@@ -287,8 +287,10 @@ screenshot is wanted after all. Spec grammar: `lod/i/j[/v]`, `v/lod/i/j` (= `sta
 `{lod,i,j,v}`, `{lon,lat,lod,v}`; `v` ∈ `'' obs tree chg dif rd sub subc`.
 
 Hook additions for drivers: `state()` carries `animating`, `refits`, `applying`, `fly`, `tour`,
-`animMs`; `settled()` waits for `applying`, tiles, a running fly (≤ 2.5 s), pending KG-outline
-refits and relief tiles.
+`animMs`, `viewPending` (the 110 ms `hiView` debounce is armed — tiles of the new window are not
+requested yet); `settled()` waits for `applying`, tiles, a running fly (≤ 2.5 s), pending KG-outline
+refits, relief tiles and `viewPending`. Without the last one a driver polling at `left=0` could land
+in the debounce gap and read the under-LOD backdrop as "not hidden" (the soak `stress` flake).
 
 Bugs it found on day one (all fixed): a pending KG-outline refit zoomed back after a same-KG
 `;full;z=` link; `#kg=` links kept a stale pinned res-12 cell; `hi.left` / `rl.inflight` went
