@@ -1,0 +1,39 @@
+[Unit]
+Description=umfeld-at — NE cells and public overlays for Austria
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# scripts/install.sh fills User/Group, WorkingDirectory, ExecStart and
+# ReadWritePaths from the checkout it runs in.
+User=umfeld
+Group=umfeld
+WorkingDirectory=/opt/umfeld-at
+ExecStart=/opt/umfeld-at/umfeld-at
+Restart=always
+RestartSec=5
+
+Environment=PORT=8000
+Environment=CGO_ENABLED=1
+# Tokens, peer URLs, private prefix — peers.go, docs/api-tiers.md. 0600, never in git.
+EnvironmentFile=-/etc/umfeld-at.env
+# Soft GC ceiling; the SQLite page caches live outside the Go heap.
+Environment=GOMEMLIMIT=3GiB
+# Hard ceiling: a runaway process is OOM-killed and back in seconds.
+MemoryMax=5G
+MemorySwapMax=256M
+OOMPolicy=kill
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/umfeld-at/data
+PrivateTmp=yes
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=umfeld-at
+
+[Install]
+WantedBy=multi-user.target
