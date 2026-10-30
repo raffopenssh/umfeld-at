@@ -35,7 +35,10 @@ func TestNoExternalAssets(t *testing.T) {
 		regexp.MustCompile(`(?i)fonts\.googleapis\.com|fonts\.gstatic\.com|fonts\.bunny\.net|use\.typekit\.net|cdnjs\.cloudflare\.com|unpkg\.com|jsdelivr\.net|cdn\.`),
 		regexp.MustCompile(`(?i)<link\b[^>]*rel\s*=\s*["']?(preconnect|dns-prefetch|preload|modulepreload|stylesheet)\b`),
 	}
+	// <link rel=canonical> names a URL, it loads nothing (api_seo.go).
+	canonicalRe := regexp.MustCompile(`(?i)<link\b[^>]*\brel\s*=\s*["']?canonical["']?[^>]*>`)
 	for name, body := range pages {
+		body = canonicalRe.ReplaceAllString(body, "")
 		for _, re := range bad {
 			if m := re.FindString(body); m != "" {
 				t.Errorf("%s loads an external resource: %q", name, m)
@@ -46,32 +49,33 @@ func TestNoExternalAssets(t *testing.T) {
 	// Every absolute URL on a page must point at a host on this list. Anchors
 	// are caught too, which is fine: anything new is added consciously.
 	allowedHosts := map[string]bool{
-		"obs.example":          true, // observed layer + trees + flags, from the browser (Datenschutz §4)
-		"obs.example:8100":     true,
-		"sub.example": true, // linked only; data is proxied server-side (ne_glyph_sub.go)
-		"mapsneu.wien.gv.at":             true, // basemap.at orthophoto tiles, from the browser only with the photo layer on (Datenschutz §4)
-		"basemap.at":                     true, // linked only (attribution)
+		"obs.example":                 true, // observed layer + trees + flags, from the browser (Datenschutz §4)
+		"obs.example:8100":            true,
+		"sub.example":                 true, // linked only; data is proxied server-side (ne_glyph_sub.go)
+		"mapsneu.wien.gv.at":          true, // basemap.at orthophoto tiles, from the browser only with the photo layer on (Datenschutz §4)
+		"basemap.at":                  true, // linked only (attribution)
 		"umfeld.example":              true, // self (share links / canonical)
-		"localhost:8000":                 true, // self, dev (soak script comment)
-		"github.com":                     true,
-		"creativecommons.org":            true,
-		"opensource.org":                 true,
-		"www.openstreetmap.org":          true,
-		"www.bev.gv.at":                  true,
-		"kataster.bev.gv.at":             true,
-		"data.bev.gv.at":                 true,
-		"www.statistik.at":               true,
-		"www.eea.europa.eu":              true,
-		"bio.discomap.eea.europa.eu":     true,
-		"data.bka.gv.at":                 true,
-		"www.protectedplanet.net":        true,
-		"gadm.org":                       true,
-		"download.geofabrik.de":          true,
-		"nominatim.openstreetmap.org":    true,
-		"h3geo.org":                      true,
-		"exe.dev":                        true,
-		"www.dsb.gv.at":                  true,
-		"www.w3.org":                     true, // SVG / XHTML namespace strings, never fetched
+		"localhost:8000":              true, // self, dev (soak script comment)
+		"github.com":                  true,
+		"creativecommons.org":         true,
+		"opensource.org":              true,
+		"www.openstreetmap.org":       true,
+		"www.bev.gv.at":               true,
+		"kataster.bev.gv.at":          true,
+		"data.bev.gv.at":              true,
+		"www.statistik.at":            true,
+		"www.eea.europa.eu":           true,
+		"bio.discomap.eea.europa.eu":  true,
+		"data.bka.gv.at":              true,
+		"www.protectedplanet.net":     true,
+		"gadm.org":                    true,
+		"download.geofabrik.de":       true,
+		"nominatim.openstreetmap.org": true,
+		"h3geo.org":                   true,
+		"exe.dev":                     true,
+		"www.dsb.gv.at":               true,
+		"www.w3.org":                  true, // SVG / XHTML namespace strings, never fetched
+		"schema.org":                  true, // JSON-LD @context string (api_seo.go), never fetched
 	}
 	hostRe := regexp.MustCompile(`https?://([a-zA-Z0-9.-]+(?::[0-9]+)?)`)
 	for name, body := range pages {

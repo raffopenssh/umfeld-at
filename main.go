@@ -130,6 +130,8 @@ func main() {
 
 	// Impressum / Datenschutz / Lizenzen (api_legal_pages.go).
 	handleLegalPages(mux)
+	// robots.txt, sitemap.xml, og.jpg (api_seo.go).
+	handleSEO(mux)
 
 	// Static files (if present); otherwise "/" is the public landing page.
 	if _, err := os.Stat("static"); err == nil {

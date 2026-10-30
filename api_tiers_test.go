@@ -12,7 +12,7 @@ import (
 // publicAllowListGolden — the complete public surface. A new route becomes
 // public only by being added HERE as well as in api_tiers.go.
 var publicAllowListGolden = []string{
-	"/", "/llm.txt",
+	"/", "/llm.txt", "/robots.txt", "/sitemap.xml", "/og.jpg",
 	"/impressum", "/imprint", "/datenschutz", "/privacy", "/lizenzen", "/licenses", "/license",
 	"/api/v1/docs", "/api/v1/docs/llm.txt", "/api/v1/docs/cache-client.py", "/api/v1/docs/cache-client.js",
 	"/api/v1/license", "/api/v1/cache/policy", "/api/v1/feedback", "/api/v1/feedback/12",
@@ -230,7 +230,6 @@ func TestPublicLicenseHasNoKataster(t *testing.T) {
 	}
 }
 
-
 // /contrib/… — the advertised contribute prefix: NE report paths only,
 // CONTRIBUTOR_TOKEN or UMFELD_TOKEN, 404 (indistinguishable) otherwise.
 func TestTierContribPrefix(t *testing.T) {
@@ -323,11 +322,11 @@ func TestNEWriterByName(t *testing.T) {
 		method, path, tok string
 		want              int
 	}{
-		{"POST", "/contrib/api/v1/ne/63330/obs", srtmC, 400},   // reaches the handler (bad body), not 404
+		{"POST", "/contrib/api/v1/ne/63330/obs", srtmC, 400},  // reaches the handler (bad body), not 404
 		{"POST", "/contrib/api/v1/ne/63330/obs", mapTok, 404}, // contributor, wrong name
-		{"POST", "/contrib/api/v1/ne/63330/obs", ops, 404},     // private slot 0 is ops now
+		{"POST", "/contrib/api/v1/ne/63330/obs", ops, 404},    // private slot 0 is ops now
 		{"POST", "/k/api/v1/ne/63330/obs", ops, 404},
-		{"POST", "/api/v1/ne/63330/obs", srtmC, 404},                     // never on the public tier
+		{"POST", "/api/v1/ne/63330/obs", srtmC, 404},                    // never on the public tier
 		{"POST", "/contrib/api/v1/ne/63330/report", mapTok, 400},        // reports: any contributor (bad body → 400)
 		{"GET", "/contrib/api/v1/ne/../../debug/inflight", mapTok, 404}, // no traversal through the allow-list
 	} {

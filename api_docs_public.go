@@ -353,7 +353,7 @@ const serviceStageNote = "field names and limits may still move between epochs"
 
 const publicDocsHTMLTemplate = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>umfeld-at — context layers around a place in Austria</title>
-<meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=resizes-content">
+{SEO}<meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=resizes-content">
 <style>{CSS}</style></head><body>
 <h1>umfeld-at — context layers around a place in Austria <span class="stage" title="{STAGE} — {STAGE_NOTE}">{STAGE}</span></h1>
 {GLYPH}<p>Austria as H3 cells. The map is the service: declared land use from the BEV cadastre, digested by
@@ -416,7 +416,7 @@ BEV, AMA, BML, EEA, UNEP-WCMC, OpenStreetMap, basemap.at or the Bundeskanzleramt
 // publicDocsHTMLText — the landing page with the NE block spliced in
 // (publicNEHTMLSection lives in the ban-checked api_docs_public_ne.go).
 func publicDocsHTMLText() string {
-	r := strings.NewReplacer("{NE}", publicNEHTMLSection, "{CSS}", monoDocsCSS+neGlyphCSS, "{STAGE_NOTE}", serviceStageNote, "{STAGE}", serviceStage)
+	r := strings.NewReplacer("{NE}", publicNEHTMLSection, "{SEO}", seoHeadMeta, "{CSS}", monoDocsCSS+neGlyphCSS, "{STAGE_NOTE}", serviceStageNote, "{STAGE}", serviceStage)
 	return neSpliceCoverage(r.Replace(publicDocsHTMLTemplate))
 }
 
@@ -434,7 +434,7 @@ func servePublicDocs(w http.ResponseWriter, r *http.Request) {
 	// Live coverage line inside: browsers must revalidate on every load
 	// (no heuristic caching of a page that changes every few minutes).
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write([]byte(peerText(publicDocsHTMLText())))
+	_, _ = w.Write([]byte(seoText(r, publicDocsHTMLText())))
 }
 
 // handlePublicRoot — "/" on the public tier: landing page; anything else

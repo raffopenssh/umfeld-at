@@ -54,6 +54,9 @@ const contribTierPrefix = "/contrib"
 var publicExactPaths = map[string]bool{
 	"/":                              true,
 	"/llm.txt":                       true,
+	"/robots.txt":                    true, // SEO surface (api_seo.go)
+	"/sitemap.xml":                   true,
+	"/og.jpg":                        true,
 	"/api/v1/docs":                   true,
 	"/api/v1/docs/llm.txt":           true,
 	"/api/v1/docs/cache-client.py":   true,
