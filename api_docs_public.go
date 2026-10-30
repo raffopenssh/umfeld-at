@@ -288,6 +288,8 @@ td:first-child{color:var(--mut)}
 th:last-child:not(:nth-child(2)),td:last-child:not(:nth-child(2)){width:18%}
 td:last-child:not(:nth-child(2)){color:var(--mut)}
 td code{background:none;padding:0}
+table.map th:first-child,table.map td:first-child{width:17%}table.map th:last-child,table.map td:last-child{width:31%}table.map td:first-child{color:var(--fg)}
+@media(max-width:640px){pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:.6rem .7rem}pre .c{color:var(--mut)}table,tbody,tr,td{display:block;width:auto!important}thead,th{display:none}tr{padding:.45rem 0;border-bottom:1px dashed var(--rule)}td{padding:0;border:0}td:first-child{font-weight:700;color:var(--fg)}td:last-child:not(:nth-child(2)){color:var(--mut);font-size:.92em}table.map td:nth-child(2){margin:.1rem 0}}
 strong{font-weight:700}
 .muted{color:var(--mut);font-size:.9em;margin-top:2.5rem;padding-top:.8rem;border-top:1px solid var(--rule)}
 figure.contrib{margin:.8rem 0 1.2rem}
@@ -354,14 +356,31 @@ const publicDocsHTMLTemplate = `<!doctype html><html lang="en"><head><meta chars
 <meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=resizes-content">
 <style>{CSS}</style></head><body>
 <h1>umfeld-at — context layers around a place in Austria <span class="stage" title="{STAGE} — {STAGE_NOTE}">{STAGE}</span></h1>
-{GLYPH}<p>One coordinate in, everything <em>around</em> it out: municipality, land-price estimate, Natura 2000 /
-national parks, OpenStreetMap proximity, official geographic names, legal references — and the declared
-land-use statistics of the cell the point falls in. Austria-wide. JSON, CORS, no key.</p>
-<p><strong>Cadastre stays client-side.</strong> Parcels, footprints and land use come straight from the official
-BEV vector tile cadastre (VTC, CC BY 4.0) — <a href="https://github.com/raffopenssh/vtcseamless">vtcseamless</a>
-(open source, MIT) stitches the tiles into seamless parcel geometries in your client. You send us a point plus
-the parcel features you already hold and get the context layers around it back.</p>
-<h2>Start here</h2>
+{GLYPH}<p>Austria as H3 cells. The map is the service: declared land use from the BEV cadastre, digested by
+peers; the use that LiDAR and satellite observe; and the change between digests, cell by cell. Around it,
+the context of any point — municipality, land price, Natura 2000, OpenStreetMap, place names, law references.
+JSON, CORS, no key. Source: <a href="https://github.com/raffopenssh/umfeld-at">github.com/raffopenssh/umfeld-at</a> (MIT).</p>
+<p><strong>Cadastre stays client-side.</strong> Parcels, footprints and land use come from the official BEV
+vector tiles (CC BY 4.0); <a href="https://github.com/raffopenssh/vtcseamless">vtcseamless</a> (MIT) stitches
+them into seamless geometries in your client. Peers digest those tiles into cells and report them here;
+this server holds no parcel.</p>
+<h2 id="map">The map</h2>
+<p>One dot per res-7 cell. Zoom in and the dots become hexagon faces, then every res-12 cell (~300 m²) in its
+dominant use. One <em>profile</em> fills the cells, any <em>overlays</em> mark on top. Every piece has an
+endpoint, so a client can draw all of it itself (keys in brackets; paths under <code>/api/v1/ne/</code>).</p>
+<table class="map"><tr><th>On the map</th><th>Shows</th><th>Endpoint</th></tr>
+<tr><td>declared (v)</td><td>declared use per cell · darker = digested more often by peers · gold = reported in the last 6 h</td><td><code>glyph</code> · <code>glyph/tile?lod=&amp;i=&amp;j=</code></td></tr>
+<tr><td>observed (v)</td><td>use seen by LiDAR &amp; satellite, posted by {OBS_NAME}</td><td><code>glyph/tile?v=obs</code> · <code>cell/{h3}</code> → <code>obs</code></td></tr>
+<tr><td>change (c)</td><td>cells whose declared use moved between digests, confirmed or candidate · the strip below replays it by pass or by day, play walks the days</td><td><code>stats?kg=</code> · <code>glyph/passes?kg=</code> · <code>glyph/tile?v=chg&amp;t=</code></td></tr>
+<tr><td>diff (d)</td><td>where the register and the LiDAR disagree today: structures declared, none flown · flown, none declared · declared forest, no trees</td><td><code>glyph/tile?v=dif</code> · <code>glyph/cell</code> → <code>pic_dif</code></td></tr>
+<tr><td>subsidy (s)</td><td>INVEKOS Schläge as drawn · with change on: new / redrawn / gone vs the previous year, per cell by {SUB_NAME}</td><td><code>glyph/sub</code> · <code>glyph/tile?v=sub|subc</code></td></tr>
+<tr><td>trees (t) · relief (r)</td><td>every tree as a ring of its crown, greener = taller · hillshade from the 25 m terrain model</td><td><code>glyph/tile?v=tree</code> · hillshade tiles of {OBS_NAME}</td></tr>
+<tr><td>photo (o) · roads (w)</td><td>basemap.at orthophoto under the cells · OSM roads and rail in one ink, darker = more remote</td><td>basemap.at WMTS · <code>glyph/tile?v=rd</code> · <code>/api/v1/osm/geometry?bbox=</code></td></tr>
+<tr><td>find (/)</td><td>KG, Gemeinde, Bezirk, Land, Natura 2000 site, address or name · the outline becomes the selection</td><td><code>glyph/kgs</code> · <code>glyph/admin</code> · <code>/api/v1/lookup?q=</code></td></tr>
+<tr><td>filter (f)</td><td>chips over the cells, e.g. <code>h>=8,sl=15..30,n2k</code> · cells that fail are veiled, the readout counts the rest</td><td><code>filter?bbox=&amp;f=</code> · <code>filter/fields</code></td></tr>
+<tr><td>card</td><td>the cell or place under the pointer: use split, structures, change, diff, subsidy, trees</td><td><code>glyph/cell?lon=&amp;lat=</code> · <code>cell/{h3}</code></td></tr>
+<tr><td>link ▾</td><td>the view as a link, with everything in it (profile, overlays, time window, filter, selection) · export of the selection: JSON, CSV, flat, a Sheets formula · for QGIS: vector tiles or a PMTiles archive</td><td><code>stats/unit?share=&amp;format=</code> · <code>mvt/{z}/{x}/{y}.pbf</code> · <code>pmtiles?bbox=</code></td></tr></table>
+<h2>Around a point</h2>
 <pre>GET /api/v1/context?lon=15.0857&amp;lat=47.0665
 GET /api/v1/context?lon=15.0857&amp;lat=47.0665&amp;area_sqm=812&amp;building_count=1
     &amp;footprint_area_sqm=140&amp;landuse_areas=41:140,52:672&amp;kg=63349
@@ -374,13 +393,13 @@ GET /api/v1/ne/cells?lon=15.0857&amp;lat=47.0665&amp;k=1&amp;format=json</pre>
 <tr><td>Roads, transit, water, remoteness</td><td><code>/api/v1/osm/point?lon=&amp;lat=</code> · <code>/api/v1/osm/geometry?bbox=</code></td><td>OpenStreetMap (ODbL)</td></tr>
 <tr><td>Names of places, Almen, Rieden</td><td><code>/api/v1/toponyms/near?lon=&amp;lat=</code> · <code>/api/v1/toponyms/search?q=</code></td><td>BEV DLM-Namen (CC BY 4.0)</td></tr>
 <tr><td>Laws naming parcels of a KG</td><td><code>/api/v1/legal/kg/{kg_code}</code></td><td>RIS</td></tr>
-<tr><td>Declared land use per H3 cell (res 12, ~300 m²)</td><td><code>/api/v1/ne/cells?bbox=</code> · <code>/api/v1/ne/cells?lon=&amp;lat=&amp;k=1</code> · <code>/api/v1/ne/cell/{h3}</code></td><td>BEV (CC BY 4.0, aggregated)</td></tr>
-<tr><td>Whole-KG cell file (download)</td><td><code>/api/v1/ne/{kg}</code> (<code>application/vnd.ne-cells</code> | <code>format=json</code>)</td><td>BEV (CC BY 4.0, aggregated)</td></tr>
 <tr><td>Register autocomplete</td><td><code>/api/v1/lookup?q=</code></td><td>EDM / Statistik Austria</td></tr>
-<tr><td>Coverage</td><td><code>/api/v1/ne</code> · <code>/api/v1/ne/manifest</code> · <code>/api/v1/license</code></td><td>—</td></tr></table>
+<tr><td>Coverage, licences</td><td><code>/api/v1/ne</code> · <code>/api/v1/ne/manifest</code> · <code>/api/v1/kgs</code> · <code>/api/v1/license</code></td><td>—</td></tr></table>
 {NE}<h2>Documentation</h2>
-<p><a href="/api/v1/docs/llm.txt">Full reference (plain text, for humans and LLM agents)</a> ·
-<a href="/api/v1/docs/ne.md">NE cells contract</a> ·
+<p><a href="/api/v1/docs/llm.txt">Full reference (plain text, for humans and agents)</a> ·
+<a href="/api/v1/docs/ne.md">NE cells</a> · <a href="/api/v1/docs/ne-change.md">change</a> ·
+<a href="/api/v1/docs/stats-envelope.md">unit stats &amp; export</a> · <a href="/api/v1/docs/qgis-layer.md">QGIS layer</a> ·
+<a href="https://github.com/raffopenssh/umfeld-at">source</a> ·
 <a href="/api/v1/license">Licences &amp; attribution per source</a> (<a href="/api/v1/license?format=json">json</a>) ·
 <a href="/api/v1/cache/policy">Caching policy</a> ·
 <a href="/api/v1/feedback?status=open">Feedback</a> ·

@@ -489,25 +489,40 @@ Observers: if you assemble cells yourself from the BEV tiles (python package ne_
 
 // publicNEHTMLSection — the NE block of the public landing page (spliced into
 // publicDocsHTML at {NE}; ban-checked like the llm.txt section).
-const publicNEHTMLSection = `<h2 id="ne">NE cells — declared land-use statistics per H3 cell</h2>
-<p>The one layer that is about the land itself, published as <em>statistics per hexagon</em> instead of objects: for every H3 res-12 cell (~307 m²) the declared land-use split in nine groups (buildings, building land, arable, grassland, forest, water, traffic, alpine, other), structure cover and count, surveyed-boundary share, unit count, boundary metres per hectare and orientation; per res-10 cell (~1.5 ha) a K record with unit-size percentiles and register counts. Tokenless, keyed by H3 cell id, lon/lat or bbox; 30-byte rows, zstd chunks, immutable ETags. The <em>observed</em> layer — LiDAR heights, tree apices, structures, NDVI, forest loss, terrain for the same cells — is served by the sibling <a href="{OBS_API}/">{OBS_NAME}</a> (<code>/api/v1/cells?bbox=</code>, <code>/api/v1/cells/{h3}</code>, <code>/api/v1/kg/{code}/cells</code>; CC BY 4.0, no key). Same H3 ids, so declared and observed zip together client-side on <code>cell_id</code>.</p>
+const publicNEHTMLSection = `<h2 id="ne">NE cells — land use per H3 cell</h2>
+<p>The layer under the map, published as <em>statistics per hexagon</em> rather than objects. Per res-12 cell
+(~307 m²): the declared use in nine groups (buildings, building land, arable, grassland, forest, water, traffic,
+alpine, other), structure cover and count, surveyed-boundary share, unit count, boundary metres per hectare,
+orientation; per res-10 cell (~1.5 ha) a K record with unit-size percentiles and register counts. Tokenless,
+keyed by H3 id, lon/lat or bbox; 30-byte rows, zstd chunks, immutable ETags. The <em>observed</em> layer for the
+same cells — LiDAR heights, tree apices, structures, NDVI, forest loss, terrain — comes from the sibling
+<a href="{OBS_API}/">{OBS_NAME}</a> (<code>/api/v1/cells?bbox=</code>, <code>/api/v1/cells/{h3}</code>; CC BY 4.0,
+no key); same ids, so both zip together on <code>cell_id</code>.</p>
 <pre>GET /api/v1/ne
-    # pin, limits, coverage (kgs_built), dictionary ids
+    # pin, limits, coverage, dictionary ids
 GET /api/v1/ne/cells?lon=15.0857&amp;lat=47.0665&amp;k=1&amp;format=json
     # the cell under a point + 1 ring
 GET /api/v1/ne/cells?bbox=15.08,47.06,15.10,47.08&amp;list=1
-    # which res-9 chunks cover a viewport (+ their ETags)
+    # res-9 chunks of a viewport + their ETags
 GET /api/v1/ne/chunk/{h3_res9}
-    # all rows of one chunk (zstd | bin | json); ETag immutable → cache 24 h
+    # all rows of one chunk (zstd | bin | json), cache 24 h
 GET /api/v1/ne/cell/{h3}
-    # one res-12 cell decoded, with its res-10 K record
+    # one res-12 cell decoded: K record, obs, chg
 GET /api/v1/ne/{kg}
     # whole-KG container (CC BY 4.0 product download)
-GET /api/v1/context?lon=&amp;lat=&amp;include=ne
-    # the same cell inside the context bundle
 GET /api/v1/ne/stats?kg=63330
-    # confirmed change over time: m² per group transition, roof area, structures</pre>
-<p><strong>Coverage:</strong> {COVERAGE} It grows by submission — a KG appears the moment its cells land in the store, declared layer here, observed layer from {OBS_NAME} (<code>/api/v1/ne/manifest</code> → status per KG; an unbuilt KG answers 404 + <code>Retry-After</code>, a bbox touching one is <em>partial</em>, never "no cells"). Record layouts, decode snippets and the playbook: <a href="/api/v1/docs/llm.txt">llm.txt</a> § NE cells · contract: <a href="/api/v1/docs/ne.md">/api/v1/docs/ne.md</a>. Attribution: © BEV (CC BY 4.0), bearbeitet · observed layer © {OBS_NAME} (CC BY 4.0).</p>
+    # confirmed change over time: m² per transition, roofs, structures
+GET /api/v1/ne/stats/unit?kg=63330&amp;format=csv
+    # one row per unit, declared + observed + subsidy peers
+GET /api/v1/ne/filter?kg=63330&amp;f=h>=8,n2k
+    # cells matching an expression (count | cells | geojson)
+GET /api/v1/ne/mvt/{z}/{x}/{y}.pbf
+    # the cells as vector tiles for QGIS / MapLibre</pre>
+<p><strong>Coverage:</strong> {COVERAGE} A KG appears the moment its cells land in the store — declared layer from
+peers' reports, observed layer from {OBS_NAME} (<code>/api/v1/ne/manifest</code> → status per KG; an unbuilt KG answers
+404 + <code>Retry-After</code>, a bbox touching one is <em>partial</em>). Record layouts, decode snippets and the
+playbook: <a href="/api/v1/docs/llm.txt">llm.txt</a> § NE cells · contract: <a href="/api/v1/docs/ne.md">/api/v1/docs/ne.md</a>.
+Attribution: © BEV (CC BY 4.0), bearbeitet · observed layer © {OBS_NAME} (CC BY 4.0).</p>
 {CONTRIB}`
 
 // nePublicDocText — docs/ne-cells.md in the public vocabulary.
