@@ -1,0 +1,8370 @@
+{
+  "70701": {
+    "gemeinde_code": "70701",
+    "gemeinde_name": "Abfaltersbach"
+  },
+  "70301": {
+    "gemeinde_code": "70301",
+    "gemeinde_name": "Absam"
+  },
+  "32101": {
+    "gemeinde_code": "32101",
+    "gemeinde_name": "Absdorf"
+  },
+  "50201": {
+    "gemeinde_code": "50201",
+    "gemeinde_name": "Abtenau"
+  },
+  "31701": {
+    "gemeinde_code": "31701",
+    "gemeinde_name": "Achau"
+  },
+  "70901": {
+    "gemeinde_code": "70901",
+    "gemeinde_name": "Achenkirch"
+  },
+  "30801": {
+    "gemeinde_code": "30801",
+    "gemeinde_name": "Aderklaa"
+  },
+  "41501": {
+    "gemeinde_code": "41501",
+    "gemeinde_name": "Adlwang"
+  },
+  "61253": {
+    "gemeinde_code": "61253",
+    "gemeinde_name": "Admont"
+  },
+  "50202": {
+    "gemeinde_code": "50202",
+    "gemeinde_name": "Adnet"
+  },
+  "62138": {
+    "gemeinde_code": "62138",
+    "gemeinde_name": "Aflenz"
+  },
+  "20701": {
+    "gemeinde_code": "20701",
+    "gemeinde_name": "Afritz am See"
+  },
+  "31301": {
+    "gemeinde_code": "31301",
+    "gemeinde_name": "Aggsbach"
+  },
+  "61254": {
+    "gemeinde_code": "61254",
+    "gemeinde_name": "Aich"
+  },
+  "41801": {
+    "gemeinde_code": "41801",
+    "gemeinde_name": "Aichkirchen"
+  },
+  "61203": {
+    "gemeinde_code": "61203",
+    "gemeinde_name": "Aigen im Ennstal"
+  },
+  "41343": {
+    "gemeinde_code": "41343",
+    "gemeinde_name": "Aigen-Schlägl"
+  },
+  "70702": {
+    "gemeinde_code": "70702",
+    "gemeinde_name": "Ainet"
+  },
+  "40801": {
+    "gemeinde_code": "40801",
+    "gemeinde_name": "Aistersheim"
+  },
+  "21001": {
+    "gemeinde_code": "21001",
+    "gemeinde_name": "Albeck"
+  },
+  "31001": {
+    "gemeinde_code": "31001",
+    "gemeinde_name": "Alberndorf im Pulkautal"
+  },
+  "41601": {
+    "gemeinde_code": "41601",
+    "gemeinde_name": "Alberndorf in der Riedmark"
+  },
+  "80201": {
+    "gemeinde_code": "80201",
+    "gemeinde_name": "Alberschwende"
+  },
+  "61701": {
+    "gemeinde_code": "61701",
+    "gemeinde_name": "Albersdorf-Prebuch"
+  },
+  "31302": {
+    "gemeinde_code": "31302",
+    "gemeinde_name": "Albrechtsberg an der Großen Krems"
+  },
+  "70302": {
+    "gemeinde_code": "70302",
+    "gemeinde_name": "Aldrans"
+  },
+  "40501": {
+    "gemeinde_code": "40501",
+    "gemeinde_name": "Alkoven"
+  },
+  "30601": {
+    "gemeinde_code": "30601",
+    "gemeinde_name": "Alland"
+  },
+  "32501": {
+    "gemeinde_code": "32501",
+    "gemeinde_name": "Allentsteig"
+  },
+  "61001": {
+    "gemeinde_code": "61001",
+    "gemeinde_name": "Allerheiligen bei Wildon"
+  },
+  "41101": {
+    "gemeinde_code": "41101",
+    "gemeinde_name": "Allerheiligen im Mühlkreis"
+  },
+  "41001": {
+    "gemeinde_code": "41001",
+    "gemeinde_name": "Allhaming"
+  },
+  "30501": {
+    "gemeinde_code": "30501",
+    "gemeinde_name": "Allhartsberg"
+  },
+  "70501": {
+    "gemeinde_code": "70501",
+    "gemeinde_name": "Alpbach"
+  },
+  "80401": {
+    "gemeinde_code": "80401",
+    "gemeinde_name": "Altach"
+  },
+  "61204": {
+    "gemeinde_code": "61204",
+    "gemeinde_name": "Altaussee"
+  },
+  "41602": {
+    "gemeinde_code": "41602",
+    "gemeinde_name": "Altenberg bei Linz"
+  },
+  "31101": {
+    "gemeinde_code": "31101",
+    "gemeinde_name": "Altenburg"
+  },
+  "31801": {
+    "gemeinde_code": "31801",
+    "gemeinde_name": "Altendorf"
+  },
+  "41304": {
+    "gemeinde_code": "41304",
+    "gemeinde_name": "Altenfelden"
+  },
+  "30602": {
+    "gemeinde_code": "30602",
+    "gemeinde_name": "Altenmarkt an der Triesting"
+  },
+  "61205": {
+    "gemeinde_code": "61205",
+    "gemeinde_name": "Altenmarkt bei Sankt Gallen"
+  },
+  "50401": {
+    "gemeinde_code": "50401",
+    "gemeinde_name": "Altenmarkt im Pongau"
+  },
+  "40401": {
+    "gemeinde_code": "40401",
+    "gemeinde_name": "Altheim"
+  },
+  "20501": {
+    "gemeinde_code": "20501",
+    "gemeinde_name": "Althofen"
+  },
+  "31901": {
+    "gemeinde_code": "31901",
+    "gemeinde_name": "Altlengbach"
+  },
+  "31601": {
+    "gemeinde_code": "31601",
+    "gemeinde_name": "Altlichtenwarth"
+  },
+  "32519": {
+    "gemeinde_code": "32519",
+    "gemeinde_name": "Altmelon"
+  },
+  "40701": {
+    "gemeinde_code": "40701",
+    "gemeinde_name": "Altmünster"
+  },
+  "41401": {
+    "gemeinde_code": "41401",
+    "gemeinde_name": "Altschwendt"
+  },
+  "30902": {
+    "gemeinde_code": "30902",
+    "gemeinde_name": "Amaliendorf-Aalfang"
+  },
+  "70703": {
+    "gemeinde_code": "70703",
+    "gemeinde_name": "Amlach"
+  },
+  "70303": {
+    "gemeinde_code": "70303",
+    "gemeinde_name": "Ampass"
+  },
+  "41701": {
+    "gemeinde_code": "41701",
+    "gemeinde_name": "Ampflwang im Hausruckwald"
+  },
+  "30502": {
+    "gemeinde_code": "30502",
+    "gemeinde_name": "Amstetten"
+  },
+  "10701": {
+    "gemeinde_code": "10701",
+    "gemeinde_name": "Andau"
+  },
+  "80202": {
+    "gemeinde_code": "80202",
+    "gemeinde_name": "Andelsbuch"
+  },
+  "30802": {
+    "gemeinde_code": "30802",
+    "gemeinde_name": "Andlersdorf"
+  },
+  "41402": {
+    "gemeinde_code": "41402",
+    "gemeinde_name": "Andorf"
+  },
+  "41201": {
+    "gemeinde_code": "41201",
+    "gemeinde_name": "Andrichsfurt"
+  },
+  "70502": {
+    "gemeinde_code": "70502",
+    "gemeinde_name": "Angath"
+  },
+  "61756": {
+    "gemeinde_code": "61756",
+    "gemeinde_name": "Anger"
+  },
+  "70528": {
+    "gemeinde_code": "70528",
+    "gemeinde_name": "Angerberg"
+  },
+  "30803": {
+    "gemeinde_code": "30803",
+    "gemeinde_name": "Angern an der March"
+  },
+  "50301": {
+    "gemeinde_code": "50301",
+    "gemeinde_name": "Anif"
+  },
+  "31401": {
+    "gemeinde_code": "31401",
+    "gemeinde_name": "Annaberg"
+  },
+  "50203": {
+    "gemeinde_code": "50203",
+    "gemeinde_name": "Annaberg-Lungötz"
+  },
+  "70704": {
+    "gemeinde_code": "70704",
+    "gemeinde_name": "Anras"
+  },
+  "41002": {
+    "gemeinde_code": "41002",
+    "gemeinde_name": "Ansfelden"
+  },
+  "10616": {
+    "gemeinde_code": "10616",
+    "gemeinde_name": "Antau"
+  },
+  "50302": {
+    "gemeinde_code": "50302",
+    "gemeinde_name": "Anthering"
+  },
+  "41202": {
+    "gemeinde_code": "41202",
+    "gemeinde_name": "Antiesenhofen"
+  },
+  "10702": {
+    "gemeinde_code": "10702",
+    "gemeinde_name": "Apetlon"
+  },
+  "32502": {
+    "gemeinde_code": "32502",
+    "gemeinde_name": "Arbesbach"
+  },
+  "41102": {
+    "gemeinde_code": "41102",
+    "gemeinde_name": "Arbing"
+  },
+  "30503": {
+    "gemeinde_code": "30503",
+    "gemeinde_name": "Ardagger"
+  },
+  "61206": {
+    "gemeinde_code": "61206",
+    "gemeinde_name": "Ardning"
+  },
+  "61002": {
+    "gemeinde_code": "61002",
+    "gemeinde_name": "Arnfels"
+  },
+  "20702": {
+    "gemeinde_code": "20702",
+    "gemeinde_name": "Arnoldstein"
+  },
+  "41305": {
+    "gemeinde_code": "41305",
+    "gemeinde_name": "Arnreit"
+  },
+  "20703": {
+    "gemeinde_code": "20703",
+    "gemeinde_name": "Arriach"
+  },
+  "31502": {
+    "gemeinde_code": "31502",
+    "gemeinde_name": "Artstetten-Pöbring"
+  },
+  "70201": {
+    "gemeinde_code": "70201",
+    "gemeinde_name": "Arzl im Pitztal"
+  },
+  "40502": {
+    "gemeinde_code": "40502",
+    "gemeinde_name": "Aschach an der Donau"
+  },
+  "41502": {
+    "gemeinde_code": "41502",
+    "gemeinde_name": "Aschach an der Steyr"
+  },
+  "70902": {
+    "gemeinde_code": "70902",
+    "gemeinde_name": "Aschau im Zillertal"
+  },
+  "30504": {
+    "gemeinde_code": "30504",
+    "gemeinde_name": "Aschbach-Markt"
+  },
+  "40402": {
+    "gemeinde_code": "40402",
+    "gemeinde_name": "Aspach"
+  },
+  "31803": {
+    "gemeinde_code": "31803",
+    "gemeinde_name": "Aspangberg-St. Peter"
+  },
+  "31802": {
+    "gemeinde_code": "31802",
+    "gemeinde_name": "Aspang-Markt"
+  },
+  "31603": {
+    "gemeinde_code": "31603",
+    "gemeinde_name": "Asparn an der Zaya"
+  },
+  "31902": {
+    "gemeinde_code": "31902",
+    "gemeinde_name": "Asperhofen"
+  },
+  "70705": {
+    "gemeinde_code": "70705",
+    "gemeinde_name": "Assling"
+  },
+  "41003": {
+    "gemeinde_code": "41003",
+    "gemeinde_name": "Asten"
+  },
+  "41702": {
+    "gemeinde_code": "41702",
+    "gemeinde_name": "Attersee am Attersee"
+  },
+  "41703": {
+    "gemeinde_code": "41703",
+    "gemeinde_name": "Attnang-Puchheim"
+  },
+  "41704": {
+    "gemeinde_code": "41704",
+    "gemeinde_name": "Atzbach"
+  },
+  "32104": {
+    "gemeinde_code": "32104",
+    "gemeinde_name": "Atzenbrugg"
+  },
+  "41306": {
+    "gemeinde_code": "41306",
+    "gemeinde_name": "Atzesberg"
+  },
+  "80203": {
+    "gemeinde_code": "80203",
+    "gemeinde_name": "Au"
+  },
+  "30701": {
+    "gemeinde_code": "30701",
+    "gemeinde_name": "Au am Leithaberge"
+  },
+  "41307": {
+    "gemeinde_code": "41307",
+    "gemeinde_name": "Auberg"
+  },
+  "40403": {
+    "gemeinde_code": "40403",
+    "gemeinde_name": "Auerbach"
+  },
+  "30804": {
+    "gemeinde_code": "30804",
+    "gemeinde_name": "Auersthal"
+  },
+  "41705": {
+    "gemeinde_code": "41705",
+    "gemeinde_name": "Aurach am Hongar"
+  },
+  "70401": {
+    "gemeinde_code": "70401",
+    "gemeinde_name": "Aurach bei Kitzbühel"
+  },
+  "41203": {
+    "gemeinde_code": "41203",
+    "gemeinde_name": "Aurolzmünster"
+  },
+  "70706": {
+    "gemeinde_code": "70706",
+    "gemeinde_name": "Außervillgraten"
+  },
+  "70304": {
+    "gemeinde_code": "70304",
+    "gemeinde_name": "Axams"
+  },
+  "70801": {
+    "gemeinde_code": "70801",
+    "gemeinde_name": "Bach"
+  },
+  "41802": {
+    "gemeinde_code": "41802",
+    "gemeinde_name": "Bachmanning"
+  },
+  "61207": {
+    "gemeinde_code": "61207",
+    "gemeinde_name": "Bad Aussee"
+  },
+  "20705": {
+    "gemeinde_code": "20705",
+    "gemeinde_name": "Bad Bleiberg"
+  },
+  "62202": {
+    "gemeinde_code": "62202",
+    "gemeinde_name": "Bad Blumau"
+  },
+  "30702": {
+    "gemeinde_code": "30702",
+    "gemeinde_name": "Bad Deutsch-Altenburg"
+  },
+  "30604": {
+    "gemeinde_code": "30604",
+    "gemeinde_name": "Baden"
+  },
+  "32306": {
+    "gemeinde_code": "32306",
+    "gemeinde_name": "Bad Erlach"
+  },
+  "10931": {
+    "gemeinde_code": "10931",
+    "gemeinde_name": "Badersdorf"
+  },
+  "32301": {
+    "gemeinde_code": "32301",
+    "gemeinde_name": "Bad Fischau-Brunn"
+  },
+  "50403": {
+    "gemeinde_code": "50403",
+    "gemeinde_name": "Bad Gastein"
+  },
+  "62375": {
+    "gemeinde_code": "62375",
+    "gemeinde_name": "Bad Gleichenberg"
+  },
+  "40702": {
+    "gemeinde_code": "40702",
+    "gemeinde_name": "Bad Goisern am Hallstättersee"
+  },
+  "30910": {
+    "gemeinde_code": "30910",
+    "gemeinde_name": "Bad Großpertholz"
+  },
+  "41503": {
+    "gemeinde_code": "41503",
+    "gemeinde_name": "Bad Hall"
+  },
+  "70503": {
+    "gemeinde_code": "70503",
+    "gemeinde_name": "Bad Häring"
+  },
+  "50402": {
+    "gemeinde_code": "50402",
+    "gemeinde_name": "Bad Hofgastein"
+  },
+  "40703": {
+    "gemeinde_code": "40703",
+    "gemeinde_name": "Bad Ischl"
+  },
+  "20601": {
+    "gemeinde_code": "20601",
+    "gemeinde_name": "Bad Kleinkirchheim"
+  },
+  "41108": {
+    "gemeinde_code": "41108",
+    "gemeinde_name": "Bad Kreuzen"
+  },
+  "41603": {
+    "gemeinde_code": "41603",
+    "gemeinde_name": "Bad Leonfelden"
+  },
+  "62273": {
+    "gemeinde_code": "62273",
+    "gemeinde_name": "Bad Loipersdorf"
+  },
+  "61255": {
+    "gemeinde_code": "61255",
+    "gemeinde_name": "Bad Mitterndorf"
+  },
+  "30805": {
+    "gemeinde_code": "30805",
+    "gemeinde_name": "Bad Pirawarth"
+  },
+  "62376": {
+    "gemeinde_code": "62376",
+    "gemeinde_name": "Bad Radkersburg"
+  },
+  "10611": {
+    "gemeinde_code": "10611",
+    "gemeinde_name": "Bad Sauerbrunn"
+  },
+  "40802": {
+    "gemeinde_code": "40802",
+    "gemeinde_name": "Bad Schallerbach"
+  },
+  "32302": {
+    "gemeinde_code": "32302",
+    "gemeinde_name": "Bad Schönau"
+  },
+  "60349": {
+    "gemeinde_code": "60349",
+    "gemeinde_name": "Bad Schwanberg"
+  },
+  "20901": {
+    "gemeinde_code": "20901",
+    "gemeinde_name": "Bad St. Leonhard im Lavanttal"
+  },
+  "10901": {
+    "gemeinde_code": "10901",
+    "gemeinde_name": "Bad Tatzmannsdorf"
+  },
+  "32528": {
+    "gemeinde_code": "32528",
+    "gemeinde_name": "Bad Traunstein"
+  },
+  "50213": {
+    "gemeinde_code": "50213",
+    "gemeinde_name": "Bad Vigaun"
+  },
+  "30603": {
+    "gemeinde_code": "30603",
+    "gemeinde_name": "Bad Vöslau"
+  },
+  "62264": {
+    "gemeinde_code": "62264",
+    "gemeinde_name": "Bad Waltersdorf"
+  },
+  "41803": {
+    "gemeinde_code": "41803",
+    "gemeinde_name": "Bad Wimsbach-Neydharting"
+  },
+  "40627": {
+    "gemeinde_code": "40627",
+    "gemeinde_name": "Bad Zell"
+  },
+  "20602": {
+    "gemeinde_code": "20602",
+    "gemeinde_name": "Baldramsdorf"
+  },
+  "61626": {
+    "gemeinde_code": "61626",
+    "gemeinde_name": "Bärnbach"
+  },
+  "32503": {
+    "gemeinde_code": "32503",
+    "gemeinde_name": "Bärnkopf"
+  },
+  "80101": {
+    "gemeinde_code": "80101",
+    "gemeinde_name": "Bartholomäberg"
+  },
+  "10617": {
+    "gemeinde_code": "10617",
+    "gemeinde_name": "Baumgarten"
+  },
+  "41103": {
+    "gemeinde_code": "41103",
+    "gemeinde_name": "Baumgartenberg"
+  },
+  "70305": {
+    "gemeinde_code": "70305",
+    "gemeinde_name": "Baumkirchen"
+  },
+  "30506": {
+    "gemeinde_code": "30506",
+    "gemeinde_name": "Behamberg"
+  },
+  "30703": {
+    "gemeinde_code": "30703",
+    "gemeinde_name": "Berg"
+  },
+  "31303": {
+    "gemeinde_code": "31303",
+    "gemeinde_name": "Bergern im Dunkelsteinerwald"
+  },
+  "50303": {
+    "gemeinde_code": "50303",
+    "gemeinde_name": "Bergheim"
+  },
+  "41706": {
+    "gemeinde_code": "41706",
+    "gemeinde_name": "Berg im Attergau"
+  },
+  "20603": {
+    "gemeinde_code": "20603",
+    "gemeinde_name": "Berg im Drautal"
+  },
+  "31503": {
+    "gemeinde_code": "31503",
+    "gemeinde_name": "Bergland"
+  },
+  "30605": {
+    "gemeinde_code": "30605",
+    "gemeinde_name": "Berndorf"
+  },
+  "50304": {
+    "gemeinde_code": "50304",
+    "gemeinde_name": "Berndorf bei Salzburg"
+  },
+  "31604": {
+    "gemeinde_code": "31604",
+    "gemeinde_name": "Bernhardsthal"
+  },
+  "10902": {
+    "gemeinde_code": "10902",
+    "gemeinde_name": "Bernstein"
+  },
+  "70802": {
+    "gemeinde_code": "70802",
+    "gemeinde_name": "Berwang"
+  },
+  "80204": {
+    "gemeinde_code": "80204",
+    "gemeinde_name": "Bezau"
+  },
+  "30507": {
+    "gemeinde_code": "30507",
+    "gemeinde_name": "Biberbach"
+  },
+  "70803": {
+    "gemeinde_code": "70803",
+    "gemeinde_name": "Biberwier"
+  },
+  "70804": {
+    "gemeinde_code": "70804",
+    "gemeinde_name": "Bichlbach"
+  },
+  "31702": {
+    "gemeinde_code": "31702",
+    "gemeinde_name": "Biedermannsdorf"
+  },
+  "10426": {
+    "gemeinde_code": "10426",
+    "gemeinde_name": "Bildein"
+  },
+  "80205": {
+    "gemeinde_code": "80205",
+    "gemeinde_name": "Bildstein"
+  },
+  "70306": {
+    "gemeinde_code": "70306",
+    "gemeinde_name": "Birgitz"
+  },
+  "61757": {
+    "gemeinde_code": "61757",
+    "gemeinde_name": "Birkfeld"
+  },
+  "31201": {
+    "gemeinde_code": "31201",
+    "gemeinde_name": "Bisamberg"
+  },
+  "50404": {
+    "gemeinde_code": "50404",
+    "gemeinde_name": "Bischofshofen"
+  },
+  "31504": {
+    "gemeinde_code": "31504",
+    "gemeinde_name": "Bischofstetten"
+  },
+  "80206": {
+    "gemeinde_code": "80206",
+    "gemeinde_name": "Bizau"
+  },
+  "20801": {
+    "gemeinde_code": "20801",
+    "gemeinde_name": "Bleiburg"
+  },
+  "31505": {
+    "gemeinde_code": "31505",
+    "gemeinde_name": "Blindenmarkt"
+  },
+  "80102": {
+    "gemeinde_code": "80102",
+    "gemeinde_name": "Blons"
+  },
+  "80103": {
+    "gemeinde_code": "80103",
+    "gemeinde_name": "Bludenz"
+  },
+  "80104": {
+    "gemeinde_code": "80104",
+    "gemeinde_name": "Bludesch"
+  },
+  "30646": {
+    "gemeinde_code": "30646",
+    "gemeinde_name": "Blumau-Neurißhof"
+  },
+  "31605": {
+    "gemeinde_code": "31605",
+    "gemeinde_name": "Bockfließ"
+  },
+  "10401": {
+    "gemeinde_code": "10401",
+    "gemeinde_name": "Bocksdorf"
+  },
+  "31903": {
+    "gemeinde_code": "31903",
+    "gemeinde_name": "Böheimkirchen"
+  },
+  "50601": {
+    "gemeinde_code": "50601",
+    "gemeinde_name": "Bramberg am Wildkogel"
+  },
+  "80105": {
+    "gemeinde_code": "80105",
+    "gemeinde_name": "Brand"
+  },
+  "70903": {
+    "gemeinde_code": "70903",
+    "gemeinde_name": "Brandberg"
+  },
+  "70504": {
+    "gemeinde_code": "70504",
+    "gemeinde_name": "Brandenberg"
+  },
+  "31904": {
+    "gemeinde_code": "31904",
+    "gemeinde_name": "Brand-Laaben"
+  },
+  "30903": {
+    "gemeinde_code": "30903",
+    "gemeinde_name": "Brand-Nagelberg"
+  },
+  "40404": {
+    "gemeinde_code": "40404",
+    "gemeinde_name": "Braunau am Inn"
+  },
+  "80207": {
+    "gemeinde_code": "80207",
+    "gemeinde_name": "Bregenz"
+  },
+  "31804": {
+    "gemeinde_code": "31804",
+    "gemeinde_name": "Breitenau"
+  },
+  "62105": {
+    "gemeinde_code": "62105",
+    "gemeinde_name": "Breitenau am Hochlantsch"
+  },
+  "70505": {
+    "gemeinde_code": "70505",
+    "gemeinde_name": "Breitenbach am Inn"
+  },
+  "10301": {
+    "gemeinde_code": "10301",
+    "gemeinde_name": "Breitenbrunn am Neusiedler See"
+  },
+  "31703": {
+    "gemeinde_code": "31703",
+    "gemeinde_name": "Breitenfurt bei Wien"
+  },
+  "31805": {
+    "gemeinde_code": "31805",
+    "gemeinde_name": "Breitenstein"
+  },
+  "70805": {
+    "gemeinde_code": "70805",
+    "gemeinde_name": "Breitenwang"
+  },
+  "70402": {
+    "gemeinde_code": "70402",
+    "gemeinde_name": "Brixen im Thale"
+  },
+  "70506": {
+    "gemeinde_code": "70506",
+    "gemeinde_name": "Brixlegg"
+  },
+  "32325": {
+    "gemeinde_code": "32325",
+    "gemeinde_name": "Bromberg"
+  },
+  "70904": {
+    "gemeinde_code": "70904",
+    "gemeinde_name": "Bruck am Ziller"
+  },
+  "50602": {
+    "gemeinde_code": "50602",
+    "gemeinde_name": "Bruck an der Großglocknerstraße"
+  },
+  "30704": {
+    "gemeinde_code": "30704",
+    "gemeinde_name": "Bruck an der Leitha"
+  },
+  "62139": {
+    "gemeinde_code": "62139",
+    "gemeinde_name": "Bruck an der Mur"
+  },
+  "20502": {
+    "gemeinde_code": "20502",
+    "gemeinde_name": "Brückl"
+  },
+  "10703": {
+    "gemeinde_code": "10703",
+    "gemeinde_name": "Bruckneudorf"
+  },
+  "31704": {
+    "gemeinde_code": "31704",
+    "gemeinde_name": "Brunn am Gebirge"
+  },
+  "31102": {
+    "gemeinde_code": "31102",
+    "gemeinde_name": "Brunn an der Wild"
+  },
+  "41403": {
+    "gemeinde_code": "41403",
+    "gemeinde_name": "Brunnenthal"
+  },
+  "80208": {
+    "gemeinde_code": "80208",
+    "gemeinde_name": "Buch"
+  },
+  "31806": {
+    "gemeinde_code": "31806",
+    "gemeinde_name": "Buchbach"
+  },
+  "70905": {
+    "gemeinde_code": "70905",
+    "gemeinde_name": "Buch in Tirol"
+  },
+  "41804": {
+    "gemeinde_code": "41804",
+    "gemeinde_name": "Buchkirchen"
+  },
+  "62205": {
+    "gemeinde_code": "62205",
+    "gemeinde_name": "Buch-St. Magdalena"
+  },
+  "62206": {
+    "gemeinde_code": "62206",
+    "gemeinde_name": "Burgau"
+  },
+  "10402": {
+    "gemeinde_code": "10402",
+    "gemeinde_name": "Burgauberg-Neudauberg"
+  },
+  "40405": {
+    "gemeinde_code": "40405",
+    "gemeinde_name": "Burgkirchen"
+  },
+  "31103": {
+    "gemeinde_code": "31103",
+    "gemeinde_name": "Burgschleinitz-Kühnring"
+  },
+  "31842": {
+    "gemeinde_code": "31842",
+    "gemeinde_name": "Bürg-Vöstenhof"
+  },
+  "50305": {
+    "gemeinde_code": "50305",
+    "gemeinde_name": "Bürmoos"
+  },
+  "80106": {
+    "gemeinde_code": "80106",
+    "gemeinde_name": "Bürs"
+  },
+  "80107": {
+    "gemeinde_code": "80107",
+    "gemeinde_name": "Bürserberg"
+  },
+  "80108": {
+    "gemeinde_code": "80108",
+    "gemeinde_name": "Dalaas"
+  },
+  "80209": {
+    "gemeinde_code": "80209",
+    "gemeinde_name": "Damüls"
+  },
+  "62265": {
+    "gemeinde_code": "62265",
+    "gemeinde_name": "Dechantskirchen"
+  },
+  "20302": {
+    "gemeinde_code": "20302",
+    "gemeinde_name": "Dellach"
+  },
+  "20604": {
+    "gemeinde_code": "20604",
+    "gemeinde_name": "Dellach im Drautal"
+  },
+  "41707": {
+    "gemeinde_code": "41707",
+    "gemeinde_name": "Desselbrunn"
+  },
+  "60659": {
+    "gemeinde_code": "60659",
+    "gemeinde_name": "Deutschfeistritz"
+  },
+  "62377": {
+    "gemeinde_code": "62377",
+    "gemeinde_name": "Deutsch Goritz"
+  },
+  "20503": {
+    "gemeinde_code": "20503",
+    "gemeinde_name": "Deutsch-Griffen"
+  },
+  "10704": {
+    "gemeinde_code": "10704",
+    "gemeinde_name": "Deutsch Jahrndorf"
+  },
+  "10501": {
+    "gemeinde_code": "10501",
+    "gemeinde_name": "Deutsch Kaltenbrunn"
+  },
+  "10801": {
+    "gemeinde_code": "10801",
+    "gemeinde_name": "Deutschkreutz"
+  },
+  "60344": {
+    "gemeinde_code": "60344",
+    "gemeinde_name": "Deutschlandsberg"
+  },
+  "10903": {
+    "gemeinde_code": "10903",
+    "gemeinde_name": "Deutsch Schützen-Eisenberg"
+  },
+  "30808": {
+    "gemeinde_code": "30808",
+    "gemeinde_name": "Deutsch-Wagram"
+  },
+  "50603": {
+    "gemeinde_code": "50603",
+    "gemeinde_name": "Dienten am Hochkönig"
+  },
+  "41404": {
+    "gemeinde_code": "41404",
+    "gemeinde_name": "Diersbach"
+  },
+  "41504": {
+    "gemeinde_code": "41504",
+    "gemeinde_name": "Dietach"
+  },
+  "32202": {
+    "gemeinde_code": "32202",
+    "gemeinde_name": "Dietmanns"
+  },
+  "20802": {
+    "gemeinde_code": "20802",
+    "gemeinde_name": "Diex"
+  },
+  "41104": {
+    "gemeinde_code": "41104",
+    "gemeinde_name": "Dimbach"
+  },
+  "32203": {
+    "gemeinde_code": "32203",
+    "gemeinde_name": "Dobersberg"
+  },
+  "60660": {
+    "gemeinde_code": "60660",
+    "gemeinde_name": "Dobl-Zwaring"
+  },
+  "70707": {
+    "gemeinde_code": "70707",
+    "gemeinde_name": "Dölsach"
+  },
+  "10302": {
+    "gemeinde_code": "10302",
+    "gemeinde_name": "Donnerskirchen"
+  },
+  "80210": {
+    "gemeinde_code": "80210",
+    "gemeinde_name": "Doren"
+  },
+  "41405": {
+    "gemeinde_code": "41405",
+    "gemeinde_name": "Dorf an der Pram"
+  },
+  "50306": {
+    "gemeinde_code": "50306",
+    "gemeinde_name": "Dorfbeuern"
+  },
+  "50405": {
+    "gemeinde_code": "50405",
+    "gemeinde_name": "Dorfgastein"
+  },
+  "31506": {
+    "gemeinde_code": "31506",
+    "gemeinde_name": "Dorfstetten"
+  },
+  "80301": {
+    "gemeinde_code": "80301",
+    "gemeinde_name": "Dornbirn"
+  },
+  "31606": {
+    "gemeinde_code": "31606",
+    "gemeinde_name": "Drasenhofen"
+  },
+  "10601": {
+    "gemeinde_code": "10601",
+    "gemeinde_name": "Draßburg"
+  },
+  "10802": {
+    "gemeinde_code": "10802",
+    "gemeinde_name": "Draßmarkt"
+  },
+  "31104": {
+    "gemeinde_code": "31104",
+    "gemeinde_name": "Drosendorf-Zissersdorf"
+  },
+  "30810": {
+    "gemeinde_code": "30810",
+    "gemeinde_name": "Drösing"
+  },
+  "31356": {
+    "gemeinde_code": "31356",
+    "gemeinde_name": "Droß"
+  },
+  "31507": {
+    "gemeinde_code": "31507",
+    "gemeinde_name": "Dunkelsteinerwald"
+  },
+  "80402": {
+    "gemeinde_code": "80402",
+    "gemeinde_name": "Düns"
+  },
+  "80403": {
+    "gemeinde_code": "80403",
+    "gemeinde_name": "Dünserberg"
+  },
+  "30811": {
+    "gemeinde_code": "30811",
+    "gemeinde_name": "Dürnkrut"
+  },
+  "31304": {
+    "gemeinde_code": "31304",
+    "gemeinde_name": "Dürnstein"
+  },
+  "70508": {
+    "gemeinde_code": "70508",
+    "gemeinde_name": "Ebbs"
+  },
+  "70907": {
+    "gemeinde_code": "70907",
+    "gemeinde_name": "Eben am Achensee"
+  },
+  "50307": {
+    "gemeinde_code": "50307",
+    "gemeinde_name": "Ebenau"
+  },
+  "32304": {
+    "gemeinde_code": "32304",
+    "gemeinde_name": "Ebenfurth"
+  },
+  "50406": {
+    "gemeinde_code": "50406",
+    "gemeinde_name": "Eben im Pongau"
+  },
+  "40704": {
+    "gemeinde_code": "40704",
+    "gemeinde_name": "Ebensee am Traunsee"
+  },
+  "30812": {
+    "gemeinde_code": "30812",
+    "gemeinde_name": "Ebenthal"
+  },
+  "20402": {
+    "gemeinde_code": "20402",
+    "gemeinde_name": "Ebenthal in Kärnten"
+  },
+  "10403": {
+    "gemeinde_code": "10403",
+    "gemeinde_name": "Eberau"
+  },
+  "30729": {
+    "gemeinde_code": "30729",
+    "gemeinde_name": "Ebergassing"
+  },
+  "20803": {
+    "gemeinde_code": "20803",
+    "gemeinde_name": "Eberndorf"
+  },
+  "41204": {
+    "gemeinde_code": "41204",
+    "gemeinde_name": "Eberschwang"
+  },
+  "62209": {
+    "gemeinde_code": "62209",
+    "gemeinde_name": "Ebersdorf"
+  },
+  "41805": {
+    "gemeinde_code": "41805",
+    "gemeinde_name": "Eberstalzell"
+  },
+  "20504": {
+    "gemeinde_code": "20504",
+    "gemeinde_name": "Eberstein"
+  },
+  "30607": {
+    "gemeinde_code": "30607",
+    "gemeinde_name": "Ebreichsdorf"
+  },
+  "32504": {
+    "gemeinde_code": "32504",
+    "gemeinde_name": "Echsenbach"
+  },
+  "30813": {
+    "gemeinde_code": "30813",
+    "gemeinde_name": "Eckartsau"
+  },
+  "62311": {
+    "gemeinde_code": "62311",
+    "gemeinde_name": "Edelsbach bei Feldbach"
+  },
+  "61627": {
+    "gemeinde_code": "61627",
+    "gemeinde_name": "Edelschrott"
+  },
+  "10727": {
+    "gemeinde_code": "10727",
+    "gemeinde_name": "Edelstal"
+  },
+  "40901": {
+    "gemeinde_code": "40901",
+    "gemeinde_name": "Edlbach"
+  },
+  "31807": {
+    "gemeinde_code": "31807",
+    "gemeinde_name": "Edlitz"
+  },
+  "41806": {
+    "gemeinde_code": "41806",
+    "gemeinde_name": "Edt bei Lambach"
+  },
+  "40503": {
+    "gemeinde_code": "40503",
+    "gemeinde_name": "Eferding"
+  },
+  "80211": {
+    "gemeinde_code": "80211",
+    "gemeinde_name": "Egg"
+  },
+  "40406": {
+    "gemeinde_code": "40406",
+    "gemeinde_name": "Eggelsberg"
+  },
+  "31105": {
+    "gemeinde_code": "31105",
+    "gemeinde_name": "Eggenburg"
+  },
+  "32305": {
+    "gemeinde_code": "32305",
+    "gemeinde_name": "Eggendorf"
+  },
+  "41004": {
+    "gemeinde_code": "41004",
+    "gemeinde_name": "Eggendorf im Traunkreis"
+  },
+  "41406": {
+    "gemeinde_code": "41406",
+    "gemeinde_name": "Eggerding"
+  },
+  "30904": {
+    "gemeinde_code": "30904",
+    "gemeinde_name": "Eggern"
+  },
+  "60661": {
+    "gemeinde_code": "60661",
+    "gemeinde_name": "Eggersdorf bei Graz"
+  },
+  "70806": {
+    "gemeinde_code": "70806",
+    "gemeinde_name": "Ehenbichl"
+  },
+  "61049": {
+    "gemeinde_code": "61049",
+    "gemeinde_name": "Ehrenhausen an der Weinstraße"
+  },
+  "70807": {
+    "gemeinde_code": "70807",
+    "gemeinde_name": "Ehrwald"
+  },
+  "60345": {
+    "gemeinde_code": "60345",
+    "gemeinde_name": "Eibiswald"
+  },
+  "80212": {
+    "gemeinde_code": "80212",
+    "gemeinde_name": "Eichenberg"
+  },
+  "31905": {
+    "gemeinde_code": "31905",
+    "gemeinde_name": "Eichgraben"
+  },
+  "62314": {
+    "gemeinde_code": "62314",
+    "gemeinde_name": "Eichkögl"
+  },
+  "41604": {
+    "gemeinde_code": "41604",
+    "gemeinde_name": "Eidenberg"
+  },
+  "61101": {
+    "gemeinde_code": "61101",
+    "gemeinde_name": "Eisenerz"
+  },
+  "20804": {
+    "gemeinde_code": "20804",
+    "gemeinde_name": "Eisenkappel-Vellach"
+  },
+  "10101": {
+    "gemeinde_code": "10101",
+    "gemeinde_name": "Eisenstadt"
+  },
+  "30906": {
+    "gemeinde_code": "30906",
+    "gemeinde_name": "Eisgarn"
+  },
+  "41205": {
+    "gemeinde_code": "41205",
+    "gemeinde_name": "Eitzing"
+  },
+  "70808": {
+    "gemeinde_code": "70808",
+    "gemeinde_name": "Elbigenalp"
+  },
+  "50308": {
+    "gemeinde_code": "50308",
+    "gemeinde_name": "Elixhausen"
+  },
+  "70307": {
+    "gemeinde_code": "70307",
+    "gemeinde_name": "Ellbögen"
+  },
+  "70509": {
+    "gemeinde_code": "70509",
+    "gemeinde_name": "Ellmau"
+  },
+  "70809": {
+    "gemeinde_code": "70809",
+    "gemeinde_name": "Elmen"
+  },
+  "50309": {
+    "gemeinde_code": "50309",
+    "gemeinde_name": "Elsbethen"
+  },
+  "10502": {
+    "gemeinde_code": "10502",
+    "gemeinde_name": "Eltendorf"
+  },
+  "31553": {
+    "gemeinde_code": "31553",
+    "gemeinde_name": "Emmersdorf an der Donau"
+  },
+  "61007": {
+    "gemeinde_code": "61007",
+    "gemeinde_name": "Empersdorf"
+  },
+  "30814": {
+    "gemeinde_code": "30814",
+    "gemeinde_name": "Engelhartstetten"
+  },
+  "41407": {
+    "gemeinde_code": "41407",
+    "gemeinde_name": "Engelhartszell"
+  },
+  "41605": {
+    "gemeinde_code": "41605",
+    "gemeinde_name": "Engerwitzdorf"
+  },
+  "41005": {
+    "gemeinde_code": "41005",
+    "gemeinde_name": "Enns"
+  },
+  "30508": {
+    "gemeinde_code": "30508",
+    "gemeinde_name": "Ennsdorf"
+  },
+  "41408": {
+    "gemeinde_code": "41408",
+    "gemeinde_name": "Enzenkirchen"
+  },
+  "31808": {
+    "gemeinde_code": "31808",
+    "gemeinde_name": "Enzenreith"
+  },
+  "30706": {
+    "gemeinde_code": "30706",
+    "gemeinde_name": "Enzersdorf an der Fischa"
+  },
+  "31202": {
+    "gemeinde_code": "31202",
+    "gemeinde_name": "Enzersfeld im Weinviertel"
+  },
+  "30608": {
+    "gemeinde_code": "30608",
+    "gemeinde_name": "Enzesfeld-Lindabrunn"
+  },
+  "70510": {
+    "gemeinde_code": "70510",
+    "gemeinde_name": "Erl"
+  },
+  "31508": {
+    "gemeinde_code": "31508",
+    "gemeinde_name": "Erlauf"
+  },
+  "31203": {
+    "gemeinde_code": "31203",
+    "gemeinde_name": "Ernstbrunn"
+  },
+  "30509": {
+    "gemeinde_code": "30509",
+    "gemeinde_name": "Ernsthofen"
+  },
+  "30510": {
+    "gemeinde_code": "30510",
+    "gemeinde_name": "Ertl"
+  },
+  "31402": {
+    "gemeinde_code": "31402",
+    "gemeinde_name": "Eschenau"
+  },
+  "40804": {
+    "gemeinde_code": "40804",
+    "gemeinde_name": "Eschenau im Hausruckkreis"
+  },
+  "41409": {
+    "gemeinde_code": "41409",
+    "gemeinde_name": "Esternberg"
+  },
+  "50310": {
+    "gemeinde_code": "50310",
+    "gemeinde_name": "Eugendorf"
+  },
+  "30511": {
+    "gemeinde_code": "30511",
+    "gemeinde_name": "Euratsfeld"
+  },
+  "70601": {
+    "gemeinde_code": "70601",
+    "gemeinde_name": "Faggen"
+  },
+  "50311": {
+    "gemeinde_code": "50311",
+    "gemeinde_name": "Faistenau"
+  },
+  "31608": {
+    "gemeinde_code": "31608",
+    "gemeinde_name": "Falkenstein"
+  },
+  "31609": {
+    "gemeinde_code": "31609",
+    "gemeinde_name": "Fallbach"
+  },
+  "62378": {
+    "gemeinde_code": "62378",
+    "gemeinde_name": "Fehring"
+  },
+  "31809": {
+    "gemeinde_code": "31809",
+    "gemeinde_name": "Feistritz am Wechsel"
+  },
+  "20707": {
+    "gemeinde_code": "20707",
+    "gemeinde_name": "Feistritz an der Gail"
+  },
+  "20403": {
+    "gemeinde_code": "20403",
+    "gemeinde_name": "Feistritz im Rosental"
+  },
+  "20805": {
+    "gemeinde_code": "20805",
+    "gemeinde_name": "Feistritz ob Bleiburg"
+  },
+  "62266": {
+    "gemeinde_code": "62266",
+    "gemeinde_name": "Feistritztal"
+  },
+  "20708": {
+    "gemeinde_code": "20708",
+    "gemeinde_name": "Feld am See"
+  },
+  "62379": {
+    "gemeinde_code": "62379",
+    "gemeinde_name": "Feldbach"
+  },
+  "80404": {
+    "gemeinde_code": "80404",
+    "gemeinde_name": "Feldkirch"
+  },
+  "41606": {
+    "gemeinde_code": "41606",
+    "gemeinde_name": "Feldkirchen an der Donau"
+  },
+  "60608": {
+    "gemeinde_code": "60608",
+    "gemeinde_name": "Feldkirchen bei Graz"
+  },
+  "40407": {
+    "gemeinde_code": "40407",
+    "gemeinde_name": "Feldkirchen bei Mattighofen"
+  },
+  "21002": {
+    "gemeinde_code": "21002",
+    "gemeinde_name": "Feldkirchen in Kärnten"
+  },
+  "32307": {
+    "gemeinde_code": "32307",
+    "gemeinde_name": "Felixdorf"
+  },
+  "32106": {
+    "gemeinde_code": "32106",
+    "gemeinde_name": "Fels am Wagram"
+  },
+  "70602": {
+    "gemeinde_code": "70602",
+    "gemeinde_name": "Fendels"
+  },
+  "20405": {
+    "gemeinde_code": "20405",
+    "gemeinde_name": "Ferlach"
+  },
+  "20710": {
+    "gemeinde_code": "20710",
+    "gemeinde_name": "Ferndorf"
+  },
+  "60662": {
+    "gemeinde_code": "60662",
+    "gemeinde_name": "Fernitz-Mellach"
+  },
+  "30512": {
+    "gemeinde_code": "30512",
+    "gemeinde_name": "Ferschnitz"
+  },
+  "70403": {
+    "gemeinde_code": "70403",
+    "gemeinde_name": "Fieberbrunn"
+  },
+  "50407": {
+    "gemeinde_code": "50407",
+    "gemeinde_name": "Filzmoos"
+  },
+  "70908": {
+    "gemeinde_code": "70908",
+    "gemeinde_name": "Finkenberg"
+  },
+  "20711": {
+    "gemeinde_code": "20711",
+    "gemeinde_name": "Finkenstein am Faaker See"
+  },
+  "30730": {
+    "gemeinde_code": "30730",
+    "gemeinde_name": "Fischamend"
+  },
+  "61708": {
+    "gemeinde_code": "61708",
+    "gemeinde_name": "Fischbach"
+  },
+  "41807": {
+    "gemeinde_code": "41807",
+    "gemeinde_name": "Fischlham"
+  },
+  "70603": {
+    "gemeinde_code": "70603",
+    "gemeinde_name": "Fiss"
+  },
+  "50408": {
+    "gemeinde_code": "50408",
+    "gemeinde_name": "Flachau"
+  },
+  "61758": {
+    "gemeinde_code": "61758",
+    "gemeinde_name": "Fladnitz an der Teichalm"
+  },
+  "20607": {
+    "gemeinde_code": "20607",
+    "gemeinde_name": "Flattach"
+  },
+  "70308": {
+    "gemeinde_code": "70308",
+    "gemeinde_name": "Flaurling"
+  },
+  "70604": {
+    "gemeinde_code": "70604",
+    "gemeinde_name": "Fließ"
+  },
+  "70605": {
+    "gemeinde_code": "70605",
+    "gemeinde_name": "Flirsch"
+  },
+  "61710": {
+    "gemeinde_code": "61710",
+    "gemeinde_name": "Floing"
+  },
+  "62007": {
+    "gemeinde_code": "62007",
+    "gemeinde_name": "Fohnsdorf"
+  },
+  "80109": {
+    "gemeinde_code": "80109",
+    "gemeinde_name": "Fontanella"
+  },
+  "70810": {
+    "gemeinde_code": "70810",
+    "gemeinde_name": "Forchach"
+  },
+  "10602": {
+    "gemeinde_code": "10602",
+    "gemeinde_name": "Forchtenstein"
+  },
+  "41708": {
+    "gemeinde_code": "41708",
+    "gemeinde_name": "Fornach"
+  },
+  "50409": {
+    "gemeinde_code": "50409",
+    "gemeinde_name": "Forstau"
+  },
+  "40504": {
+    "gemeinde_code": "40504",
+    "gemeinde_name": "Fraham"
+  },
+  "10803": {
+    "gemeinde_code": "10803",
+    "gemeinde_name": "Frankenau-Unterpullendorf"
+  },
+  "41709": {
+    "gemeinde_code": "41709",
+    "gemeinde_name": "Frankenburg am Hausruck"
+  },
+  "31906": {
+    "gemeinde_code": "31906",
+    "gemeinde_name": "Frankenfels"
+  },
+  "41710": {
+    "gemeinde_code": "41710",
+    "gemeinde_name": "Frankenmarkt"
+  },
+  "40408": {
+    "gemeinde_code": "40408",
+    "gemeinde_name": "Franking"
+  },
+  "20905": {
+    "gemeinde_code": "20905",
+    "gemeinde_name": "Frantschach-St. Gertraud"
+  },
+  "80405": {
+    "gemeinde_code": "80405",
+    "gemeinde_name": "Frastanz"
+  },
+  "10705": {
+    "gemeinde_code": "10705",
+    "gemeinde_name": "Frauenkirchen"
+  },
+  "20534": {
+    "gemeinde_code": "20534",
+    "gemeinde_name": "Frauenstein"
+  },
+  "60305": {
+    "gemeinde_code": "60305",
+    "gemeinde_name": "Frauental an der Laßnitz"
+  },
+  "80406": {
+    "gemeinde_code": "80406",
+    "gemeinde_name": "Fraxern"
+  },
+  "41410": {
+    "gemeinde_code": "41410",
+    "gemeinde_name": "Freinberg"
+  },
+  "40601": {
+    "gemeinde_code": "40601",
+    "gemeinde_name": "Freistadt"
+  },
+  "20712": {
+    "gemeinde_code": "20712",
+    "gemeinde_name": "Fresach"
+  },
+  "62211": {
+    "gemeinde_code": "62211",
+    "gemeinde_name": "Friedberg"
+  },
+  "20505": {
+    "gemeinde_code": "20505",
+    "gemeinde_name": "Friesach"
+  },
+  "70309": {
+    "gemeinde_code": "70309",
+    "gemeinde_name": "Fritzens"
+  },
+  "60663": {
+    "gemeinde_code": "60663",
+    "gemeinde_name": "Frohnleiten"
+  },
+  "70909": {
+    "gemeinde_code": "70909",
+    "gemeinde_name": "Fügen"
+  },
+  "70910": {
+    "gemeinde_code": "70910",
+    "gemeinde_name": "Fügenberg"
+  },
+  "70310": {
+    "gemeinde_code": "70310",
+    "gemeinde_name": "Fulpmes"
+  },
+  "62280": {
+    "gemeinde_code": "62280",
+    "gemeinde_name": "Fürstenfeld"
+  },
+  "30609": {
+    "gemeinde_code": "30609",
+    "gemeinde_name": "Furth an der Triesting"
+  },
+  "31309": {
+    "gemeinde_code": "31309",
+    "gemeinde_name": "Furth bei Göttweig"
+  },
+  "50604": {
+    "gemeinde_code": "50604",
+    "gemeinde_name": "Fusch an der Großglocknerstraße"
+  },
+  "50312": {
+    "gemeinde_code": "50312",
+    "gemeinde_name": "Fuschl am See"
+  },
+  "80213": {
+    "gemeinde_code": "80213",
+    "gemeinde_name": "Fußach"
+  },
+  "31706": {
+    "gemeinde_code": "31706",
+    "gemeinde_name": "Gaaden"
+  },
+  "62008": {
+    "gemeinde_code": "62008",
+    "gemeinde_name": "Gaal"
+  },
+  "61008": {
+    "gemeinde_code": "61008",
+    "gemeinde_name": "Gabersdorf"
+  },
+  "31949": {
+    "gemeinde_code": "31949",
+    "gemeinde_name": "Gablitz"
+  },
+  "41505": {
+    "gemeinde_code": "41505",
+    "gemeinde_name": "Gaflenz"
+  },
+  "70708": {
+    "gemeinde_code": "70708",
+    "gemeinde_name": "Gaimberg"
+  },
+  "61256": {
+    "gemeinde_code": "61256",
+    "gemeinde_name": "Gaishorn am See"
+  },
+  "80214": {
+    "gemeinde_code": "80214",
+    "gemeinde_name": "Gaißau"
+  },
+  "20806": {
+    "gemeinde_code": "20806",
+    "gemeinde_name": "Gallizien"
+  },
+  "41607": {
+    "gemeinde_code": "41607",
+    "gemeinde_name": "Gallneukirchen"
+  },
+  "40805": {
+    "gemeinde_code": "40805",
+    "gemeinde_name": "Gallspach"
+  },
+  "70911": {
+    "gemeinde_code": "70911",
+    "gemeinde_name": "Gallzein"
+  },
+  "70606": {
+    "gemeinde_code": "70606",
+    "gemeinde_name": "Galtür"
+  },
+  "32001": {
+    "gemeinde_code": "32001",
+    "gemeinde_name": "Gaming"
+  },
+  "61050": {
+    "gemeinde_code": "61050",
+    "gemeinde_name": "Gamlitz"
+  },
+  "41711": {
+    "gemeinde_code": "41711",
+    "gemeinde_name": "Gampern"
+  },
+  "30817": {
+    "gemeinde_code": "30817",
+    "gemeinde_name": "Gänserndorf"
+  },
+  "31106": {
+    "gemeinde_code": "31106",
+    "gemeinde_name": "Gars am Kamp"
+  },
+  "41506": {
+    "gemeinde_code": "41506",
+    "gemeinde_name": "Garsten"
+  },
+  "80110": {
+    "gemeinde_code": "80110",
+    "gemeinde_name": "Gaschurn"
+  },
+  "61711": {
+    "gemeinde_code": "61711",
+    "gemeinde_name": "Gasen"
+  },
+  "40806": {
+    "gemeinde_code": "40806",
+    "gemeinde_name": "Gaspoltshofen"
+  },
+  "32206": {
+    "gemeinde_code": "32206",
+    "gemeinde_name": "Gastern"
+  },
+  "10706": {
+    "gemeinde_code": "10706",
+    "gemeinde_name": "Gattendorf"
+  },
+  "31611": {
+    "gemeinde_code": "31611",
+    "gemeinde_name": "Gaubitsch"
+  },
+  "31612": {
+    "gemeinde_code": "31612",
+    "gemeinde_name": "Gaweinstal"
+  },
+  "40807": {
+    "gemeinde_code": "40807",
+    "gemeinde_name": "Geboltskirchen"
+  },
+  "31310": {
+    "gemeinde_code": "31310",
+    "gemeinde_name": "Gedersdorf"
+  },
+  "41206": {
+    "gemeinde_code": "41206",
+    "gemeinde_name": "Geiersberg"
+  },
+  "41207": {
+    "gemeinde_code": "41207",
+    "gemeinde_name": "Geinberg"
+  },
+  "61628": {
+    "gemeinde_code": "61628",
+    "gemeinde_name": "Geistthal-Södingberg"
+  },
+  "31107": {
+    "gemeinde_code": "31107",
+    "gemeinde_name": "Geras"
+  },
+  "31235": {
+    "gemeinde_code": "31235",
+    "gemeinde_name": "Gerasdorf bei Wien"
+  },
+  "31907": {
+    "gemeinde_code": "31907",
+    "gemeinde_name": "Gerersdorf"
+  },
+  "10404": {
+    "gemeinde_code": "10404",
+    "gemeinde_name": "Gerersdorf-Sulz"
+  },
+  "40409": {
+    "gemeinde_code": "40409",
+    "gemeinde_name": "Geretsberg"
+  },
+  "70912": {
+    "gemeinde_code": "70912",
+    "gemeinde_name": "Gerlos"
+  },
+  "70913": {
+    "gemeinde_code": "70913",
+    "gemeinde_name": "Gerlosberg"
+  },
+  "61759": {
+    "gemeinde_code": "61759",
+    "gemeinde_name": "Gersdorf an der Feistritz"
+  },
+  "31311": {
+    "gemeinde_code": "31311",
+    "gemeinde_name": "Gföhl"
+  },
+  "31707": {
+    "gemeinde_code": "31707",
+    "gemeinde_name": "Gießhübl"
+  },
+  "40410": {
+    "gemeinde_code": "40410",
+    "gemeinde_name": "Gilgenberg am Weilhart"
+  },
+  "20320": {
+    "gemeinde_code": "20320",
+    "gemeinde_name": "Gitschtal"
+  },
+  "21003": {
+    "gemeinde_code": "21003",
+    "gemeinde_name": "Glanegg"
+  },
+  "61051": {
+    "gemeinde_code": "61051",
+    "gemeinde_name": "Gleinstätten"
+  },
+  "61760": {
+    "gemeinde_code": "61760",
+    "gemeinde_name": "Gleisdorf"
+  },
+  "30819": {
+    "gemeinde_code": "30819",
+    "gemeinde_name": "Glinzendorf"
+  },
+  "20807": {
+    "gemeinde_code": "20807",
+    "gemeinde_name": "Globasnitz"
+  },
+  "20506": {
+    "gemeinde_code": "20506",
+    "gemeinde_name": "Glödnitz"
+  },
+  "31810": {
+    "gemeinde_code": "31810",
+    "gemeinde_name": "Gloggnitz"
+  },
+  "30908": {
+    "gemeinde_code": "30908",
+    "gemeinde_name": "Gmünd"
+  },
+  "40705": {
+    "gemeinde_code": "40705",
+    "gemeinde_name": "Gmunden"
+  },
+  "20608": {
+    "gemeinde_code": "20608",
+    "gemeinde_name": "Gmünd in Kärnten"
+  },
+  "31613": {
+    "gemeinde_code": "31613",
+    "gemeinde_name": "Gnadendorf"
+  },
+  "70311": {
+    "gemeinde_code": "70311",
+    "gemeinde_name": "Gnadenwald"
+  },
+  "62380": {
+    "gemeinde_code": "62380",
+    "gemeinde_name": "Gnas"
+  },
+  "21004": {
+    "gemeinde_code": "21004",
+    "gemeinde_name": "Gnesau"
+  },
+  "80407": {
+    "gemeinde_code": "80407",
+    "gemeinde_name": "Göfis"
+  },
+  "70404": {
+    "gemeinde_code": "70404",
+    "gemeinde_name": "Going am Wilden Kaiser"
+  },
+  "50410": {
+    "gemeinde_code": "50410",
+    "gemeinde_name": "Goldegg"
+  },
+  "41608": {
+    "gemeinde_code": "41608",
+    "gemeinde_name": "Goldwörth"
+  },
+  "31008": {
+    "gemeinde_code": "31008",
+    "gemeinde_name": "Göllersdorf"
+  },
+  "31509": {
+    "gemeinde_code": "31509",
+    "gemeinde_name": "Golling an der Erlauf"
+  },
+  "50204": {
+    "gemeinde_code": "50204",
+    "gemeinde_name": "Golling an der Salzach"
+  },
+  "10707": {
+    "gemeinde_code": "10707",
+    "gemeinde_name": "Gols"
+  },
+  "50313": {
+    "gemeinde_code": "50313",
+    "gemeinde_name": "Göming"
+  },
+  "32505": {
+    "gemeinde_code": "32505",
+    "gemeinde_name": "Göpfritz an der Wild"
+  },
+  "50501": {
+    "gemeinde_code": "50501",
+    "gemeinde_name": "Göriach"
+  },
+  "40706": {
+    "gemeinde_code": "40706",
+    "gemeinde_name": "Gosau"
+  },
+  "60611": {
+    "gemeinde_code": "60611",
+    "gemeinde_name": "Gössendorf"
+  },
+  "32002": {
+    "gemeinde_code": "32002",
+    "gemeinde_name": "Göstling an der Ybbs"
+  },
+  "30708": {
+    "gemeinde_code": "30708",
+    "gemeinde_name": "Göttlesbrunn-Arbesthal"
+  },
+  "30709": {
+    "gemeinde_code": "30709",
+    "gemeinde_name": "Götzendorf an der Leitha"
+  },
+  "70312": {
+    "gemeinde_code": "70312",
+    "gemeinde_name": "Götzens"
+  },
+  "80408": {
+    "gemeinde_code": "80408",
+    "gemeinde_name": "Götzis"
+  },
+  "31009": {
+    "gemeinde_code": "31009",
+    "gemeinde_name": "Grabern"
+  },
+  "31811": {
+    "gemeinde_code": "31811",
+    "gemeinde_name": "Grafenbach-St. Valentin"
+  },
+  "62268": {
+    "gemeinde_code": "62268",
+    "gemeinde_name": "Grafendorf bei Hartberg"
+  },
+  "31308": {
+    "gemeinde_code": "31308",
+    "gemeinde_name": "Grafenegg"
+  },
+  "10904": {
+    "gemeinde_code": "10904",
+    "gemeinde_name": "Grafenschachen"
+  },
+  "32506": {
+    "gemeinde_code": "32506",
+    "gemeinde_name": "Grafenschlag"
+  },
+  "20409": {
+    "gemeinde_code": "20409",
+    "gemeinde_name": "Grafenstein"
+  },
+  "32107": {
+    "gemeinde_code": "32107",
+    "gemeinde_name": "Grafenwörth"
+  },
+  "61012": {
+    "gemeinde_code": "61012",
+    "gemeinde_name": "Gralla"
+  },
+  "70812": {
+    "gemeinde_code": "70812",
+    "gemeinde_name": "Gramais"
+  },
+  "41609": {
+    "gemeinde_code": "41609",
+    "gemeinde_name": "Gramastetten"
+  },
+  "30731": {
+    "gemeinde_code": "30731",
+    "gemeinde_name": "Gramatneusiedl"
+  },
+  "70811": {
+    "gemeinde_code": "70811",
+    "gemeinde_name": "Grän"
+  },
+  "60613": {
+    "gemeinde_code": "60613",
+    "gemeinde_name": "Gratkorn"
+  },
+  "60664": {
+    "gemeinde_code": "60664",
+    "gemeinde_name": "Gratwein-Straßengel"
+  },
+  "60101": {
+    "gemeinde_code": "60101",
+    "gemeinde_name": "Graz"
+  },
+  "20609": {
+    "gemeinde_code": "20609",
+    "gemeinde_name": "Greifenburg"
+  },
+  "41105": {
+    "gemeinde_code": "41105",
+    "gemeinde_name": "Grein"
+  },
+  "62214": {
+    "gemeinde_code": "62214",
+    "gemeinde_name": "Greinbach"
+  },
+  "32003": {
+    "gemeinde_code": "32003",
+    "gemeinde_name": "Gresten"
+  },
+  "32004": {
+    "gemeinde_code": "32004",
+    "gemeinde_name": "Gresten-Land"
+  },
+  "70313": {
+    "gemeinde_code": "70313",
+    "gemeinde_name": "Gries am Brenner"
+  },
+  "70314": {
+    "gemeinde_code": "70314",
+    "gemeinde_name": "Gries im Sellrain"
+  },
+  "40808": {
+    "gemeinde_code": "40808",
+    "gemeinde_name": "Grieskirchen"
+  },
+  "20808": {
+    "gemeinde_code": "20808",
+    "gemeinde_name": "Griffen"
+  },
+  "31812": {
+    "gemeinde_code": "31812",
+    "gemeinde_name": "Grimmenstein"
+  },
+  "70607": {
+    "gemeinde_code": "70607",
+    "gemeinde_name": "Grins"
+  },
+  "70315": {
+    "gemeinde_code": "70315",
+    "gemeinde_name": "Grinzens"
+  },
+  "61213": {
+    "gemeinde_code": "61213",
+    "gemeinde_name": "Gröbming"
+  },
+  "50314": {
+    "gemeinde_code": "50314",
+    "gemeinde_name": "Grödig"
+  },
+  "50411": {
+    "gemeinde_code": "50411",
+    "gemeinde_name": "Großarl"
+  },
+  "30909": {
+    "gemeinde_code": "30909",
+    "gemeinde_name": "Großdietmanns"
+  },
+  "31614": {
+    "gemeinde_code": "31614",
+    "gemeinde_name": "Großebersdorf"
+  },
+  "31615": {
+    "gemeinde_code": "31615",
+    "gemeinde_name": "Großengersdorf"
+  },
+  "30821": {
+    "gemeinde_code": "30821",
+    "gemeinde_name": "Groß-Enzersdorf"
+  },
+  "32508": {
+    "gemeinde_code": "32508",
+    "gemeinde_name": "Groß Gerungs"
+  },
+  "50315": {
+    "gemeinde_code": "50315",
+    "gemeinde_name": "Großgmain"
+  },
+  "32509": {
+    "gemeinde_code": "32509",
+    "gemeinde_name": "Großgöttfritz"
+  },
+  "31616": {
+    "gemeinde_code": "31616",
+    "gemeinde_name": "Großharras"
+  },
+  "30822": {
+    "gemeinde_code": "30822",
+    "gemeinde_name": "Großhofen"
+  },
+  "10303": {
+    "gemeinde_code": "10303",
+    "gemeinde_name": "Großhöflein"
+  },
+  "20605": {
+    "gemeinde_code": "20605",
+    "gemeinde_name": "Großkirchheim"
+  },
+  "61013": {
+    "gemeinde_code": "61013",
+    "gemeinde_name": "Großklein"
+  },
+  "31617": {
+    "gemeinde_code": "31617",
+    "gemeinde_name": "Großkrut"
+  },
+  "31204": {
+    "gemeinde_code": "31204",
+    "gemeinde_name": "Großmugl"
+  },
+  "10420": {
+    "gemeinde_code": "10420",
+    "gemeinde_name": "Großmürbisch"
+  },
+  "10905": {
+    "gemeinde_code": "10905",
+    "gemeinde_name": "Großpetersdorf"
+  },
+  "41507": {
+    "gemeinde_code": "41507",
+    "gemeinde_name": "Großraming"
+  },
+  "32109": {
+    "gemeinde_code": "32109",
+    "gemeinde_name": "Großriedenthal"
+  },
+  "31205": {
+    "gemeinde_code": "31205",
+    "gemeinde_name": "Großrußbach"
+  },
+  "60346": {
+    "gemeinde_code": "60346",
+    "gemeinde_name": "Groß Sankt Florian"
+  },
+  "30912": {
+    "gemeinde_code": "30912",
+    "gemeinde_name": "Großschönau"
+  },
+  "30824": {
+    "gemeinde_code": "30824",
+    "gemeinde_name": "Groß-Schweinbarth"
+  },
+  "32207": {
+    "gemeinde_code": "32207",
+    "gemeinde_name": "Groß-Siegharts"
+  },
+  "62216": {
+    "gemeinde_code": "62216",
+    "gemeinde_name": "Großsteinbach"
+  },
+  "10804": {
+    "gemeinde_code": "10804",
+    "gemeinde_name": "Großwarasdorf"
+  },
+  "32110": {
+    "gemeinde_code": "32110",
+    "gemeinde_name": "Großweikersdorf"
+  },
+  "62269": {
+    "gemeinde_code": "62269",
+    "gemeinde_name": "Großwilfersdorf"
+  },
+  "40707": {
+    "gemeinde_code": "40707",
+    "gemeinde_name": "Grünau im Almtal"
+  },
+  "40602": {
+    "gemeinde_code": "40602",
+    "gemeinde_name": "Grünbach"
+  },
+  "31813": {
+    "gemeinde_code": "31813",
+    "gemeinde_name": "Grünbach am Schneeberg"
+  },
+  "40902": {
+    "gemeinde_code": "40902",
+    "gemeinde_name": "Grünburg"
+  },
+  "61215": {
+    "gemeinde_code": "61215",
+    "gemeinde_name": "Grundlsee"
+  },
+  "70317": {
+    "gemeinde_code": "70317",
+    "gemeinde_name": "Gschnitz"
+  },
+  "40708": {
+    "gemeinde_code": "40708",
+    "gemeinde_name": "Gschwandt"
+  },
+  "31709": {
+    "gemeinde_code": "31709",
+    "gemeinde_name": "Gumpoldskirchen"
+  },
+  "30612": {
+    "gemeinde_code": "30612",
+    "gemeinde_name": "Günselsdorf"
+  },
+  "41808": {
+    "gemeinde_code": "41808",
+    "gemeinde_name": "Gunskirchen"
+  },
+  "31014": {
+    "gemeinde_code": "31014",
+    "gemeinde_name": "Guntersdorf"
+  },
+  "31710": {
+    "gemeinde_code": "31710",
+    "gemeinde_name": "Guntramsdorf"
+  },
+  "20508": {
+    "gemeinde_code": "20508",
+    "gemeinde_name": "Gurk"
+  },
+  "41208": {
+    "gemeinde_code": "41208",
+    "gemeinde_name": "Gurten"
+  },
+  "10405": {
+    "gemeinde_code": "10405",
+    "gemeinde_name": "Güssing"
+  },
+  "40603": {
+    "gemeinde_code": "40603",
+    "gemeinde_name": "Gutau"
+  },
+  "61761": {
+    "gemeinde_code": "61761",
+    "gemeinde_name": "Gutenberg"
+  },
+  "32511": {
+    "gemeinde_code": "32511",
+    "gemeinde_name": "Gutenbrunn"
+  },
+  "32308": {
+    "gemeinde_code": "32308",
+    "gemeinde_name": "Gutenstein"
+  },
+  "20509": {
+    "gemeinde_code": "20509",
+    "gemeinde_name": "Guttaring"
+  },
+  "10406": {
+    "gemeinde_code": "10406",
+    "gemeinde_name": "Güttenbach"
+  },
+  "30514": {
+    "gemeinde_code": "30514",
+    "gemeinde_name": "Haag"
+  },
+  "40809": {
+    "gemeinde_code": "40809",
+    "gemeinde_name": "Haag am Hausruck"
+  },
+  "10418": {
+    "gemeinde_code": "10418",
+    "gemeinde_name": "Hackerberg"
+  },
+  "31315": {
+    "gemeinde_code": "31315",
+    "gemeinde_name": "Hadersdorf-Kammern"
+  },
+  "31015": {
+    "gemeinde_code": "31015",
+    "gemeinde_name": "Hadres"
+  },
+  "31910": {
+    "gemeinde_code": "31910",
+    "gemeinde_name": "Hafnerbach"
+  },
+  "40604": {
+    "gemeinde_code": "40604",
+    "gemeinde_name": "Hagenberg im Mühlkreis"
+  },
+  "31206": {
+    "gemeinde_code": "31206",
+    "gemeinde_name": "Hagenbrunn"
+  },
+  "41610": {
+    "gemeinde_code": "41610",
+    "gemeinde_name": "Haibach im Mühlkreis"
+  },
+  "40505": {
+    "gemeinde_code": "40505",
+    "gemeinde_name": "Haibach ob der Donau"
+  },
+  "30515": {
+    "gemeinde_code": "30515",
+    "gemeinde_name": "Haidershofen"
+  },
+  "40411": {
+    "gemeinde_code": "40411",
+    "gemeinde_name": "Haigermoos"
+  },
+  "70202": {
+    "gemeinde_code": "70202",
+    "gemeinde_name": "Haiming"
+  },
+  "30710": {
+    "gemeinde_code": "30710",
+    "gemeinde_name": "Hainburg a.d. Donau"
+  },
+  "31403": {
+    "gemeinde_code": "31403",
+    "gemeinde_name": "Hainfeld"
+  },
+  "70914": {
+    "gemeinde_code": "70914",
+    "gemeinde_name": "Hainzenberg"
+  },
+  "62326": {
+    "gemeinde_code": "62326",
+    "gemeinde_name": "Halbenrain"
+  },
+  "10708": {
+    "gemeinde_code": "10708",
+    "gemeinde_name": "Halbturn"
+  },
+  "50205": {
+    "gemeinde_code": "50205",
+    "gemeinde_name": "Hallein"
+  },
+  "70354": {
+    "gemeinde_code": "70354",
+    "gemeinde_name": "Hall in Tirol"
+  },
+  "40709": {
+    "gemeinde_code": "40709",
+    "gemeinde_name": "Hallstatt"
+  },
+  "50316": {
+    "gemeinde_code": "50316",
+    "gemeinde_name": "Hallwang"
+  },
+  "40412": {
+    "gemeinde_code": "40412",
+    "gemeinde_name": "Handenberg"
+  },
+  "10906": {
+    "gemeinde_code": "10906",
+    "gemeinde_name": "Hannersdorf"
+  },
+  "80215": {
+    "gemeinde_code": "80215",
+    "gemeinde_name": "Hard"
+  },
+  "31016": {
+    "gemeinde_code": "31016",
+    "gemeinde_name": "Hardegg"
+  },
+  "41006": {
+    "gemeinde_code": "41006",
+    "gemeinde_name": "Hargelsberg"
+  },
+  "30825": {
+    "gemeinde_code": "30825",
+    "gemeinde_name": "Haringsee"
+  },
+  "31207": {
+    "gemeinde_code": "31207",
+    "gemeinde_name": "Harmannsdorf"
+  },
+  "60617": {
+    "gemeinde_code": "60617",
+    "gemeinde_name": "Hart bei Graz"
+  },
+  "62219": {
+    "gemeinde_code": "62219",
+    "gemeinde_name": "Hartberg"
+  },
+  "62220": {
+    "gemeinde_code": "62220",
+    "gemeinde_name": "Hartberg Umgebung"
+  },
+  "70915": {
+    "gemeinde_code": "70915",
+    "gemeinde_name": "Hart im Zillertal"
+  },
+  "40506": {
+    "gemeinde_code": "40506",
+    "gemeinde_name": "Hartkirchen"
+  },
+  "62270": {
+    "gemeinde_code": "62270",
+    "gemeinde_name": "Hartl"
+  },
+  "70813": {
+    "gemeinde_code": "70813",
+    "gemeinde_name": "Häselgehr"
+  },
+  "60618": {
+    "gemeinde_code": "60618",
+    "gemeinde_name": "Haselsdorf-Tobelbad"
+  },
+  "41309": {
+    "gemeinde_code": "41309",
+    "gemeinde_name": "Haslach an der Mühl"
+  },
+  "30711": {
+    "gemeinde_code": "30711",
+    "gemeinde_name": "Haslau-Maria Ellend"
+  },
+  "70318": {
+    "gemeinde_code": "70318",
+    "gemeinde_name": "Hatting"
+  },
+  "30915": {
+    "gemeinde_code": "30915",
+    "gemeinde_name": "Haugschlag"
+  },
+  "31018": {
+    "gemeinde_code": "31018",
+    "gemeinde_name": "Haugsdorf"
+  },
+  "31911": {
+    "gemeinde_code": "31911",
+    "gemeinde_name": "Haunoldstein"
+  },
+  "61217": {
+    "gemeinde_code": "61217",
+    "gemeinde_name": "Haus"
+  },
+  "31620": {
+    "gemeinde_code": "31620",
+    "gemeinde_name": "Hausbrunn"
+  },
+  "30826": {
+    "gemeinde_code": "30826",
+    "gemeinde_name": "Hauskirchen"
+  },
+  "31208": {
+    "gemeinde_code": "31208",
+    "gemeinde_name": "Hausleiten"
+  },
+  "60619": {
+    "gemeinde_code": "60619",
+    "gemeinde_name": "Hausmannstätten"
+  },
+  "30916": {
+    "gemeinde_code": "30916",
+    "gemeinde_name": "Heidenreichstein"
+  },
+  "40810": {
+    "gemeinde_code": "40810",
+    "gemeinde_name": "Heiligenberg"
+  },
+  "20610": {
+    "gemeinde_code": "20610",
+    "gemeinde_name": "Heiligenblut am Großglockner"
+  },
+  "10407": {
+    "gemeinde_code": "10407",
+    "gemeinde_name": "Heiligenbrunn"
+  },
+  "30613": {
+    "gemeinde_code": "30613",
+    "gemeinde_name": "Heiligenkreuz"
+  },
+  "61052": {
+    "gemeinde_code": "61052",
+    "gemeinde_name": "Heiligenkreuz am Waasen"
+  },
+  "10503": {
+    "gemeinde_code": "10503",
+    "gemeinde_name": "Heiligenkreuz im Lafnitztal"
+  },
+  "61016": {
+    "gemeinde_code": "61016",
+    "gemeinde_name": "Heimschuh"
+  },
+  "70735": {
+    "gemeinde_code": "70735",
+    "gemeinde_name": "Heinfels"
+  },
+  "70814": {
+    "gemeinde_code": "70814",
+    "gemeinde_name": "Heiterwang"
+  },
+  "31019": {
+    "gemeinde_code": "31019",
+    "gemeinde_name": "Heldenberg"
+  },
+  "41345": {
+    "gemeinde_code": "41345",
+    "gemeinde_name": "Helfenberg"
+  },
+  "41611": {
+    "gemeinde_code": "41611",
+    "gemeinde_name": "Hellmonsödt"
+  },
+  "40413": {
+    "gemeinde_code": "40413",
+    "gemeinde_name": "Helpfau-Uttendorf"
+  },
+  "61017": {
+    "gemeinde_code": "61017",
+    "gemeinde_name": "Hengsberg"
+  },
+  "50317": {
+    "gemeinde_code": "50317",
+    "gemeinde_name": "Henndorf am Wallersee"
+  },
+  "31711": {
+    "gemeinde_code": "31711",
+    "gemeinde_name": "Hennersdorf"
+  },
+  "20305": {
+    "gemeinde_code": "20305",
+    "gemeinde_name": "Hermagor-Pressegger See"
+  },
+  "30614": {
+    "gemeinde_code": "30614",
+    "gemeinde_name": "Hernstein"
+  },
+  "31621": {
+    "gemeinde_code": "31621",
+    "gemeinde_name": "Herrnbaumgarten"
+  },
+  "31912": {
+    "gemeinde_code": "31912",
+    "gemeinde_name": "Herzogenburg"
+  },
+  "41612": {
+    "gemeinde_code": "41612",
+    "gemeinde_name": "Herzogsdorf"
+  },
+  "10424": {
+    "gemeinde_code": "10424",
+    "gemeinde_name": "Heugraben"
+  },
+  "30732": {
+    "gemeinde_code": "30732",
+    "gemeinde_name": "Himberg"
+  },
+  "21005": {
+    "gemeinde_code": "21005",
+    "gemeinde_name": "Himmelberg"
+  },
+  "31712": {
+    "gemeinde_code": "31712",
+    "gemeinde_name": "Hinterbrühl"
+  },
+  "70815": {
+    "gemeinde_code": "70815",
+    "gemeinde_name": "Hinterhornbach"
+  },
+  "50318": {
+    "gemeinde_code": "50318",
+    "gemeinde_name": "Hintersee"
+  },
+  "40903": {
+    "gemeinde_code": "40903",
+    "gemeinde_name": "Hinterstoder"
+  },
+  "40507": {
+    "gemeinde_code": "40507",
+    "gemeinde_name": "Hinzenbach"
+  },
+  "70916": {
+    "gemeinde_code": "70916",
+    "gemeinde_name": "Hippach"
+  },
+  "10603": {
+    "gemeinde_code": "10603",
+    "gemeinde_name": "Hirm"
+  },
+  "30917": {
+    "gemeinde_code": "30917",
+    "gemeinde_name": "Hirschbach"
+  },
+  "40605": {
+    "gemeinde_code": "40605",
+    "gemeinde_name": "Hirschbach im Mühlkreis"
+  },
+  "61629": {
+    "gemeinde_code": "61629",
+    "gemeinde_name": "Hirschegg-Pack"
+  },
+  "30615": {
+    "gemeinde_code": "30615",
+    "gemeinde_name": "Hirtenberg"
+  },
+  "80216": {
+    "gemeinde_code": "80216",
+    "gemeinde_name": "Hittisau"
+  },
+  "60665": {
+    "gemeinde_code": "60665",
+    "gemeinde_name": "Hitzendorf"
+  },
+  "40414": {
+    "gemeinde_code": "40414",
+    "gemeinde_name": "Hochburg-Ach"
+  },
+  "70405": {
+    "gemeinde_code": "70405",
+    "gemeinde_name": "Hochfilzen"
+  },
+  "31622": {
+    "gemeinde_code": "31622",
+    "gemeinde_name": "Hochleithen"
+  },
+  "32309": {
+    "gemeinde_code": "32309",
+    "gemeinde_name": "Hochneukirchen-Gschaidt"
+  },
+  "80217": {
+    "gemeinde_code": "80217",
+    "gemeinde_name": "Höchst"
+  },
+  "32310": {
+    "gemeinde_code": "32310",
+    "gemeinde_name": "Hochwolkersdorf"
+  },
+  "30713": {
+    "gemeinde_code": "30713",
+    "gemeinde_name": "Hof am Leithaberge"
+  },
+  "31511": {
+    "gemeinde_code": "31511",
+    "gemeinde_name": "Hofamt Priel"
+  },
+  "50319": {
+    "gemeinde_code": "50319",
+    "gemeinde_name": "Hof bei Salzburg"
+  },
+  "70816": {
+    "gemeinde_code": "70816",
+    "gemeinde_name": "Höfen"
+  },
+  "40811": {
+    "gemeinde_code": "40811",
+    "gemeinde_name": "Hofkirchen an der Trattnach"
+  },
+  "41312": {
+    "gemeinde_code": "41312",
+    "gemeinde_name": "Hofkirchen im Mühlkreis"
+  },
+  "41008": {
+    "gemeinde_code": "41008",
+    "gemeinde_name": "Hofkirchen im Traunkreis"
+  },
+  "30712": {
+    "gemeinde_code": "30712",
+    "gemeinde_name": "Höflein"
+  },
+  "31849": {
+    "gemeinde_code": "31849",
+    "gemeinde_name": "Höflein an der Hohen Wand"
+  },
+  "61719": {
+    "gemeinde_code": "61719",
+    "gemeinde_name": "Hofstätten an der Raab"
+  },
+  "31909": {
+    "gemeinde_code": "31909",
+    "gemeinde_name": "Hofstetten-Grünau"
+  },
+  "30827": {
+    "gemeinde_code": "30827",
+    "gemeinde_name": "Hohenau an der March"
+  },
+  "31404": {
+    "gemeinde_code": "31404",
+    "gemeinde_name": "Hohenberg"
+  },
+  "30920": {
+    "gemeinde_code": "30920",
+    "gemeinde_name": "Hoheneich"
+  },
+  "80302": {
+    "gemeinde_code": "80302",
+    "gemeinde_name": "Hohenems"
+  },
+  "30828": {
+    "gemeinde_code": "30828",
+    "gemeinde_name": "Hohenruppersdorf"
+  },
+  "62010": {
+    "gemeinde_code": "62010",
+    "gemeinde_name": "Hohentauern"
+  },
+  "20713": {
+    "gemeinde_code": "20713",
+    "gemeinde_name": "Hohenthurn"
+  },
+  "31021": {
+    "gemeinde_code": "31021",
+    "gemeinde_name": "Hohenwarth-Mühlbach a.M."
+  },
+  "80219": {
+    "gemeinde_code": "80219",
+    "gemeinde_name": "Hohenweiler"
+  },
+  "41209": {
+    "gemeinde_code": "41209",
+    "gemeinde_name": "Hohenzell"
+  },
+  "32311": {
+    "gemeinde_code": "32311",
+    "gemeinde_name": "Hohe Wand"
+  },
+  "40415": {
+    "gemeinde_code": "40415",
+    "gemeinde_name": "Höhnhart"
+  },
+  "31022": {
+    "gemeinde_code": "31022",
+    "gemeinde_name": "Hollabrunn"
+  },
+  "30516": {
+    "gemeinde_code": "30516",
+    "gemeinde_name": "Hollenstein an der Ybbs"
+  },
+  "32312": {
+    "gemeinde_code": "32312",
+    "gemeinde_name": "Hollenthon"
+  },
+  "50605": {
+    "gemeinde_code": "50605",
+    "gemeinde_name": "Hollersbach im Pinzgau"
+  },
+  "70817": {
+    "gemeinde_code": "70817",
+    "gemeinde_name": "Holzgau"
+  },
+  "41809": {
+    "gemeinde_code": "41809",
+    "gemeinde_name": "Holzhausen"
+  },
+  "70406": {
+    "gemeinde_code": "70406",
+    "gemeinde_name": "Hopfgarten im Brixental"
+  },
+  "70709": {
+    "gemeinde_code": "70709",
+    "gemeinde_name": "Hopfgarten in Defereggen"
+  },
+  "41311": {
+    "gemeinde_code": "41311",
+    "gemeinde_name": "Hörbich"
+  },
+  "80218": {
+    "gemeinde_code": "80218",
+    "gemeinde_name": "Hörbranz"
+  },
+  "10805": {
+    "gemeinde_code": "10805",
+    "gemeinde_name": "Horitschon"
+  },
+  "31109": {
+    "gemeinde_code": "31109",
+    "gemeinde_name": "Horn"
+  },
+  "10304": {
+    "gemeinde_code": "10304",
+    "gemeinde_name": "Hornstein"
+  },
+  "41007": {
+    "gemeinde_code": "41007",
+    "gemeinde_name": "Hörsching"
+  },
+  "30715": {
+    "gemeinde_code": "30715",
+    "gemeinde_name": "Hundsheim"
+  },
+  "31513": {
+    "gemeinde_code": "31513",
+    "gemeinde_name": "Hürm"
+  },
+  "50412": {
+    "gemeinde_code": "50412",
+    "gemeinde_name": "Hüttau"
+  },
+  "20511": {
+    "gemeinde_code": "20511",
+    "gemeinde_name": "Hüttenberg"
+  },
+  "50413": {
+    "gemeinde_code": "50413",
+    "gemeinde_name": "Hüttschlag"
+  },
+  "10709": {
+    "gemeinde_code": "10709",
+    "gemeinde_name": "Illmitz"
+  },
+  "62271": {
+    "gemeinde_code": "62271",
+    "gemeinde_name": "Ilz"
+  },
+  "61762": {
+    "gemeinde_code": "61762",
+    "gemeinde_name": "Ilztal"
+  },
+  "70203": {
+    "gemeinde_code": "70203",
+    "gemeinde_name": "Imst"
+  },
+  "70204": {
+    "gemeinde_code": "70204",
+    "gemeinde_name": "Imsterberg"
+  },
+  "80111": {
+    "gemeinde_code": "80111",
+    "gemeinde_name": "Innerbraz"
+  },
+  "41712": {
+    "gemeinde_code": "41712",
+    "gemeinde_name": "Innerschwand am Mondsee"
+  },
+  "70710": {
+    "gemeinde_code": "70710",
+    "gemeinde_name": "Innervillgraten"
+  },
+  "70101": {
+    "gemeinde_code": "70101",
+    "gemeinde_name": "Innsbruck"
+  },
+  "10421": {
+    "gemeinde_code": "10421",
+    "gemeinde_name": "Inzenhof"
+  },
+  "31913": {
+    "gemeinde_code": "31913",
+    "gemeinde_name": "Inzersdorf-Getzersdorf"
+  },
+  "40904": {
+    "gemeinde_code": "40904",
+    "gemeinde_name": "Inzersdorf im Kremstal"
+  },
+  "70319": {
+    "gemeinde_code": "70319",
+    "gemeinde_name": "Inzing"
+  },
+  "61257": {
+    "gemeinde_code": "61257",
+    "gemeinde_name": "Irdning-Donnersbachtal"
+  },
+  "31110": {
+    "gemeinde_code": "31110",
+    "gemeinde_name": "Irnfritz-Messern"
+  },
+  "20611": {
+    "gemeinde_code": "20611",
+    "gemeinde_name": "Irschen"
+  },
+  "70608": {
+    "gemeinde_code": "70608",
+    "gemeinde_name": "Ischgl"
+  },
+  "70711": {
+    "gemeinde_code": "70711",
+    "gemeinde_name": "Iselsberg-Stronach"
+  },
+  "70407": {
+    "gemeinde_code": "70407",
+    "gemeinde_name": "Itter"
+  },
+  "10930": {
+    "gemeinde_code": "10930",
+    "gemeinde_name": "Jabing"
+  },
+  "62330": {
+    "gemeinde_code": "62330",
+    "gemeinde_name": "Jagerberg"
+  },
+  "31319": {
+    "gemeinde_code": "31319",
+    "gemeinde_name": "Jaidhof"
+  },
+  "31111": {
+    "gemeinde_code": "31111",
+    "gemeinde_name": "Japons"
+  },
+  "30829": {
+    "gemeinde_code": "30829",
+    "gemeinde_name": "Jedenspeigen"
+  },
+  "40416": {
+    "gemeinde_code": "40416",
+    "gemeinde_name": "Jeging"
+  },
+  "70917": {
+    "gemeinde_code": "70917",
+    "gemeinde_name": "Jenbach"
+  },
+  "10504": {
+    "gemeinde_code": "10504",
+    "gemeinde_name": "Jennersdorf"
+  },
+  "70205": {
+    "gemeinde_code": "70205",
+    "gemeinde_name": "Jerzens"
+  },
+  "70408": {
+    "gemeinde_code": "70408",
+    "gemeinde_name": "Jochberg"
+  },
+  "10710": {
+    "gemeinde_code": "10710",
+    "gemeinde_name": "Jois"
+  },
+  "32112": {
+    "gemeinde_code": "32112",
+    "gemeinde_name": "Judenau-Baumgarten"
+  },
+  "62040": {
+    "gemeinde_code": "62040",
+    "gemeinde_name": "Judenburg"
+  },
+  "41313": {
+    "gemeinde_code": "41313",
+    "gemeinde_name": "Julbach"
+  },
+  "70818": {
+    "gemeinde_code": "70818",
+    "gemeinde_name": "Jungholz"
+  },
+  "61630": {
+    "gemeinde_code": "61630",
+    "gemeinde_name": "Kainach bei Voitsberg"
+  },
+  "60623": {
+    "gemeinde_code": "60623",
+    "gemeinde_name": "Kainbach bei Graz"
+  },
+  "62272": {
+    "gemeinde_code": "62272",
+    "gemeinde_name": "Kaindorf"
+  },
+  "70819": {
+    "gemeinde_code": "70819",
+    "gemeinde_name": "Kaisers"
+  },
+  "10806": {
+    "gemeinde_code": "10806",
+    "gemeinde_name": "Kaisersdorf"
+  },
+  "40812": {
+    "gemeinde_code": "40812",
+    "gemeinde_name": "Kallham"
+  },
+  "70712": {
+    "gemeinde_code": "70712",
+    "gemeinde_name": "Kals am Großglockner"
+  },
+  "60624": {
+    "gemeinde_code": "60624",
+    "gemeinde_name": "Kalsdorf bei Graz"
+  },
+  "70918": {
+    "gemeinde_code": "70918",
+    "gemeinde_name": "Kaltenbach"
+  },
+  "40606": {
+    "gemeinde_code": "40606",
+    "gemeinde_name": "Kaltenberg"
+  },
+  "31713": {
+    "gemeinde_code": "31713",
+    "gemeinde_name": "Kaltenleutgeben"
+  },
+  "61105": {
+    "gemeinde_code": "61105",
+    "gemeinde_name": "Kalwang"
+  },
+  "61106": {
+    "gemeinde_code": "61106",
+    "gemeinde_name": "Kammern im Liesingtal"
+  },
+  "31915": {
+    "gemeinde_code": "31915",
+    "gemeinde_name": "Kapelln"
+  },
+  "62140": {
+    "gemeinde_code": "62140",
+    "gemeinde_name": "Kapfenberg"
+  },
+  "62332": {
+    "gemeinde_code": "62332",
+    "gemeinde_name": "Kapfenstein"
+  },
+  "20512": {
+    "gemeinde_code": "20512",
+    "gemeinde_name": "Kappel am Krappfeld"
+  },
+  "70609": {
+    "gemeinde_code": "70609",
+    "gemeinde_name": "Kappl"
+  },
+  "50606": {
+    "gemeinde_code": "50606",
+    "gemeinde_name": "Kaprun"
+  },
+  "32209": {
+    "gemeinde_code": "32209",
+    "gemeinde_name": "Karlstein an der Thaya"
+  },
+  "31916": {
+    "gemeinde_code": "31916",
+    "gemeinde_name": "Karlstetten"
+  },
+  "70206": {
+    "gemeinde_code": "70206",
+    "gemeinde_name": "Karres"
+  },
+  "70207": {
+    "gemeinde_code": "70207",
+    "gemeinde_name": "Karrösten"
+  },
+  "70713": {
+    "gemeinde_code": "70713",
+    "gemeinde_name": "Kartitsch"
+  },
+  "31917": {
+    "gemeinde_code": "31917",
+    "gemeinde_name": "Kasten bei Böheimkirchen"
+  },
+  "41106": {
+    "gemeinde_code": "41106",
+    "gemeinde_name": "Katsdorf"
+  },
+  "32313": {
+    "gemeinde_code": "32313",
+    "gemeinde_name": "Katzelsdorf"
+  },
+  "31405": {
+    "gemeinde_code": "31405",
+    "gemeinde_name": "Kaumberg"
+  },
+  "70610": {
+    "gemeinde_code": "70610",
+    "gemeinde_name": "Kaunerberg"
+  },
+  "70611": {
+    "gemeinde_code": "70611",
+    "gemeinde_name": "Kaunertal"
+  },
+  "70612": {
+    "gemeinde_code": "70612",
+    "gemeinde_name": "Kauns"
+  },
+  "32210": {
+    "gemeinde_code": "32210",
+    "gemeinde_name": "Kautzen"
+  },
+  "40607": {
+    "gemeinde_code": "40607",
+    "gemeinde_name": "Kefermarkt"
+  },
+  "40813": {
+    "gemeinde_code": "40813",
+    "gemeinde_name": "Kematen am Innbach"
+  },
+  "41009": {
+    "gemeinde_code": "41009",
+    "gemeinde_name": "Kematen an der Krems"
+  },
+  "30517": {
+    "gemeinde_code": "30517",
+    "gemeinde_name": "Kematen an der Ybbs"
+  },
+  "70320": {
+    "gemeinde_code": "70320",
+    "gemeinde_name": "Kematen in Tirol"
+  },
+  "10907": {
+    "gemeinde_code": "10907",
+    "gemeinde_name": "Kemeten"
+  },
+  "80220": {
+    "gemeinde_code": "80220",
+    "gemeinde_name": "Kennelbach"
+  },
+  "20412": {
+    "gemeinde_code": "20412",
+    "gemeinde_name": "Keutschach am See"
+  },
+  "31514": {
+    "gemeinde_code": "31514",
+    "gemeinde_name": "Kilb"
+  },
+  "62141": {
+    "gemeinde_code": "62141",
+    "gemeinde_name": "Kindberg"
+  },
+  "20306": {
+    "gemeinde_code": "20306",
+    "gemeinde_name": "Kirchbach"
+  },
+  "62381": {
+    "gemeinde_code": "62381",
+    "gemeinde_name": "Kirchbach-Zerlach"
+  },
+  "32114": {
+    "gemeinde_code": "32114",
+    "gemeinde_name": "Kirchberg am Wagram"
+  },
+  "30921": {
+    "gemeinde_code": "30921",
+    "gemeinde_name": "Kirchberg am Walde"
+  },
+  "31814": {
+    "gemeinde_code": "31814",
+    "gemeinde_name": "Kirchberg am Wechsel"
+  },
+  "31918": {
+    "gemeinde_code": "31918",
+    "gemeinde_name": "Kirchberg an der Pielach"
+  },
+  "62382": {
+    "gemeinde_code": "62382",
+    "gemeinde_name": "Kirchberg an der Raab"
+  },
+  "40417": {
+    "gemeinde_code": "40417",
+    "gemeinde_name": "Kirchberg bei Mattighofen"
+  },
+  "70409": {
+    "gemeinde_code": "70409",
+    "gemeinde_name": "Kirchberg in Tirol"
+  },
+  "41314": {
+    "gemeinde_code": "41314",
+    "gemeinde_name": "Kirchberg ob der Donau"
+  },
+  "41010": {
+    "gemeinde_code": "41010",
+    "gemeinde_name": "Kirchberg-Thening"
+  },
+  "70511": {
+    "gemeinde_code": "70511",
+    "gemeinde_name": "Kirchbichl"
+  },
+  "41210": {
+    "gemeinde_code": "41210",
+    "gemeinde_name": "Kirchdorf am Inn"
+  },
+  "40905": {
+    "gemeinde_code": "40905",
+    "gemeinde_name": "Kirchdorf an der Krems"
+  },
+  "70410": {
+    "gemeinde_code": "70410",
+    "gemeinde_name": "Kirchdorf in Tirol"
+  },
+  "40710": {
+    "gemeinde_code": "40710",
+    "gemeinde_name": "Kirchham"
+  },
+  "41211": {
+    "gemeinde_code": "41211",
+    "gemeinde_name": "Kirchheim im Innkreis"
+  },
+  "32514": {
+    "gemeinde_code": "32514",
+    "gemeinde_name": "Kirchschlag"
+  },
+  "41613": {
+    "gemeinde_code": "41613",
+    "gemeinde_name": "Kirchschlag bei Linz"
+  },
+  "32314": {
+    "gemeinde_code": "32314",
+    "gemeinde_name": "Kirchschlag in der Buckligen Welt"
+  },
+  "31919": {
+    "gemeinde_code": "31919",
+    "gemeinde_name": "Kirchstetten"
+  },
+  "31515": {
+    "gemeinde_code": "31515",
+    "gemeinde_name": "Kirnberg an der Mank"
+  },
+  "10711": {
+    "gemeinde_code": "10711",
+    "gemeinde_name": "Kittsee"
+  },
+  "70411": {
+    "gemeinde_code": "70411",
+    "gemeinde_name": "Kitzbühel"
+  },
+  "61019": {
+    "gemeinde_code": "61019",
+    "gemeinde_name": "Kitzeck im Sausal"
+  },
+  "41315": {
+    "gemeinde_code": "41315",
+    "gemeinde_name": "Klaffer am Hochficht"
+  },
+  "20101": {
+    "gemeinde_code": "20101",
+    "gemeinde_name": "Klagenfurt am Wörthersee"
+  },
+  "41107": {
+    "gemeinde_code": "41107",
+    "gemeinde_name": "Klam"
+  },
+  "80409": {
+    "gemeinde_code": "80409",
+    "gemeinde_name": "Klaus"
+  },
+  "40906": {
+    "gemeinde_code": "40906",
+    "gemeinde_name": "Klaus an der Pyhrnbahn"
+  },
+  "30616": {
+    "gemeinde_code": "30616",
+    "gemeinde_name": "Klausen-Leopoldsdorf"
+  },
+  "20613": {
+    "gemeinde_code": "20613",
+    "gemeinde_name": "Kleblach-Lind"
+  },
+  "50414": {
+    "gemeinde_code": "50414",
+    "gemeinde_name": "Kleinarl"
+  },
+  "10422": {
+    "gemeinde_code": "10422",
+    "gemeinde_name": "Kleinmürbisch"
+  },
+  "30733": {
+    "gemeinde_code": "30733",
+    "gemeinde_name": "Klein-Neusiedl"
+  },
+  "31516": {
+    "gemeinde_code": "31516",
+    "gemeinde_name": "Klein-Pöchlarn"
+  },
+  "20513": {
+    "gemeinde_code": "20513",
+    "gemeinde_name": "Klein St. Paul"
+  },
+  "31406": {
+    "gemeinde_code": "31406",
+    "gemeinde_name": "Kleinzell"
+  },
+  "41316": {
+    "gemeinde_code": "41316",
+    "gemeinde_name": "Kleinzell im Mühlkreis"
+  },
+  "10305": {
+    "gemeinde_code": "10305",
+    "gemeinde_name": "Klingenbach"
+  },
+  "62335": {
+    "gemeinde_code": "62335",
+    "gemeinde_name": "Klöch"
+  },
+  "80112": {
+    "gemeinde_code": "80112",
+    "gemeinde_name": "Klösterle"
+  },
+  "32144": {
+    "gemeinde_code": "32144",
+    "gemeinde_name": "Klosterneuburg"
+  },
+  "62041": {
+    "gemeinde_code": "62041",
+    "gemeinde_name": "Knittelfeld"
+  },
+  "62014": {
+    "gemeinde_code": "62014",
+    "gemeinde_name": "Kobenz"
+  },
+  "10807": {
+    "gemeinde_code": "10807",
+    "gemeinde_name": "Kobersdorf"
+  },
+  "80410": {
+    "gemeinde_code": "80410",
+    "gemeinde_name": "Koblach"
+  },
+  "61631": {
+    "gemeinde_code": "61631",
+    "gemeinde_name": "Köflach"
+  },
+  "10908": {
+    "gemeinde_code": "10908",
+    "gemeinde_name": "Kohfidisch"
+  },
+  "41317": {
+    "gemeinde_code": "41317",
+    "gemeinde_name": "Kollerschlag"
+  },
+  "70322": {
+    "gemeinde_code": "70322",
+    "gemeinde_name": "Kolsass"
+  },
+  "70323": {
+    "gemeinde_code": "70323",
+    "gemeinde_name": "Kolsassberg"
+  },
+  "32115": {
+    "gemeinde_code": "32115",
+    "gemeinde_name": "Königsbrunn am Wagram"
+  },
+  "10511": {
+    "gemeinde_code": "10511",
+    "gemeinde_name": "Königsdorf"
+  },
+  "32116": {
+    "gemeinde_code": "32116",
+    "gemeinde_name": "Königstetten"
+  },
+  "40608": {
+    "gemeinde_code": "40608",
+    "gemeinde_name": "Königswiesen"
+  },
+  "41411": {
+    "gemeinde_code": "41411",
+    "gemeinde_name": "Kopfing im Innkreis"
+  },
+  "50321": {
+    "gemeinde_code": "50321",
+    "gemeinde_name": "Koppl"
+  },
+  "31213": {
+    "gemeinde_code": "31213",
+    "gemeinde_name": "Korneuburg"
+  },
+  "70412": {
+    "gemeinde_code": "70412",
+    "gemeinde_name": "Kössen"
+  },
+  "50320": {
+    "gemeinde_code": "50320",
+    "gemeinde_name": "Köstendorf"
+  },
+  "20307": {
+    "gemeinde_code": "20307",
+    "gemeinde_name": "Kötschach-Mauthen"
+  },
+  "32515": {
+    "gemeinde_code": "32515",
+    "gemeinde_name": "Kottes-Purk"
+  },
+  "30618": {
+    "gemeinde_code": "30618",
+    "gemeinde_name": "Kottingbrunn"
+  },
+  "20414": {
+    "gemeinde_code": "20414",
+    "gemeinde_name": "Köttmannsdorf"
+  },
+  "61437": {
+    "gemeinde_code": "61437",
+    "gemeinde_name": "Krakau"
+  },
+  "70512": {
+    "gemeinde_code": "70512",
+    "gemeinde_name": "Kramsach"
+  },
+  "61107": {
+    "gemeinde_code": "61107",
+    "gemeinde_name": "Kraubath an der Mur"
+  },
+  "30101": {
+    "gemeinde_code": "30101",
+    "gemeinde_name": "Krems an der Donau"
+  },
+  "20642": {
+    "gemeinde_code": "20642",
+    "gemeinde_name": "Krems in Kärnten"
+  },
+  "40907": {
+    "gemeinde_code": "40907",
+    "gemeinde_name": "Kremsmünster"
+  },
+  "41810": {
+    "gemeinde_code": "41810",
+    "gemeinde_name": "Krenglbach"
+  },
+  "10619": {
+    "gemeinde_code": "10619",
+    "gemeinde_name": "Krensdorf"
+  },
+  "31627": {
+    "gemeinde_code": "31627",
+    "gemeinde_name": "Kreuttal"
+  },
+  "31628": {
+    "gemeinde_code": "31628",
+    "gemeinde_name": "Kreuzstetten"
+  },
+  "62115": {
+    "gemeinde_code": "62115",
+    "gemeinde_name": "Krieglach"
+  },
+  "50607": {
+    "gemeinde_code": "50607",
+    "gemeinde_name": "Krimml"
+  },
+  "50206": {
+    "gemeinde_code": "50206",
+    "gemeinde_name": "Krispl"
+  },
+  "41011": {
+    "gemeinde_code": "41011",
+    "gemeinde_name": "Kronstorf"
+  },
+  "61611": {
+    "gemeinde_code": "61611",
+    "gemeinde_name": "Krottendorf-Gaisfeld"
+  },
+  "31321": {
+    "gemeinde_code": "31321",
+    "gemeinde_name": "Krumau am Kamp"
+  },
+  "80221": {
+    "gemeinde_code": "80221",
+    "gemeinde_name": "Krumbach"
+  },
+  "32315": {
+    "gemeinde_code": "32315",
+    "gemeinde_name": "Krumbach"
+  },
+  "31517": {
+    "gemeinde_code": "31517",
+    "gemeinde_name": "Krummnußbaum"
+  },
+  "20415": {
+    "gemeinde_code": "20415",
+    "gemeinde_name": "Krumpendorf am Wörthersee"
+  },
+  "50207": {
+    "gemeinde_code": "50207",
+    "gemeinde_name": "Kuchl"
+  },
+  "70513": {
+    "gemeinde_code": "70513",
+    "gemeinde_name": "Kufstein"
+  },
+  "10408": {
+    "gemeinde_code": "10408",
+    "gemeinde_name": "Kukmirn"
+  },
+  "60626": {
+    "gemeinde_code": "60626",
+    "gemeinde_name": "Kumberg"
+  },
+  "70514": {
+    "gemeinde_code": "70514",
+    "gemeinde_name": "Kundl"
+  },
+  "31629": {
+    "gemeinde_code": "31629",
+    "gemeinde_name": "Laa an der Thaya"
+  },
+  "31714": {
+    "gemeinde_code": "31714",
+    "gemeinde_name": "Laab im Walde"
+  },
+  "40711": {
+    "gemeinde_code": "40711",
+    "gemeinde_name": "Laakirchen"
+  },
+  "10808": {
+    "gemeinde_code": "10808",
+    "gemeinde_name": "Lackenbach"
+  },
+  "10824": {
+    "gemeinde_code": "10824",
+    "gemeinde_name": "Lackendorf"
+  },
+  "31630": {
+    "gemeinde_code": "31630",
+    "gemeinde_name": "Ladendorf"
+  },
+  "70613": {
+    "gemeinde_code": "70613",
+    "gemeinde_name": "Ladis"
+  },
+  "62226": {
+    "gemeinde_code": "62226",
+    "gemeinde_name": "Lafnitz"
+  },
+  "41811": {
+    "gemeinde_code": "41811",
+    "gemeinde_name": "Lambach"
+  },
+  "41212": {
+    "gemeinde_code": "41212",
+    "gemeinde_name": "Lambrechten"
+  },
+  "50322": {
+    "gemeinde_code": "50322",
+    "gemeinde_name": "Lamprechtshausen"
+  },
+  "70614": {
+    "gemeinde_code": "70614",
+    "gemeinde_name": "Landeck"
+  },
+  "61258": {
+    "gemeinde_code": "61258",
+    "gemeinde_name": "Landl"
+  },
+  "61020": {
+    "gemeinde_code": "61020",
+    "gemeinde_name": "Lang"
+  },
+  "31113": {
+    "gemeinde_code": "31113",
+    "gemeinde_name": "Langau"
+  },
+  "80222": {
+    "gemeinde_code": "80222",
+    "gemeinde_name": "Langen bei Bregenz"
+  },
+  "80223": {
+    "gemeinde_code": "80223",
+    "gemeinde_name": "Langenegg"
+  },
+  "70208": {
+    "gemeinde_code": "70208",
+    "gemeinde_name": "Längenfeld"
+  },
+  "31322": {
+    "gemeinde_code": "31322",
+    "gemeinde_name": "Langenlois"
+  },
+  "32119": {
+    "gemeinde_code": "32119",
+    "gemeinde_name": "Langenrohr"
+  },
+  "41109": {
+    "gemeinde_code": "41109",
+    "gemeinde_name": "Langenstein"
+  },
+  "62116": {
+    "gemeinde_code": "62116",
+    "gemeinde_name": "Langenwang"
+  },
+  "31214": {
+    "gemeinde_code": "31214",
+    "gemeinde_name": "Langenzersdorf"
+  },
+  "70515": {
+    "gemeinde_code": "70515",
+    "gemeinde_name": "Langkampfen"
+  },
+  "32516": {
+    "gemeinde_code": "32516",
+    "gemeinde_name": "Langschlag"
+  },
+  "60318": {
+    "gemeinde_code": "60318",
+    "gemeinde_name": "Lannach"
+  },
+  "70325": {
+    "gemeinde_code": "70325",
+    "gemeinde_name": "Lans"
+  },
+  "30734": {
+    "gemeinde_code": "30734",
+    "gemeinde_name": "Lanzendorf"
+  },
+  "32316": {
+    "gemeinde_code": "32316",
+    "gemeinde_name": "Lanzenkirchen"
+  },
+  "40609": {
+    "gemeinde_code": "40609",
+    "gemeinde_name": "Lasberg"
+  },
+  "30830": {
+    "gemeinde_code": "30830",
+    "gemeinde_name": "Lassee"
+  },
+  "61222": {
+    "gemeinde_code": "61222",
+    "gemeinde_name": "Lassing"
+  },
+  "60628": {
+    "gemeinde_code": "60628",
+    "gemeinde_name": "Laßnitzhöhe"
+  },
+  "80411": {
+    "gemeinde_code": "80411",
+    "gemeinde_name": "Laterns"
+  },
+  "41508": {
+    "gemeinde_code": "41508",
+    "gemeinde_name": "Laussa"
+  },
+  "80224": {
+    "gemeinde_code": "80224",
+    "gemeinde_name": "Lauterach"
+  },
+  "20909": {
+    "gemeinde_code": "20909",
+    "gemeinde_name": "Lavamünd"
+  },
+  "70714": {
+    "gemeinde_code": "70714",
+    "gemeinde_name": "Lavant"
+  },
+  "31715": {
+    "gemeinde_code": "31715",
+    "gemeinde_name": "Laxenburg"
+  },
+  "61021": {
+    "gemeinde_code": "61021",
+    "gemeinde_name": "Lebring-Sankt Margarethen"
+  },
+  "80113": {
+    "gemeinde_code": "80113",
+    "gemeinde_name": "Lech"
+  },
+  "70820": {
+    "gemeinde_code": "70820",
+    "gemeinde_name": "Lechaschau"
+  },
+  "31519": {
+    "gemeinde_code": "31519",
+    "gemeinde_name": "Leiben"
+  },
+  "61053": {
+    "gemeinde_code": "61053",
+    "gemeinde_name": "Leibnitz"
+  },
+  "70715": {
+    "gemeinde_code": "70715",
+    "gemeinde_name": "Leisach"
+  },
+  "10306": {
+    "gemeinde_code": "10306",
+    "gemeinde_name": "Leithaprodersdorf"
+  },
+  "31215": {
+    "gemeinde_code": "31215",
+    "gemeinde_name": "Leitzersdorf"
+  },
+  "41318": {
+    "gemeinde_code": "41318",
+    "gemeinde_name": "Lembach im Mühlkreis"
+  },
+  "50608": {
+    "gemeinde_code": "50608",
+    "gemeinde_name": "Lend"
+  },
+  "20616": {
+    "gemeinde_code": "20616",
+    "gemeinde_name": "Lendorf"
+  },
+  "40418": {
+    "gemeinde_code": "40418",
+    "gemeinde_name": "Lengau"
+  },
+  "31323": {
+    "gemeinde_code": "31323",
+    "gemeinde_name": "Lengenfeld"
+  },
+  "41713": {
+    "gemeinde_code": "41713",
+    "gemeinde_name": "Lenzing"
+  },
+  "61108": {
+    "gemeinde_code": "61108",
+    "gemeinde_name": "Leoben"
+  },
+  "31216": {
+    "gemeinde_code": "31216",
+    "gemeinde_name": "Leobendorf"
+  },
+  "30620": {
+    "gemeinde_code": "30620",
+    "gemeinde_name": "Leobersdorf"
+  },
+  "50609": {
+    "gemeinde_code": "50609",
+    "gemeinde_name": "Leogang"
+  },
+  "41012": {
+    "gemeinde_code": "41012",
+    "gemeinde_name": "Leonding"
+  },
+  "40610": {
+    "gemeinde_code": "40610",
+    "gemeinde_name": "Leopoldschlag"
+  },
+  "30735": {
+    "gemeinde_code": "30735",
+    "gemeinde_name": "Leopoldsdorf"
+  },
+  "30831": {
+    "gemeinde_code": "30831",
+    "gemeinde_name": "Leopoldsdorf im Marchfeld"
+  },
+  "70821": {
+    "gemeinde_code": "70821",
+    "gemeinde_name": "Lermoos"
+  },
+  "20321": {
+    "gemeinde_code": "20321",
+    "gemeinde_name": "Lesachtal"
+  },
+  "50502": {
+    "gemeinde_code": "50502",
+    "gemeinde_name": "Lessach"
+  },
+  "70326": {
+    "gemeinde_code": "70326",
+    "gemeinde_name": "Leutasch"
+  },
+  "61054": {
+    "gemeinde_code": "61054",
+    "gemeinde_name": "Leutschach an der Weinstraße"
+  },
+  "41319": {
+    "gemeinde_code": "41319",
+    "gemeinde_name": "Lichtenau im Mühlkreis"
+  },
+  "31324": {
+    "gemeinde_code": "31324",
+    "gemeinde_name": "Lichtenau im Waldviertel"
+  },
+  "41614": {
+    "gemeinde_code": "41614",
+    "gemeinde_name": "Lichtenberg"
+  },
+  "32317": {
+    "gemeinde_code": "32317",
+    "gemeinde_name": "Lichtenegg"
+  },
+  "32318": {
+    "gemeinde_code": "32318",
+    "gemeinde_name": "Lichtenwörth"
+  },
+  "40611": {
+    "gemeinde_code": "40611",
+    "gemeinde_name": "Liebenau"
+  },
+  "20515": {
+    "gemeinde_code": "20515",
+    "gemeinde_name": "Liebenfels"
+  },
+  "60629": {
+    "gemeinde_code": "60629",
+    "gemeinde_name": "Lieboch"
+  },
+  "70716": {
+    "gemeinde_code": "70716",
+    "gemeinde_name": "Lienz"
+  },
+  "61259": {
+    "gemeinde_code": "61259",
+    "gemeinde_name": "Liezen"
+  },
+  "61612": {
+    "gemeinde_code": "61612",
+    "gemeinde_name": "Ligist"
+  },
+  "31407": {
+    "gemeinde_code": "31407",
+    "gemeinde_name": "Lilienfeld"
+  },
+  "80225": {
+    "gemeinde_code": "80225",
+    "gemeinde_name": "Lingenau"
+  },
+  "40101": {
+    "gemeinde_code": "40101",
+    "gemeinde_name": "Linz"
+  },
+  "30925": {
+    "gemeinde_code": "30925",
+    "gemeinde_name": "Litschau"
+  },
+  "10909": {
+    "gemeinde_code": "10909",
+    "gemeinde_name": "Litzelsdorf"
+  },
+  "62039": {
+    "gemeinde_code": "62039",
+    "gemeinde_name": "Lobmingtal"
+  },
+  "80226": {
+    "gemeinde_code": "80226",
+    "gemeinde_name": "Lochau"
+  },
+  "40419": {
+    "gemeinde_code": "40419",
+    "gemeinde_name": "Lochen am See"
+  },
+  "10809": {
+    "gemeinde_code": "10809",
+    "gemeinde_name": "Lockenhaus"
+  },
+  "50610": {
+    "gemeinde_code": "50610",
+    "gemeinde_name": "Lofer"
+  },
+  "41213": {
+    "gemeinde_code": "41213",
+    "gemeinde_name": "Lohnsburg am Kobernaußerwald"
+  },
+  "31920": {
+    "gemeinde_code": "31920",
+    "gemeinde_name": "Loich"
+  },
+  "10604": {
+    "gemeinde_code": "10604",
+    "gemeinde_name": "Loipersbach im Burgenland"
+  },
+  "10910": {
+    "gemeinde_code": "10910",
+    "gemeinde_name": "Loipersdorf-Kitzladen"
+  },
+  "31520": {
+    "gemeinde_code": "31520",
+    "gemeinde_name": "Loosdorf"
+  },
+  "10320": {
+    "gemeinde_code": "10320",
+    "gemeinde_name": "Loretto"
+  },
+  "80114": {
+    "gemeinde_code": "80114",
+    "gemeinde_name": "Lorüns"
+  },
+  "41509": {
+    "gemeinde_code": "41509",
+    "gemeinde_name": "Losenstein"
+  },
+  "61727": {
+    "gemeinde_code": "61727",
+    "gemeinde_name": "Ludersdorf-Wilfersdorf"
+  },
+  "80115": {
+    "gemeinde_code": "80115",
+    "gemeinde_name": "Ludesch"
+  },
+  "20416": {
+    "gemeinde_code": "20416",
+    "gemeinde_name": "Ludmannsdorf"
+  },
+  "32212": {
+    "gemeinde_code": "32212",
+    "gemeinde_name": "Ludweis-Aigen"
+  },
+  "41110": {
+    "gemeinde_code": "41110",
+    "gemeinde_name": "Luftenberg an der Donau"
+  },
+  "32005": {
+    "gemeinde_code": "32005",
+    "gemeinde_name": "Lunz am See"
+  },
+  "20643": {
+    "gemeinde_code": "20643",
+    "gemeinde_name": "Lurnfeld"
+  },
+  "80303": {
+    "gemeinde_code": "80303",
+    "gemeinde_name": "Lustenau"
+  },
+  "10810": {
+    "gemeinde_code": "10810",
+    "gemeinde_name": "Lutzmannsburg"
+  },
+  "80412": {
+    "gemeinde_code": "80412",
+    "gemeinde_name": "Mäder"
+  },
+  "20442": {
+    "gemeinde_code": "20442",
+    "gemeinde_name": "Magdalensberg"
+  },
+  "31025": {
+    "gemeinde_code": "31025",
+    "gemeinde_name": "Mailberg"
+  },
+  "50611": {
+    "gemeinde_code": "50611",
+    "gemeinde_name": "Maishofen"
+  },
+  "31026": {
+    "gemeinde_code": "31026",
+    "gemeinde_name": "Maissau"
+  },
+  "20618": {
+    "gemeinde_code": "20618",
+    "gemeinde_name": "Mallnitz"
+  },
+  "20619": {
+    "gemeinde_code": "20619",
+    "gemeinde_name": "Malta"
+  },
+  "31521": {
+    "gemeinde_code": "31521",
+    "gemeinde_name": "Mank"
+  },
+  "30716": {
+    "gemeinde_code": "30716",
+    "gemeinde_name": "Mannersdorf am Leithagebirge"
+  },
+  "10811": {
+    "gemeinde_code": "10811",
+    "gemeinde_name": "Mannersdorf an der Rabnitz"
+  },
+  "41714": {
+    "gemeinde_code": "41714",
+    "gemeinde_name": "Manning"
+  },
+  "30834": {
+    "gemeinde_code": "30834",
+    "gemeinde_name": "Mannsdorf an der Donau"
+  },
+  "31522": {
+    "gemeinde_code": "31522",
+    "gemeinde_name": "Marbach an der Donau"
+  },
+  "30835": {
+    "gemeinde_code": "30835",
+    "gemeinde_name": "Marchegg"
+  },
+  "41812": {
+    "gemeinde_code": "41812",
+    "gemeinde_name": "Marchtrenk"
+  },
+  "50612": {
+    "gemeinde_code": "50612",
+    "gemeinde_name": "Maria Alm am Steinernen Meer"
+  },
+  "31921": {
+    "gemeinde_code": "31921",
+    "gemeinde_name": "Maria Anzbach"
+  },
+  "31716": {
+    "gemeinde_code": "31716",
+    "gemeinde_name": "Maria Enzersdorf"
+  },
+  "31326": {
+    "gemeinde_code": "31326",
+    "gemeinde_name": "Maria Laach am Jauerling"
+  },
+  "61632": {
+    "gemeinde_code": "61632",
+    "gemeinde_name": "Maria Lankowitz"
+  },
+  "30736": {
+    "gemeinde_code": "30736",
+    "gemeinde_name": "Maria-Lanzendorf"
+  },
+  "41510": {
+    "gemeinde_code": "41510",
+    "gemeinde_name": "Maria Neustift"
+  },
+  "50503": {
+    "gemeinde_code": "50503",
+    "gemeinde_name": "Mariapfarr"
+  },
+  "20417": {
+    "gemeinde_code": "20417",
+    "gemeinde_name": "Maria Rain"
+  },
+  "20418": {
+    "gemeinde_code": "20418",
+    "gemeinde_name": "Maria Saal"
+  },
+  "40420": {
+    "gemeinde_code": "40420",
+    "gemeinde_name": "Maria Schmolln"
+  },
+  "10911": {
+    "gemeinde_code": "10911",
+    "gemeinde_name": "Mariasdorf"
+  },
+  "70516": {
+    "gemeinde_code": "70516",
+    "gemeinde_name": "Mariastein"
+  },
+  "31523": {
+    "gemeinde_code": "31523",
+    "gemeinde_name": "Maria Taferl"
+  },
+  "20419": {
+    "gemeinde_code": "20419",
+    "gemeinde_name": "Maria Wörth"
+  },
+  "62142": {
+    "gemeinde_code": "62142",
+    "gemeinde_name": "Mariazell"
+  },
+  "31922": {
+    "gemeinde_code": "31922",
+    "gemeinde_name": "Markersdorf-Haindorf"
+  },
+  "30836": {
+    "gemeinde_code": "30836",
+    "gemeinde_name": "Markgrafneusiedl"
+  },
+  "10912": {
+    "gemeinde_code": "10912",
+    "gemeinde_name": "Markt Allhau"
+  },
+  "61716": {
+    "gemeinde_code": "61716",
+    "gemeinde_name": "Markt Hartmannsdorf"
+  },
+  "10913": {
+    "gemeinde_code": "10913",
+    "gemeinde_name": "Markt Neuhodis"
+  },
+  "32319": {
+    "gemeinde_code": "32319",
+    "gemeinde_name": "Markt Piesting"
+  },
+  "10812": {
+    "gemeinde_code": "10812",
+    "gemeinde_name": "Markt Sankt Martin"
+  },
+  "32517": {
+    "gemeinde_code": "32517",
+    "gemeinde_name": "Martinsberg"
+  },
+  "10605": {
+    "gemeinde_code": "10605",
+    "gemeinde_name": "Marz"
+  },
+  "70370": {
+    "gemeinde_code": "70370",
+    "gemeinde_name": "Matrei am Brenner"
+  },
+  "70717": {
+    "gemeinde_code": "70717",
+    "gemeinde_name": "Matrei in Osttirol"
+  },
+  "10606": {
+    "gemeinde_code": "10606",
+    "gemeinde_name": "Mattersburg"
+  },
+  "40421": {
+    "gemeinde_code": "40421",
+    "gemeinde_name": "Mattighofen"
+  },
+  "50323": {
+    "gemeinde_code": "50323",
+    "gemeinde_name": "Mattsee"
+  },
+  "32320": {
+    "gemeinde_code": "32320",
+    "gemeinde_name": "Matzendorf-Hölles"
+  },
+  "30838": {
+    "gemeinde_code": "30838",
+    "gemeinde_name": "Matzen-Raggendorf"
+  },
+  "31950": {
+    "gemeinde_code": "31950",
+    "gemeinde_name": "Mauerbach"
+  },
+  "40422": {
+    "gemeinde_code": "40422",
+    "gemeinde_name": "Mauerkirchen"
+  },
+  "31327": {
+    "gemeinde_code": "31327",
+    "gemeinde_name": "Mautern an der Donau"
+  },
+  "50504": {
+    "gemeinde_code": "50504",
+    "gemeinde_name": "Mauterndorf"
+  },
+  "61109": {
+    "gemeinde_code": "61109",
+    "gemeinde_name": "Mautern in Steiermark"
+  },
+  "41111": {
+    "gemeinde_code": "41111",
+    "gemeinde_name": "Mauthausen"
+  },
+  "41412": {
+    "gemeinde_code": "41412",
+    "gemeinde_name": "Mayrhof"
+  },
+  "70920": {
+    "gemeinde_code": "70920",
+    "gemeinde_name": "Mayrhofen"
+  },
+  "40814": {
+    "gemeinde_code": "40814",
+    "gemeinde_name": "Meggenhofen"
+  },
+  "41214": {
+    "gemeinde_code": "41214",
+    "gemeinde_name": "Mehrnbach"
+  },
+  "80413": {
+    "gemeinde_code": "80413",
+    "gemeinde_name": "Meiningen"
+  },
+  "31114": {
+    "gemeinde_code": "31114",
+    "gemeinde_name": "Meiseldorf"
+  },
+  "31524": {
+    "gemeinde_code": "31524",
+    "gemeinde_name": "Melk"
+  },
+  "80227": {
+    "gemeinde_code": "80227",
+    "gemeinde_name": "Mellau"
+  },
+  "20518": {
+    "gemeinde_code": "20518",
+    "gemeinde_name": "Metnitz"
+  },
+  "62343": {
+    "gemeinde_code": "62343",
+    "gemeinde_name": "Mettersdorf am Saßbach"
+  },
+  "41215": {
+    "gemeinde_code": "41215",
+    "gemeinde_name": "Mettmach"
+  },
+  "61260": {
+    "gemeinde_code": "61260",
+    "gemeinde_name": "Michaelerberg-Pruggern"
+  },
+  "40815": {
+    "gemeinde_code": "40815",
+    "gemeinde_name": "Michaelnbach"
+  },
+  "31923": {
+    "gemeinde_code": "31923",
+    "gemeinde_name": "Michelbach"
+  },
+  "20519": {
+    "gemeinde_code": "20519",
+    "gemeinde_name": "Micheldorf"
+  },
+  "40908": {
+    "gemeinde_code": "40908",
+    "gemeinde_name": "Micheldorf in Oberösterreich"
+  },
+  "32120": {
+    "gemeinde_code": "32120",
+    "gemeinde_name": "Michelhausen"
+  },
+  "70328": {
+    "gemeinde_code": "70328",
+    "gemeinde_name": "Mieders"
+  },
+  "70209": {
+    "gemeinde_code": "70209",
+    "gemeinde_name": "Mieming"
+  },
+  "32321": {
+    "gemeinde_code": "32321",
+    "gemeinde_name": "Miesenbach"
+  },
+  "61728": {
+    "gemeinde_code": "61728",
+    "gemeinde_name": "Miesenbach bei Birkfeld"
+  },
+  "20620": {
+    "gemeinde_code": "20620",
+    "gemeinde_name": "Millstatt am See"
+  },
+  "70329": {
+    "gemeinde_code": "70329",
+    "gemeinde_name": "Mils"
+  },
+  "70210": {
+    "gemeinde_code": "70210",
+    "gemeinde_name": "Mils bei Imst"
+  },
+  "10505": {
+    "gemeinde_code": "10505",
+    "gemeinde_name": "Minihof-Liebau"
+  },
+  "40423": {
+    "gemeinde_code": "40423",
+    "gemeinde_name": "Mining"
+  },
+  "10914": {
+    "gemeinde_code": "10914",
+    "gemeinde_name": "Mischendorf"
+  },
+  "31633": {
+    "gemeinde_code": "31633",
+    "gemeinde_name": "Mistelbach"
+  },
+  "80228": {
+    "gemeinde_code": "80228",
+    "gemeinde_name": "Mittelberg"
+  },
+  "31408": {
+    "gemeinde_code": "31408",
+    "gemeinde_name": "Mitterbach am Erlaufsee"
+  },
+  "61261": {
+    "gemeinde_code": "61261",
+    "gemeinde_name": "Mitterberg-Sankt Martin"
+  },
+  "61729": {
+    "gemeinde_code": "61729",
+    "gemeinde_name": "Mitterdorf an der Raab"
+  },
+  "41112": {
+    "gemeinde_code": "41112",
+    "gemeinde_name": "Mitterkirchen im Machland"
+  },
+  "30621": {
+    "gemeinde_code": "30621",
+    "gemeinde_name": "Mitterndorf an der Fischa"
+  },
+  "50613": {
+    "gemeinde_code": "50613",
+    "gemeinde_name": "Mittersill"
+  },
+  "31717": {
+    "gemeinde_code": "31717",
+    "gemeinde_name": "Mödling"
+  },
+  "10506": {
+    "gemeinde_code": "10506",
+    "gemeinde_name": "Mogersdorf"
+  },
+  "80229": {
+    "gemeinde_code": "80229",
+    "gemeinde_name": "Möggers"
+  },
+  "20520": {
+    "gemeinde_code": "20520",
+    "gemeinde_name": "Mölbling"
+  },
+  "40909": {
+    "gemeinde_code": "40909",
+    "gemeinde_name": "Molln"
+  },
+  "10712": {
+    "gemeinde_code": "10712",
+    "gemeinde_name": "Mönchhof"
+  },
+  "41715": {
+    "gemeinde_code": "41715",
+    "gemeinde_name": "Mondsee"
+  },
+  "31815": {
+    "gemeinde_code": "31815",
+    "gemeinde_name": "Mönichkirchen"
+  },
+  "30913": {
+    "gemeinde_code": "30913",
+    "gemeinde_name": "Moorbad Harbach"
+  },
+  "40424": {
+    "gemeinde_code": "40424",
+    "gemeinde_name": "Moosbach"
+  },
+  "30737": {
+    "gemeinde_code": "30737",
+    "gemeinde_name": "Moosbrunn"
+  },
+  "20421": {
+    "gemeinde_code": "20421",
+    "gemeinde_name": "Moosburg"
+  },
+  "40425": {
+    "gemeinde_code": "40425",
+    "gemeinde_name": "Moosdorf"
+  },
+  "61615": {
+    "gemeinde_code": "61615",
+    "gemeinde_name": "Mooskirchen"
+  },
+  "10307": {
+    "gemeinde_code": "10307",
+    "gemeinde_name": "Mörbisch am See"
+  },
+  "41216": {
+    "gemeinde_code": "41216",
+    "gemeinde_name": "Mörschwang"
+  },
+  "61730": {
+    "gemeinde_code": "61730",
+    "gemeinde_name": "Mortantsch"
+  },
+  "20622": {
+    "gemeinde_code": "20622",
+    "gemeinde_name": "Mörtschach"
+  },
+  "10428": {
+    "gemeinde_code": "10428",
+    "gemeinde_name": "Moschendorf"
+  },
+  "70211": {
+    "gemeinde_code": "70211",
+    "gemeinde_name": "Mötz"
+  },
+  "32143": {
+    "gemeinde_code": "32143",
+    "gemeinde_name": "Muckendorf-Wipfing"
+  },
+  "32322": {
+    "gemeinde_code": "32322",
+    "gemeinde_name": "Muggendorf"
+  },
+  "50415": {
+    "gemeinde_code": "50415",
+    "gemeinde_name": "Mühlbach am Hochkönig"
+  },
+  "31330": {
+    "gemeinde_code": "31330",
+    "gemeinde_name": "Mühldorf"
+  },
+  "20624": {
+    "gemeinde_code": "20624",
+    "gemeinde_name": "Mühldorf"
+  },
+  "61410": {
+    "gemeinde_code": "61410",
+    "gemeinde_name": "Mühlen"
+  },
+  "10512": {
+    "gemeinde_code": "10512",
+    "gemeinde_name": "Mühlgraben"
+  },
+  "41217": {
+    "gemeinde_code": "41217",
+    "gemeinde_name": "Mühlheim am Inn"
+  },
+  "50505": {
+    "gemeinde_code": "50505",
+    "gemeinde_name": "Muhr"
+  },
+  "10308": {
+    "gemeinde_code": "10308",
+    "gemeinde_name": "Müllendorf"
+  },
+  "31718": {
+    "gemeinde_code": "31718",
+    "gemeinde_name": "Münchendorf"
+  },
+  "40426": {
+    "gemeinde_code": "40426",
+    "gemeinde_name": "Munderfing"
+  },
+  "31525": {
+    "gemeinde_code": "31525",
+    "gemeinde_name": "Münichreith-Laimbach"
+  },
+  "70517": {
+    "gemeinde_code": "70517",
+    "gemeinde_name": "Münster"
+  },
+  "41113": {
+    "gemeinde_code": "41113",
+    "gemeinde_name": "Münzbach"
+  },
+  "41413": {
+    "gemeinde_code": "41413",
+    "gemeinde_name": "Münzkirchen"
+  },
+  "61438": {
+    "gemeinde_code": "61438",
+    "gemeinde_name": "Murau"
+  },
+  "62383": {
+    "gemeinde_code": "62383",
+    "gemeinde_name": "Mureck"
+  },
+  "62143": {
+    "gemeinde_code": "62143",
+    "gemeinde_name": "Mürzzuschlag"
+  },
+  "70822": {
+    "gemeinde_code": "70822",
+    "gemeinde_name": "Musau"
+  },
+  "70331": {
+    "gemeinde_code": "70331",
+    "gemeinde_name": "Mutters"
+  },
+  "41114": {
+    "gemeinde_code": "41114",
+    "gemeinde_name": "Naarn im Machlande"
+  },
+  "61731": {
+    "gemeinde_code": "61731",
+    "gemeinde_name": "Naas"
+  },
+  "70823": {
+    "gemeinde_code": "70823",
+    "gemeinde_name": "Namlos"
+  },
+  "31028": {
+    "gemeinde_code": "31028",
+    "gemeinde_name": "Nappersdorf-Kammersdorf"
+  },
+  "70212": {
+    "gemeinde_code": "70212",
+    "gemeinde_name": "Nassereith"
+  },
+  "31817": {
+    "gemeinde_code": "31817",
+    "gemeinde_name": "Natschbach-Loipersbach"
+  },
+  "40816": {
+    "gemeinde_code": "40816",
+    "gemeinde_name": "Natternbach"
+  },
+  "70332": {
+    "gemeinde_code": "70332",
+    "gemeinde_name": "Natters"
+  },
+  "70615": {
+    "gemeinde_code": "70615",
+    "gemeinde_name": "Nauders"
+  },
+  "70333": {
+    "gemeinde_code": "70333",
+    "gemeinde_name": "Navis"
+  },
+  "41320": {
+    "gemeinde_code": "41320",
+    "gemeinde_name": "Nebelberg"
+  },
+  "10813": {
+    "gemeinde_code": "10813",
+    "gemeinde_name": "Neckenmarkt"
+  },
+  "31925": {
+    "gemeinde_code": "31925",
+    "gemeinde_name": "Neidling"
+  },
+  "80116": {
+    "gemeinde_code": "80116",
+    "gemeinde_name": "Nenzing"
+  },
+  "70824": {
+    "gemeinde_code": "70824",
+    "gemeinde_name": "Nesselwängle"
+  },
+  "60666": {
+    "gemeinde_code": "60666",
+    "gemeinde_name": "Nestelbach bei Graz"
+  },
+  "62144": {
+    "gemeinde_code": "62144",
+    "gemeinde_name": "Neuberg an der Mürz"
+  },
+  "10409": {
+    "gemeinde_code": "10409",
+    "gemeinde_name": "Neuberg im Burgenland"
+  },
+  "62274": {
+    "gemeinde_code": "62274",
+    "gemeinde_name": "Neudau"
+  },
+  "10725": {
+    "gemeinde_code": "10725",
+    "gemeinde_name": "Neudorf"
+  },
+  "31634": {
+    "gemeinde_code": "31634",
+    "gemeinde_name": "Neudorf im Weinviertel"
+  },
+  "10607": {
+    "gemeinde_code": "10607",
+    "gemeinde_name": "Neudörfl"
+  },
+  "10309": {
+    "gemeinde_code": "10309",
+    "gemeinde_name": "Neufeld an der Leitha"
+  },
+  "41321": {
+    "gemeinde_code": "41321",
+    "gemeinde_name": "Neufelden"
+  },
+  "20810": {
+    "gemeinde_code": "20810",
+    "gemeinde_name": "Neuhaus"
+  },
+  "10507": {
+    "gemeinde_code": "10507",
+    "gemeinde_name": "Neuhaus am Klausenbach"
+  },
+  "41014": {
+    "gemeinde_code": "41014",
+    "gemeinde_name": "Neuhofen an der Krems"
+  },
+  "30520": {
+    "gemeinde_code": "30520",
+    "gemeinde_name": "Neuhofen an der Ybbs"
+  },
+  "41218": {
+    "gemeinde_code": "41218",
+    "gemeinde_name": "Neuhofen im Innkreis"
+  },
+  "50614": {
+    "gemeinde_code": "50614",
+    "gemeinde_name": "Neukirchen am Großvenediger"
+  },
+  "40817": {
+    "gemeinde_code": "40817",
+    "gemeinde_name": "Neukirchen am Walde"
+  },
+  "40427": {
+    "gemeinde_code": "40427",
+    "gemeinde_name": "Neukirchen an der Enknach"
+  },
+  "41716": {
+    "gemeinde_code": "41716",
+    "gemeinde_name": "Neukirchen an der Vöckla"
+  },
+  "41813": {
+    "gemeinde_code": "41813",
+    "gemeinde_name": "Neukirchen bei Lambach"
+  },
+  "31926": {
+    "gemeinde_code": "31926",
+    "gemeinde_name": "Neulengbach"
+  },
+  "50324": {
+    "gemeinde_code": "50324",
+    "gemeinde_name": "Neumarkt am Wallersee"
+  },
+  "31527": {
+    "gemeinde_code": "31527",
+    "gemeinde_name": "Neumarkt an der Ybbs"
+  },
+  "40818": {
+    "gemeinde_code": "40818",
+    "gemeinde_name": "Neumarkt im Hausruckkreis"
+  },
+  "40612": {
+    "gemeinde_code": "40612",
+    "gemeinde_name": "Neumarkt im Mühlkreis"
+  },
+  "61439": {
+    "gemeinde_code": "61439",
+    "gemeinde_name": "Neumarkt in der Steiermark"
+  },
+  "31818": {
+    "gemeinde_code": "31818",
+    "gemeinde_name": "Neunkirchen"
+  },
+  "10713": {
+    "gemeinde_code": "10713",
+    "gemeinde_name": "Neusiedl am See"
+  },
+  "30841": {
+    "gemeinde_code": "30841",
+    "gemeinde_name": "Neusiedl an der Zaya"
+  },
+  "30521": {
+    "gemeinde_code": "30521",
+    "gemeinde_name": "Neustadtl an der Donau"
+  },
+  "10929": {
+    "gemeinde_code": "10929",
+    "gemeinde_name": "Neustift an der Lafnitz"
+  },
+  "10410": {
+    "gemeinde_code": "10410",
+    "gemeinde_name": "Neustift bei Güssing"
+  },
+  "41329": {
+    "gemeinde_code": "41329",
+    "gemeinde_name": "Neustift im Mühlkreis"
+  },
+  "70334": {
+    "gemeinde_code": "70334",
+    "gemeinde_name": "Neustift im Stubaital"
+  },
+  "31927": {
+    "gemeinde_code": "31927",
+    "gemeinde_name": "Neustift-Innermanzing"
+  },
+  "10814": {
+    "gemeinde_code": "10814",
+    "gemeinde_name": "Neutal"
+  },
+  "10714": {
+    "gemeinde_code": "10714",
+    "gemeinde_name": "Nickelsdorf"
+  },
+  "31234": {
+    "gemeinde_code": "31234",
+    "gemeinde_name": "Niederhollabrunn"
+  },
+  "41322": {
+    "gemeinde_code": "41322",
+    "gemeinde_name": "Niederkappel"
+  },
+  "31636": {
+    "gemeinde_code": "31636",
+    "gemeinde_name": "Niederleis"
+  },
+  "70518": {
+    "gemeinde_code": "70518",
+    "gemeinde_name": "Niederndorf"
+  },
+  "70519": {
+    "gemeinde_code": "70519",
+    "gemeinde_name": "Niederndorferberg"
+  },
+  "41015": {
+    "gemeinde_code": "41015",
+    "gemeinde_name": "Niederneukirchen"
+  },
+  "50615": {
+    "gemeinde_code": "50615",
+    "gemeinde_name": "Niedernsill"
+  },
+  "41717": {
+    "gemeinde_code": "41717",
+    "gemeinde_name": "Niederthalheim"
+  },
+  "41323": {
+    "gemeinde_code": "41323",
+    "gemeinde_name": "Niederwaldkirchen"
+  },
+  "61413": {
+    "gemeinde_code": "61413",
+    "gemeinde_name": "Niederwölz"
+  },
+  "10815": {
+    "gemeinde_code": "10815",
+    "gemeinde_name": "Nikitsch"
+  },
+  "61110": {
+    "gemeinde_code": "61110",
+    "gemeinde_name": "Niklasdorf"
+  },
+  "70718": {
+    "gemeinde_code": "70718",
+    "gemeinde_name": "Nikolsdorf"
+  },
+  "31528": {
+    "gemeinde_code": "31528",
+    "gemeinde_name": "Nöchling"
+  },
+  "20719": {
+    "gemeinde_code": "20719",
+    "gemeinde_name": "Nötsch im Gailtal"
+  },
+  "40910": {
+    "gemeinde_code": "40910",
+    "gemeinde_name": "Nußbach"
+  },
+  "41718": {
+    "gemeinde_code": "41718",
+    "gemeinde_name": "Nußdorf am Attersee"
+  },
+  "50325": {
+    "gemeinde_code": "50325",
+    "gemeinde_name": "Nußdorf am Haunsberg"
+  },
+  "70719": {
+    "gemeinde_code": "70719",
+    "gemeinde_name": "Nußdorf-Debant"
+  },
+  "31928": {
+    "gemeinde_code": "31928",
+    "gemeinde_name": "Nußdorf ob der Traisen"
+  },
+  "80117": {
+    "gemeinde_code": "80117",
+    "gemeinde_name": "Nüziders"
+  },
+  "62042": {
+    "gemeinde_code": "62042",
+    "gemeinde_name": "Obdach"
+  },
+  "50208": {
+    "gemeinde_code": "50208",
+    "gemeinde_name": "Oberalm"
+  },
+  "10915": {
+    "gemeinde_code": "10915",
+    "gemeinde_name": "Oberdorf im Burgenland"
+  },
+  "20625": {
+    "gemeinde_code": "20625",
+    "gemeinde_name": "Oberdrauburg"
+  },
+  "31929": {
+    "gemeinde_code": "31929",
+    "gemeinde_name": "Ober-Grafendorf"
+  },
+  "61024": {
+    "gemeinde_code": "61024",
+    "gemeinde_name": "Oberhaag"
+  },
+  "41719": {
+    "gemeinde_code": "41719",
+    "gemeinde_name": "Oberhofen am Irrsee"
+  },
+  "70335": {
+    "gemeinde_code": "70335",
+    "gemeinde_name": "Oberhofen im Inntal"
+  },
+  "41324": {
+    "gemeinde_code": "41324",
+    "gemeinde_name": "Oberkappel"
+  },
+  "70720": {
+    "gemeinde_code": "70720",
+    "gemeinde_name": "Oberlienz"
+  },
+  "10828": {
+    "gemeinde_code": "10828",
+    "gemeinde_name": "Oberloisdorf"
+  },
+  "70336": {
+    "gemeinde_code": "70336",
+    "gemeinde_name": "Obernberg am Brenner"
+  },
+  "41219": {
+    "gemeinde_code": "41219",
+    "gemeinde_name": "Obernberg am Inn"
+  },
+  "32006": {
+    "gemeinde_code": "32006",
+    "gemeinde_name": "Oberndorf an der Melk"
+  },
+  "50326": {
+    "gemeinde_code": "50326",
+    "gemeinde_name": "Oberndorf bei Salzburg"
+  },
+  "41720": {
+    "gemeinde_code": "41720",
+    "gemeinde_name": "Oberndorf bei Schwanenstadt"
+  },
+  "70413": {
+    "gemeinde_code": "70413",
+    "gemeinde_name": "Oberndorf in Tirol"
+  },
+  "41615": {
+    "gemeinde_code": "41615",
+    "gemeinde_name": "Oberneukirchen"
+  },
+  "70337": {
+    "gemeinde_code": "70337",
+    "gemeinde_name": "Oberperfuss"
+  },
+  "10816": {
+    "gemeinde_code": "10816",
+    "gemeinde_name": "Oberpullendorf"
+  },
+  "40911": {
+    "gemeinde_code": "40911",
+    "gemeinde_name": "Oberschlierbach"
+  },
+  "10916": {
+    "gemeinde_code": "10916",
+    "gemeinde_name": "Oberschützen"
+  },
+  "30842": {
+    "gemeinde_code": "30842",
+    "gemeinde_name": "Obersiebenbrunn"
+  },
+  "70721": {
+    "gemeinde_code": "70721",
+    "gemeinde_name": "Obertilliach"
+  },
+  "40712": {
+    "gemeinde_code": "40712",
+    "gemeinde_name": "Obertraun"
+  },
+  "50327": {
+    "gemeinde_code": "50327",
+    "gemeinde_name": "Obertrum am See"
+  },
+  "20627": {
+    "gemeinde_code": "20627",
+    "gemeinde_name": "Obervellach"
+  },
+  "30623": {
+    "gemeinde_code": "30623",
+    "gemeinde_name": "Oberwaltersdorf"
+  },
+  "41721": {
+    "gemeinde_code": "41721",
+    "gemeinde_name": "Oberwang"
+  },
+  "10917": {
+    "gemeinde_code": "10917",
+    "gemeinde_name": "Oberwart"
+  },
+  "61440": {
+    "gemeinde_code": "61440",
+    "gemeinde_name": "Oberwölz"
+  },
+  "61262": {
+    "gemeinde_code": "61262",
+    "gemeinde_name": "Öblarn"
+  },
+  "31930": {
+    "gemeinde_code": "31930",
+    "gemeinde_name": "Obritzberg-Rust"
+  },
+  "70213": {
+    "gemeinde_code": "70213",
+    "gemeinde_name": "Obsteig"
+  },
+  "30522": {
+    "gemeinde_code": "30522",
+    "gemeinde_name": "Oed-Oehling"
+  },
+  "41325": {
+    "gemeinde_code": "41325",
+    "gemeinde_name": "Oepping"
+  },
+  "70214": {
+    "gemeinde_code": "70214",
+    "gemeinde_name": "Oetz"
+  },
+  "41814": {
+    "gemeinde_code": "41814",
+    "gemeinde_name": "Offenhausen"
+  },
+  "41016": {
+    "gemeinde_code": "41016",
+    "gemeinde_name": "Oftering"
+  },
+  "10310": {
+    "gemeinde_code": "10310",
+    "gemeinde_name": "Oggau am Neusiedler See"
+  },
+  "40713": {
+    "gemeinde_code": "40713",
+    "gemeinde_name": "Ohlsdorf"
+  },
+  "10411": {
+    "gemeinde_code": "10411",
+    "gemeinde_name": "Olbendorf"
+  },
+  "10412": {
+    "gemeinde_code": "10412",
+    "gemeinde_name": "Ollersdorf im Burgenland"
+  },
+  "30524": {
+    "gemeinde_code": "30524",
+    "gemeinde_name": "Opponitz"
+  },
+  "30844": {
+    "gemeinde_code": "30844",
+    "gemeinde_name": "Orth an der Donau"
+  },
+  "41220": {
+    "gemeinde_code": "41220",
+    "gemeinde_name": "Ort im Innkreis"
+  },
+  "10311": {
+    "gemeinde_code": "10311",
+    "gemeinde_name": "Oslip"
+  },
+  "21006": {
+    "gemeinde_code": "21006",
+    "gemeinde_name": "Ossiach"
+  },
+  "40428": {
+    "gemeinde_code": "40428",
+    "gemeinde_name": "Ostermiething"
+  },
+  "62232": {
+    "gemeinde_code": "62232",
+    "gemeinde_name": "Ottendorf an der Rittschein"
+  },
+  "32518": {
+    "gemeinde_code": "32518",
+    "gemeinde_name": "Ottenschlag"
+  },
+  "41616": {
+    "gemeinde_code": "41616",
+    "gemeinde_name": "Ottenschlag im Mühlkreis"
+  },
+  "41617": {
+    "gemeinde_code": "41617",
+    "gemeinde_name": "Ottensheim"
+  },
+  "31658": {
+    "gemeinde_code": "31658",
+    "gemeinde_name": "Ottenthal"
+  },
+  "31820": {
+    "gemeinde_code": "31820",
+    "gemeinde_name": "Otterthal"
+  },
+  "41722": {
+    "gemeinde_code": "41722",
+    "gemeinde_name": "Ottnang am Hausruck"
+  },
+  "41115": {
+    "gemeinde_code": "41115",
+    "gemeinde_name": "Pabneukirchen"
+  },
+  "62384": {
+    "gemeinde_code": "62384",
+    "gemeinde_name": "Paldau"
+  },
+  "30845": {
+    "gemeinde_code": "30845",
+    "gemeinde_name": "Palterndorf-Dobermannsdorf"
+  },
+  "40429": {
+    "gemeinde_code": "40429",
+    "gemeinde_name": "Palting"
+  },
+  "10715": {
+    "gemeinde_code": "10715",
+    "gemeinde_name": "Pama"
+  },
+  "10716": {
+    "gemeinde_code": "10716",
+    "gemeinde_name": "Pamhagen"
+  },
+  "30846": {
+    "gemeinde_code": "30846",
+    "gemeinde_name": "Parbasdorf"
+  },
+  "10717": {
+    "gemeinde_code": "10717",
+    "gemeinde_name": "Parndorf"
+  },
+  "41017": {
+    "gemeinde_code": "41017",
+    "gemeinde_name": "Pasching"
+  },
+  "61763": {
+    "gemeinde_code": "61763",
+    "gemeinde_name": "Passail"
+  },
+  "20720": {
+    "gemeinde_code": "20720",
+    "gemeinde_name": "Paternion"
+  },
+  "70338": {
+    "gemeinde_code": "70338",
+    "gemeinde_name": "Patsch"
+  },
+  "41221": {
+    "gemeinde_code": "41221",
+    "gemeinde_name": "Pattigham"
+  },
+  "31333": {
+    "gemeinde_code": "31333",
+    "gemeinde_name": "Paudorf"
+  },
+  "31821": {
+    "gemeinde_code": "31821",
+    "gemeinde_name": "Payerbach"
+  },
+  "60632": {
+    "gemeinde_code": "60632",
+    "gemeinde_name": "Peggau"
+  },
+  "41326": {
+    "gemeinde_code": "41326",
+    "gemeinde_name": "Peilstein im Mühlviertel"
+  },
+  "41815": {
+    "gemeinde_code": "41815",
+    "gemeinde_name": "Pennewang"
+  },
+  "31719": {
+    "gemeinde_code": "31719",
+    "gemeinde_name": "Perchtoldsdorf"
+  },
+  "41116": {
+    "gemeinde_code": "41116",
+    "gemeinde_name": "Perg"
+  },
+  "31117": {
+    "gemeinde_code": "31117",
+    "gemeinde_name": "Pernegg"
+  },
+  "62125": {
+    "gemeinde_code": "62125",
+    "gemeinde_name": "Pernegg an der Mur"
+  },
+  "31033": {
+    "gemeinde_code": "31033",
+    "gemeinde_name": "Pernersdorf"
+  },
+  "32323": {
+    "gemeinde_code": "32323",
+    "gemeinde_name": "Pernitz"
+  },
+  "31946": {
+    "gemeinde_code": "31946",
+    "gemeinde_name": "Perschling"
+  },
+  "31530": {
+    "gemeinde_code": "31530",
+    "gemeinde_name": "Persenbeug-Gottsdorf"
+  },
+  "40430": {
+    "gemeinde_code": "40430",
+    "gemeinde_name": "Perwang am Grabensee"
+  },
+  "41222": {
+    "gemeinde_code": "41222",
+    "gemeinde_name": "Peterskirchen"
+  },
+  "30718": {
+    "gemeinde_code": "30718",
+    "gemeinde_name": "Petronell-Carnuntum"
+  },
+  "40912": {
+    "gemeinde_code": "40912",
+    "gemeinde_name": "Pettenbach"
+  },
+  "70339": {
+    "gemeinde_code": "70339",
+    "gemeinde_name": "Pettnau"
+  },
+  "70616": {
+    "gemeinde_code": "70616",
+    "gemeinde_name": "Pettneu am Arlberg"
+  },
+  "31531": {
+    "gemeinde_code": "31531",
+    "gemeinde_name": "Petzenkirchen"
+  },
+  "40835": {
+    "gemeinde_code": "40835",
+    "gemeinde_name": "Peuerbach"
+  },
+  "70340": {
+    "gemeinde_code": "70340",
+    "gemeinde_name": "Pfaffenhofen"
+  },
+  "32214": {
+    "gemeinde_code": "32214",
+    "gemeinde_name": "Pfaffenschlag bei Waidhofen a.d.Thaya"
+  },
+  "41723": {
+    "gemeinde_code": "41723",
+    "gemeinde_name": "Pfaffing"
+  },
+  "70825": {
+    "gemeinde_code": "70825",
+    "gemeinde_name": "Pfafflar"
+  },
+  "40431": {
+    "gemeinde_code": "40431",
+    "gemeinde_name": "Pfaffstätt"
+  },
+  "30625": {
+    "gemeinde_code": "30625",
+    "gemeinde_name": "Pfaffstätten"
+  },
+  "41511": {
+    "gemeinde_code": "41511",
+    "gemeinde_name": "Pfarrkirchen bei Bad Hall"
+  },
+  "41327": {
+    "gemeinde_code": "41327",
+    "gemeinde_name": "Pfarrkirchen im Mühlkreis"
+  },
+  "50416": {
+    "gemeinde_code": "50416",
+    "gemeinde_name": "Pfarrwerfen"
+  },
+  "70826": {
+    "gemeinde_code": "70826",
+    "gemeinde_name": "Pflach"
+  },
+  "70617": {
+    "gemeinde_code": "70617",
+    "gemeinde_name": "Pfunds"
+  },
+  "70618": {
+    "gemeinde_code": "70618",
+    "gemeinde_name": "Pians"
+  },
+  "41018": {
+    "gemeinde_code": "41018",
+    "gemeinde_name": "Piberbach"
+  },
+  "41816": {
+    "gemeinde_code": "41816",
+    "gemeinde_name": "Pichl bei Wels"
+  },
+  "40613": {
+    "gemeinde_code": "40613",
+    "gemeinde_name": "Pierbach"
+  },
+  "50616": {
+    "gemeinde_code": "50616",
+    "gemeinde_name": "Piesendorf"
+  },
+  "10817": {
+    "gemeinde_code": "10817",
+    "gemeinde_name": "Pilgersdorf"
+  },
+  "70921": {
+    "gemeinde_code": "70921",
+    "gemeinde_name": "Pill"
+  },
+  "31642": {
+    "gemeinde_code": "31642",
+    "gemeinde_name": "Pillichsdorf"
+  },
+  "41724": {
+    "gemeinde_code": "41724",
+    "gemeinde_name": "Pilsbach"
+  },
+  "62233": {
+    "gemeinde_code": "62233",
+    "gemeinde_name": "Pinggau"
+  },
+  "10918": {
+    "gemeinde_code": "10918",
+    "gemeinde_name": "Pinkafeld"
+  },
+  "40714": {
+    "gemeinde_code": "40714",
+    "gemeinde_name": "Pinsdorf"
+  },
+  "70827": {
+    "gemeinde_code": "70827",
+    "gemeinde_name": "Pinswang"
+  },
+  "62385": {
+    "gemeinde_code": "62385",
+    "gemeinde_name": "Pirching am Traubenberg"
+  },
+  "10818": {
+    "gemeinde_code": "10818",
+    "gemeinde_name": "Piringsdorf"
+  },
+  "40432": {
+    "gemeinde_code": "40432",
+    "gemeinde_name": "Pischelsdorf am Engelbach"
+  },
+  "61764": {
+    "gemeinde_code": "61764",
+    "gemeinde_name": "Pischelsdorf am Kulm"
+  },
+  "31823": {
+    "gemeinde_code": "31823",
+    "gemeinde_name": "Pitten"
+  },
+  "41725": {
+    "gemeinde_code": "41725",
+    "gemeinde_name": "Pitzenberg"
+  },
+  "50328": {
+    "gemeinde_code": "50328",
+    "gemeinde_name": "Plainfeld"
+  },
+  "31533": {
+    "gemeinde_code": "31533",
+    "gemeinde_name": "Pöchlarn"
+  },
+  "10718": {
+    "gemeinde_code": "10718",
+    "gemeinde_name": "Podersdorf am See"
+  },
+  "20425": {
+    "gemeinde_code": "20425",
+    "gemeinde_name": "Poggersdorf"
+  },
+  "31534": {
+    "gemeinde_code": "31534",
+    "gemeinde_name": "Pöggstall"
+  },
+  "60323": {
+    "gemeinde_code": "60323",
+    "gemeinde_name": "Pölfing-Brunn"
+  },
+  "32520": {
+    "gemeinde_code": "32520",
+    "gemeinde_name": "Pölla"
+  },
+  "62275": {
+    "gemeinde_code": "62275",
+    "gemeinde_name": "Pöllau"
+  },
+  "62235": {
+    "gemeinde_code": "62235",
+    "gemeinde_name": "Pöllauberg"
+  },
+  "40821": {
+    "gemeinde_code": "40821",
+    "gemeinde_name": "Pollham"
+  },
+  "40433": {
+    "gemeinde_code": "40433",
+    "gemeinde_name": "Polling im Innkreis"
+  },
+  "70342": {
+    "gemeinde_code": "70342",
+    "gemeinde_name": "Polling in Tirol"
+  },
+  "62043": {
+    "gemeinde_code": "62043",
+    "gemeinde_name": "Pöls-Oberkurzheim"
+  },
+  "62044": {
+    "gemeinde_code": "62044",
+    "gemeinde_name": "Pölstal"
+  },
+  "41726": {
+    "gemeinde_code": "41726",
+    "gemeinde_name": "Pöndorf"
+  },
+  "20424": {
+    "gemeinde_code": "20424",
+    "gemeinde_name": "Pörtschach am Wörther See"
+  },
+  "10608": {
+    "gemeinde_code": "10608",
+    "gemeinde_name": "Pöttelsdorf"
+  },
+  "30626": {
+    "gemeinde_code": "30626",
+    "gemeinde_name": "Pottendorf"
+  },
+  "30627": {
+    "gemeinde_code": "30627",
+    "gemeinde_name": "Pottenstein"
+  },
+  "40820": {
+    "gemeinde_code": "40820",
+    "gemeinde_name": "Pötting"
+  },
+  "10609": {
+    "gemeinde_code": "10609",
+    "gemeinde_name": "Pöttsching"
+  },
+  "10726": {
+    "gemeinde_code": "10726",
+    "gemeinde_name": "Potzneusiedl"
+  },
+  "31644": {
+    "gemeinde_code": "31644",
+    "gemeinde_name": "Poysdorf"
+  },
+  "70723": {
+    "gemeinde_code": "70723",
+    "gemeinde_name": "Prägraten am Großvenediger"
+  },
+  "40822": {
+    "gemeinde_code": "40822",
+    "gemeinde_name": "Pram"
+  },
+  "40508": {
+    "gemeinde_code": "40508",
+    "gemeinde_name": "Prambachkirchen"
+  },
+  "41223": {
+    "gemeinde_code": "41223",
+    "gemeinde_name": "Pramet"
+  },
+  "60324": {
+    "gemeinde_code": "60324",
+    "gemeinde_name": "Preding"
+  },
+  "40614": {
+    "gemeinde_code": "40614",
+    "gemeinde_name": "Pregarten"
+  },
+  "20911": {
+    "gemeinde_code": "20911",
+    "gemeinde_name": "Preitenegg"
+  },
+  "30719": {
+    "gemeinde_code": "30719",
+    "gemeinde_name": "Prellenkirchen"
+  },
+  "60670": {
+    "gemeinde_code": "60670",
+    "gemeinde_name": "Premstätten"
+  },
+  "31951": {
+    "gemeinde_code": "31951",
+    "gemeinde_name": "Pressbaum"
+  },
+  "31825": {
+    "gemeinde_code": "31825",
+    "gemeinde_name": "Prigglitz"
+  },
+  "31932": {
+    "gemeinde_code": "31932",
+    "gemeinde_name": "Prinzersdorf"
+  },
+  "61111": {
+    "gemeinde_code": "61111",
+    "gemeinde_name": "Proleb"
+  },
+  "30848": {
+    "gemeinde_code": "30848",
+    "gemeinde_name": "Prottes"
+  },
+  "70619": {
+    "gemeinde_code": "70619",
+    "gemeinde_name": "Prutz"
+  },
+  "50209": {
+    "gemeinde_code": "50209",
+    "gemeinde_name": "Puch bei Hallein"
+  },
+  "61740": {
+    "gemeinde_code": "61740",
+    "gemeinde_name": "Puch bei Weiz"
+  },
+  "31826": {
+    "gemeinde_code": "31826",
+    "gemeinde_name": "Puchberg am Schneeberg"
+  },
+  "41618": {
+    "gemeinde_code": "41618",
+    "gemeinde_name": "Puchenau"
+  },
+  "32007": {
+    "gemeinde_code": "32007",
+    "gemeinde_name": "Puchenstuben"
+  },
+  "41727": {
+    "gemeinde_code": "41727",
+    "gemeinde_name": "Puchkirchen am Trattberg"
+  },
+  "41019": {
+    "gemeinde_code": "41019",
+    "gemeinde_name": "Pucking"
+  },
+  "41728": {
+    "gemeinde_code": "41728",
+    "gemeinde_name": "Pühret"
+  },
+  "31035": {
+    "gemeinde_code": "31035",
+    "gemeinde_name": "Pulkau"
+  },
+  "40509": {
+    "gemeinde_code": "40509",
+    "gemeinde_name": "Pupping"
+  },
+  "10312": {
+    "gemeinde_code": "10312",
+    "gemeinde_name": "Purbach am Neusiedler See"
+  },
+  "32008": {
+    "gemeinde_code": "32008",
+    "gemeinde_name": "Purgstall an der Erlauf"
+  },
+  "31952": {
+    "gemeinde_code": "31952",
+    "gemeinde_name": "Purkersdorf"
+  },
+  "62021": {
+    "gemeinde_code": "62021",
+    "gemeinde_name": "Pusterwald"
+  },
+  "41328": {
+    "gemeinde_code": "41328",
+    "gemeinde_name": "Putzleinsdorf"
+  },
+  "31934": {
+    "gemeinde_code": "31934",
+    "gemeinde_name": "Pyhra"
+  },
+  "41414": {
+    "gemeinde_code": "41414",
+    "gemeinde_name": "Raab"
+  },
+  "60667": {
+    "gemeinde_code": "60667",
+    "gemeinde_name": "Raaba-Grambach"
+  },
+  "32216": {
+    "gemeinde_code": "32216",
+    "gemeinde_name": "Raabs an der Thaya"
+  },
+  "31827": {
+    "gemeinde_code": "31827",
+    "gemeinde_name": "Raach am Hochgebirge"
+  },
+  "30849": {
+    "gemeinde_code": "30849",
+    "gemeinde_name": "Raasdorf"
+  },
+  "31645": {
+    "gemeinde_code": "31645",
+    "gemeinde_name": "Rabensburg"
+  },
+  "31935": {
+    "gemeinde_code": "31935",
+    "gemeinde_name": "Rabenstein an der Pielach"
+  },
+  "20630": {
+    "gemeinde_code": "20630",
+    "gemeinde_name": "Radenthein"
+  },
+  "70520": {
+    "gemeinde_code": "70520",
+    "gemeinde_name": "Radfeld"
+  },
+  "61112": {
+    "gemeinde_code": "61112",
+    "gemeinde_name": "Radmer"
+  },
+  "50417": {
+    "gemeinde_code": "50417",
+    "gemeinde_name": "Radstadt"
+  },
+  "80118": {
+    "gemeinde_code": "80118",
+    "gemeinde_name": "Raggal"
+  },
+  "61027": {
+    "gemeinde_code": "61027",
+    "gemeinde_name": "Ragnitz"
+  },
+  "10819": {
+    "gemeinde_code": "10819",
+    "gemeinde_name": "Raiding"
+  },
+  "41415": {
+    "gemeinde_code": "41415",
+    "gemeinde_name": "Rainbach im Innkreis"
+  },
+  "40615": {
+    "gemeinde_code": "40615",
+    "gemeinde_name": "Rainbach im Mühlkreis"
+  },
+  "50506": {
+    "gemeinde_code": "50506",
+    "gemeinde_name": "Ramingstein"
+  },
+  "31409": {
+    "gemeinde_code": "31409",
+    "gemeinde_name": "Ramsau"
+  },
+  "61236": {
+    "gemeinde_code": "61236",
+    "gemeinde_name": "Ramsau am Dachstein"
+  },
+  "70922": {
+    "gemeinde_code": "70922",
+    "gemeinde_name": "Ramsau im Zillertal"
+  },
+  "32009": {
+    "gemeinde_code": "32009",
+    "gemeinde_name": "Randegg"
+  },
+  "20631": {
+    "gemeinde_code": "20631",
+    "gemeinde_name": "Rangersdorf"
+  },
+  "70343": {
+    "gemeinde_code": "70343",
+    "gemeinde_name": "Ranggen"
+  },
+  "80414": {
+    "gemeinde_code": "80414",
+    "gemeinde_name": "Rankweil"
+  },
+  "61441": {
+    "gemeinde_code": "61441",
+    "gemeinde_name": "Ranten"
+  },
+  "32521": {
+    "gemeinde_code": "32521",
+    "gemeinde_name": "Rappottenstein"
+  },
+  "31336": {
+    "gemeinde_code": "31336",
+    "gemeinde_name": "Rastenfeld"
+  },
+  "61741": {
+    "gemeinde_code": "61741",
+    "gemeinde_name": "Ratten"
+  },
+  "70521": {
+    "gemeinde_code": "70521",
+    "gemeinde_name": "Rattenberg"
+  },
+  "30738": {
+    "gemeinde_code": "30738",
+    "gemeinde_name": "Rauchenwarth"
+  },
+  "10427": {
+    "gemeinde_code": "10427",
+    "gemeinde_name": "Rauchwart"
+  },
+  "50617": {
+    "gemeinde_code": "50617",
+    "gemeinde_name": "Rauris"
+  },
+  "31036": {
+    "gemeinde_code": "31036",
+    "gemeinde_name": "Ravelsbach"
+  },
+  "31535": {
+    "gemeinde_code": "31535",
+    "gemeinde_name": "Raxendorf"
+  },
+  "41117": {
+    "gemeinde_code": "41117",
+    "gemeinde_name": "Rechberg"
+  },
+  "10919": {
+    "gemeinde_code": "10919",
+    "gemeinde_name": "Rechnitz"
+  },
+  "41729": {
+    "gemeinde_code": "41729",
+    "gemeinde_name": "Redleiten"
+  },
+  "41730": {
+    "gemeinde_code": "41730",
+    "gemeinde_name": "Redlham"
+  },
+  "41731": {
+    "gemeinde_code": "41731",
+    "gemeinde_name": "Regau"
+  },
+  "21007": {
+    "gemeinde_code": "21007",
+    "gemeinde_name": "Reichenau"
+  },
+  "31829": {
+    "gemeinde_code": "31829",
+    "gemeinde_name": "Reichenau an der Rax"
+  },
+  "41619": {
+    "gemeinde_code": "41619",
+    "gemeinde_name": "Reichenau im Mühlkreis"
+  },
+  "20912": {
+    "gemeinde_code": "20912",
+    "gemeinde_name": "Reichenfels"
+  },
+  "41620": {
+    "gemeinde_code": "41620",
+    "gemeinde_name": "Reichenthal"
+  },
+  "41224": {
+    "gemeinde_code": "41224",
+    "gemeinde_name": "Reichersberg"
+  },
+  "41512": {
+    "gemeinde_code": "41512",
+    "gemeinde_name": "Reichraming"
+  },
+  "30929": {
+    "gemeinde_code": "30929",
+    "gemeinde_name": "Reingers"
+  },
+  "32010": {
+    "gemeinde_code": "32010",
+    "gemeinde_name": "Reinsberg"
+  },
+  "30629": {
+    "gemeinde_code": "30629",
+    "gemeinde_name": "Reisenberg"
+  },
+  "20644": {
+    "gemeinde_code": "20644",
+    "gemeinde_name": "Reißeck"
+  },
+  "70414": {
+    "gemeinde_code": "70414",
+    "gemeinde_name": "Reith bei Kitzbühel"
+  },
+  "70344": {
+    "gemeinde_code": "70344",
+    "gemeinde_name": "Reith bei Seefeld"
+  },
+  "70522": {
+    "gemeinde_code": "70522",
+    "gemeinde_name": "Reith im Alpbachtal"
+  },
+  "20632": {
+    "gemeinde_code": "20632",
+    "gemeinde_name": "Rennweg am Katschberg"
+  },
+  "61743": {
+    "gemeinde_code": "61743",
+    "gemeinde_name": "Rettenegg"
+  },
+  "70523": {
+    "gemeinde_code": "70523",
+    "gemeinde_name": "Rettenschöss"
+  },
+  "31037": {
+    "gemeinde_code": "31037",
+    "gemeinde_name": "Retz"
+  },
+  "31038": {
+    "gemeinde_code": "31038",
+    "gemeinde_name": "Retzbach"
+  },
+  "80230": {
+    "gemeinde_code": "80230",
+    "gemeinde_name": "Reuthe"
+  },
+  "70828": {
+    "gemeinde_code": "70828",
+    "gemeinde_name": "Reutte"
+  },
+  "41416": {
+    "gemeinde_code": "41416",
+    "gemeinde_name": "Riedau"
+  },
+  "41225": {
+    "gemeinde_code": "41225",
+    "gemeinde_name": "Ried im Innkreis"
+  },
+  "70620": {
+    "gemeinde_code": "70620",
+    "gemeinde_name": "Ried im Oberinntal"
+  },
+  "40913": {
+    "gemeinde_code": "40913",
+    "gemeinde_name": "Ried im Traunkreis"
+  },
+  "70923": {
+    "gemeinde_code": "70923",
+    "gemeinde_name": "Ried im Zillertal"
+  },
+  "41118": {
+    "gemeinde_code": "41118",
+    "gemeinde_name": "Ried in der Riedmark"
+  },
+  "10920": {
+    "gemeinde_code": "10920",
+    "gemeinde_name": "Riedlingsdorf"
+  },
+  "80231": {
+    "gemeinde_code": "80231",
+    "gemeinde_name": "Riefensberg"
+  },
+  "62386": {
+    "gemeinde_code": "62386",
+    "gemeinde_name": "Riegersburg"
+  },
+  "70215": {
+    "gemeinde_code": "70215",
+    "gemeinde_name": "Rietz"
+  },
+  "30850": {
+    "gemeinde_code": "30850",
+    "gemeinde_name": "Ringelsdorf-Niederabsdorf"
+  },
+  "70345": {
+    "gemeinde_code": "70345",
+    "gemeinde_name": "Rinn"
+  },
+  "10820": {
+    "gemeinde_code": "10820",
+    "gemeinde_name": "Ritzing"
+  },
+  "30721": {
+    "gemeinde_code": "30721",
+    "gemeinde_name": "Rohrau"
+  },
+  "31410": {
+    "gemeinde_code": "31410",
+    "gemeinde_name": "Rohrbach an der Gölsen"
+  },
+  "62277": {
+    "gemeinde_code": "62277",
+    "gemeinde_name": "Rohrbach an der Lafnitz"
+  },
+  "10610": {
+    "gemeinde_code": "10610",
+    "gemeinde_name": "Rohrbach bei Mattersburg"
+  },
+  "41344": {
+    "gemeinde_code": "41344",
+    "gemeinde_name": "Rohrbach-Berg"
+  },
+  "62276": {
+    "gemeinde_code": "62276",
+    "gemeinde_name": "Rohr bei Hartberg"
+  },
+  "70924": {
+    "gemeinde_code": "70924",
+    "gemeinde_name": "Rohrberg"
+  },
+  "31119": {
+    "gemeinde_code": "31119",
+    "gemeinde_name": "Röhrenbach"
+  },
+  "31337": {
+    "gemeinde_code": "31337",
+    "gemeinde_name": "Rohrendorf bei Krems"
+  },
+  "10425": {
+    "gemeinde_code": "10425",
+    "gemeinde_name": "Rohr im Burgenland"
+  },
+  "32324": {
+    "gemeinde_code": "32324",
+    "gemeinde_name": "Rohr im Gebirge"
+  },
+  "41513": {
+    "gemeinde_code": "41513",
+    "gemeinde_name": "Rohr im Kremstal"
+  },
+  "40715": {
+    "gemeinde_code": "40715",
+    "gemeinde_name": "Roitham am Traunfall"
+  },
+  "80415": {
+    "gemeinde_code": "80415",
+    "gemeinde_name": "Röns"
+  },
+  "70216": {
+    "gemeinde_code": "70216",
+    "gemeinde_name": "Roppen"
+  },
+  "31120": {
+    "gemeinde_code": "31120",
+    "gemeinde_name": "Röschitz"
+  },
+  "20721": {
+    "gemeinde_code": "20721",
+    "gemeinde_name": "Rosegg"
+  },
+  "40914": {
+    "gemeinde_code": "40914",
+    "gemeinde_name": "Rosenau am Hengstpaß"
+  },
+  "31121": {
+    "gemeinde_code": "31121",
+    "gemeinde_name": "Rosenburg-Mold"
+  },
+  "61618": {
+    "gemeinde_code": "61618",
+    "gemeinde_name": "Rosental an der Kainach"
+  },
+  "31338": {
+    "gemeinde_code": "31338",
+    "gemeinde_name": "Rossatz-Arnsdorf"
+  },
+  "40434": {
+    "gemeinde_code": "40434",
+    "gemeinde_name": "Roßbach"
+  },
+  "40915": {
+    "gemeinde_code": "40915",
+    "gemeinde_name": "Roßleithen"
+  },
+  "10921": {
+    "gemeinde_code": "10921",
+    "gemeinde_name": "Rotenturm an der Pinka"
+  },
+  "80416": {
+    "gemeinde_code": "80416",
+    "gemeinde_name": "Röthis"
+  },
+  "40823": {
+    "gemeinde_code": "40823",
+    "gemeinde_name": "Rottenbach"
+  },
+  "61263": {
+    "gemeinde_code": "61263",
+    "gemeinde_name": "Rottenmann"
+  },
+  "20812": {
+    "gemeinde_code": "20812",
+    "gemeinde_name": "Ruden"
+  },
+  "10508": {
+    "gemeinde_code": "10508",
+    "gemeinde_name": "Rudersdorf"
+  },
+  "70346": {
+    "gemeinde_code": "70346",
+    "gemeinde_name": "Rum"
+  },
+  "31537": {
+    "gemeinde_code": "31537",
+    "gemeinde_name": "Ruprechtshofen"
+  },
+  "31224": {
+    "gemeinde_code": "31224",
+    "gemeinde_name": "Rußbach"
+  },
+  "50210": {
+    "gemeinde_code": "50210",
+    "gemeinde_name": "Rußbach am Paß Gschütt"
+  },
+  "10201": {
+    "gemeinde_code": "10201",
+    "gemeinde_name": "Rust"
+  },
+  "41732": {
+    "gemeinde_code": "41732",
+    "gemeinde_name": "Rüstorf"
+  },
+  "41733": {
+    "gemeinde_code": "41733",
+    "gemeinde_name": "Rutzenham"
+  },
+  "50618": {
+    "gemeinde_code": "50618",
+    "gemeinde_name": "Saalbach-Hinterglemm"
+  },
+  "50619": {
+    "gemeinde_code": "50619",
+    "gemeinde_name": "Saalfelden am Steinernen Meer"
+  },
+  "20633": {
+    "gemeinde_code": "20633",
+    "gemeinde_name": "Sachsenburg"
+  },
+  "32522": {
+    "gemeinde_code": "32522",
+    "gemeinde_name": "Sallingberg"
+  },
+  "50101": {
+    "gemeinde_code": "50101",
+    "gemeinde_name": "Salzburg"
+  },
+  "40616": {
+    "gemeinde_code": "40616",
+    "gemeinde_name": "Sandl"
+  },
+  "10719": {
+    "gemeinde_code": "10719",
+    "gemeinde_name": "Sankt Andrä am Zicksee"
+  },
+  "61030": {
+    "gemeinde_code": "61030",
+    "gemeinde_name": "Sankt Andrä-Höch"
+  },
+  "62387": {
+    "gemeinde_code": "62387",
+    "gemeinde_name": "Sankt Anna am Aigen"
+  },
+  "62145": {
+    "gemeinde_code": "62145",
+    "gemeinde_name": "Sankt Barbara im Mürztal"
+  },
+  "60639": {
+    "gemeinde_code": "60639",
+    "gemeinde_name": "Sankt Bartholomä"
+  },
+  "61264": {
+    "gemeinde_code": "61264",
+    "gemeinde_name": "Sankt Gallen"
+  },
+  "61442": {
+    "gemeinde_code": "61442",
+    "gemeinde_name": "Sankt Georgen am Kreischberg"
+  },
+  "61055": {
+    "gemeinde_code": "61055",
+    "gemeinde_name": "Sankt Georgen an der Stiefing"
+  },
+  "62026": {
+    "gemeinde_code": "62026",
+    "gemeinde_name": "Sankt Georgen ob Judenburg"
+  },
+  "62242": {
+    "gemeinde_code": "62242",
+    "gemeinde_name": "Sankt Jakob im Walde"
+  },
+  "61032": {
+    "gemeinde_code": "61032",
+    "gemeinde_name": "Sankt Johann im Saggautal"
+  },
+  "62244": {
+    "gemeinde_code": "62244",
+    "gemeinde_name": "Sankt Johann in der Haide"
+  },
+  "60326": {
+    "gemeinde_code": "60326",
+    "gemeinde_name": "Sankt Josef (Weststeiermark)"
+  },
+  "61745": {
+    "gemeinde_code": "61745",
+    "gemeinde_name": "Sankt Kathrein am Offenegg"
+  },
+  "61443": {
+    "gemeinde_code": "61443",
+    "gemeinde_name": "Sankt Lambrecht"
+  },
+  "62245": {
+    "gemeinde_code": "62245",
+    "gemeinde_name": "Sankt Lorenzen am Wechsel"
+  },
+  "62128": {
+    "gemeinde_code": "62128",
+    "gemeinde_name": "Sankt Lorenzen im Mürztal"
+  },
+  "60668": {
+    "gemeinde_code": "60668",
+    "gemeinde_name": "Sankt Marein bei Graz"
+  },
+  "62045": {
+    "gemeinde_code": "62045",
+    "gemeinde_name": "Sankt Marein-Feistritz"
+  },
+  "62146": {
+    "gemeinde_code": "62146",
+    "gemeinde_name": "Sankt Marein im Mürztal"
+  },
+  "62046": {
+    "gemeinde_code": "62046",
+    "gemeinde_name": "Sankt Margarethen bei Knittelfeld"
+  },
+  "10313": {
+    "gemeinde_code": "10313",
+    "gemeinde_name": "Sankt Margarethen im Burgenland"
+  },
+  "61621": {
+    "gemeinde_code": "61621",
+    "gemeinde_name": "Sankt Martin am Wöllmißberg"
+  },
+  "10509": {
+    "gemeinde_code": "10509",
+    "gemeinde_name": "Sankt Martin an der Raab"
+  },
+  "60347": {
+    "gemeinde_code": "60347",
+    "gemeinde_name": "Sankt Martin im Sulmtal"
+  },
+  "10413": {
+    "gemeinde_code": "10413",
+    "gemeinde_name": "Sankt Michael im Burgenland"
+  },
+  "61113": {
+    "gemeinde_code": "61113",
+    "gemeinde_name": "Sankt Michael in Obersteiermark"
+  },
+  "61033": {
+    "gemeinde_code": "61033",
+    "gemeinde_name": "Sankt Nikolai im Sausal"
+  },
+  "60641": {
+    "gemeinde_code": "60641",
+    "gemeinde_name": "Sankt Oswald bei Plankenwarth"
+  },
+  "62388": {
+    "gemeinde_code": "62388",
+    "gemeinde_name": "Sankt Peter am Ottersbach"
+  },
+  "61114": {
+    "gemeinde_code": "61114",
+    "gemeinde_name": "Sankt Peter-Freienstein"
+  },
+  "60329": {
+    "gemeinde_code": "60329",
+    "gemeinde_name": "Sankt Peter im Sulmtal"
+  },
+  "62032": {
+    "gemeinde_code": "62032",
+    "gemeinde_name": "Sankt Peter ob Judenburg"
+  },
+  "60642": {
+    "gemeinde_code": "60642",
+    "gemeinde_name": "Sankt Radegund bei Graz"
+  },
+  "61765": {
+    "gemeinde_code": "61765",
+    "gemeinde_name": "Sankt Ruprecht an der Raab"
+  },
+  "62389": {
+    "gemeinde_code": "62389",
+    "gemeinde_name": "Sankt Stefan im Rosental"
+  },
+  "61115": {
+    "gemeinde_code": "61115",
+    "gemeinde_name": "Sankt Stefan ob Leoben"
+  },
+  "60348": {
+    "gemeinde_code": "60348",
+    "gemeinde_name": "Sankt Stefan ob Stainz"
+  },
+  "61060": {
+    "gemeinde_code": "61060",
+    "gemeinde_name": "Sankt Veit in der Südsteiermark"
+  },
+  "41338": {
+    "gemeinde_code": "41338",
+    "gemeinde_name": "Sarleinsbach"
+  },
+  "80417": {
+    "gemeinde_code": "80417",
+    "gemeinde_name": "Satteins"
+  },
+  "41817": {
+    "gemeinde_code": "41817",
+    "gemeinde_name": "Sattledt"
+  },
+  "70218": {
+    "gemeinde_code": "70218",
+    "gemeinde_name": "Sautens"
+  },
+  "41123": {
+    "gemeinde_code": "41123",
+    "gemeinde_name": "Saxen"
+  },
+  "10922": {
+    "gemeinde_code": "10922",
+    "gemeinde_name": "Schachendorf"
+  },
+  "62247": {
+    "gemeinde_code": "62247",
+    "gemeinde_name": "Schäffern"
+  },
+  "40441": {
+    "gemeinde_code": "40441",
+    "gemeinde_name": "Schalchen"
+  },
+  "10932": {
+    "gemeinde_code": "10932",
+    "gemeinde_name": "Schandorf"
+  },
+  "41423": {
+    "gemeinde_code": "41423",
+    "gemeinde_name": "Schardenberg"
+  },
+  "41422": {
+    "gemeinde_code": "41422",
+    "gemeinde_name": "Schärding"
+  },
+  "30722": {
+    "gemeinde_code": "30722",
+    "gemeinde_name": "Scharndorf"
+  },
+  "70348": {
+    "gemeinde_code": "70348",
+    "gemeinde_name": "Scharnitz"
+  },
+  "40719": {
+    "gemeinde_code": "40719",
+    "gemeinde_name": "Scharnstein"
+  },
+  "40511": {
+    "gemeinde_code": "40511",
+    "gemeinde_name": "Scharten"
+  },
+  "10612": {
+    "gemeinde_code": "10612",
+    "gemeinde_name": "Schattendorf"
+  },
+  "70829": {
+    "gemeinde_code": "70829",
+    "gemeinde_name": "Schattwald"
+  },
+  "50212": {
+    "gemeinde_code": "50212",
+    "gemeinde_name": "Scheffau am Tennengebirge"
+  },
+  "70524": {
+    "gemeinde_code": "70524",
+    "gemeinde_name": "Scheffau am Wilden Kaiser"
+  },
+  "32013": {
+    "gemeinde_code": "32013",
+    "gemeinde_name": "Scheibbs"
+  },
+  "31832": {
+    "gemeinde_code": "31832",
+    "gemeinde_name": "Scheiblingkirchen-Thernberg"
+  },
+  "61444": {
+    "gemeinde_code": "61444",
+    "gemeinde_name": "Scheifling"
+  },
+  "41622": {
+    "gemeinde_code": "41622",
+    "gemeinde_name": "Schenkenfelden"
+  },
+  "41515": {
+    "gemeinde_code": "41515",
+    "gemeinde_name": "Schiedlberg"
+  },
+  "20432": {
+    "gemeinde_code": "20432",
+    "gemeinde_name": "Schiefling am Wörthersee"
+  },
+  "41229": {
+    "gemeinde_code": "41229",
+    "gemeinde_name": "Schildorn"
+  },
+  "61265": {
+    "gemeinde_code": "61265",
+    "gemeinde_name": "Schladming"
+  },
+  "70727": {
+    "gemeinde_code": "70727",
+    "gemeinde_name": "Schlaiten"
+  },
+  "41736": {
+    "gemeinde_code": "41736",
+    "gemeinde_name": "Schlatt"
+  },
+  "50331": {
+    "gemeinde_code": "50331",
+    "gemeinde_name": "Schleedorf"
+  },
+  "41818": {
+    "gemeinde_code": "41818",
+    "gemeinde_name": "Schleißheim"
+  },
+  "40917": {
+    "gemeinde_code": "40917",
+    "gemeinde_name": "Schlierbach"
+  },
+  "80418": {
+    "gemeinde_code": "80418",
+    "gemeinde_name": "Schlins"
+  },
+  "70925": {
+    "gemeinde_code": "70925",
+    "gemeinde_name": "Schlitters"
+  },
+  "40827": {
+    "gemeinde_code": "40827",
+    "gemeinde_name": "Schlüßlberg"
+  },
+  "70349": {
+    "gemeinde_code": "70349",
+    "gemeinde_name": "Schmirn"
+  },
+  "80232": {
+    "gemeinde_code": "80232",
+    "gemeinde_name": "Schnepfau"
+  },
+  "80419": {
+    "gemeinde_code": "80419",
+    "gemeinde_name": "Schnifis"
+  },
+  "61428": {
+    "gemeinde_code": "61428",
+    "gemeinde_name": "Schöder"
+  },
+  "31543": {
+    "gemeinde_code": "31543",
+    "gemeinde_name": "Schollach"
+  },
+  "30631": {
+    "gemeinde_code": "30631",
+    "gemeinde_name": "Schönau an der Triesting"
+  },
+  "40619": {
+    "gemeinde_code": "40619",
+    "gemeinde_name": "Schönau im Mühlkreis"
+  },
+  "32523": {
+    "gemeinde_code": "32523",
+    "gemeinde_name": "Schönbach"
+  },
+  "31355": {
+    "gemeinde_code": "31355",
+    "gemeinde_name": "Schönberg am Kamp"
+  },
+  "70350": {
+    "gemeinde_code": "70350",
+    "gemeinde_name": "Schönberg im Stubaital"
+  },
+  "31542": {
+    "gemeinde_code": "31542",
+    "gemeinde_name": "Schönbühel-Aggsbach"
+  },
+  "30852": {
+    "gemeinde_code": "30852",
+    "gemeinde_name": "Schönkirchen-Reyersdorf"
+  },
+  "70622": {
+    "gemeinde_code": "70622",
+    "gemeinde_name": "Schönwies"
+  },
+  "80233": {
+    "gemeinde_code": "80233",
+    "gemeinde_name": "Schoppernau"
+  },
+  "41737": {
+    "gemeinde_code": "41737",
+    "gemeinde_name": "Schörfling am Attersee"
+  },
+  "31833": {
+    "gemeinde_code": "31833",
+    "gemeinde_name": "Schottwien"
+  },
+  "31834": {
+    "gemeinde_code": "31834",
+    "gemeinde_name": "Schrattenbach"
+  },
+  "31646": {
+    "gemeinde_code": "31646",
+    "gemeinde_name": "Schrattenberg"
+  },
+  "31041": {
+    "gemeinde_code": "31041",
+    "gemeinde_name": "Schrattenthal"
+  },
+  "30935": {
+    "gemeinde_code": "30935",
+    "gemeinde_name": "Schrems"
+  },
+  "80234": {
+    "gemeinde_code": "80234",
+    "gemeinde_name": "Schröcken"
+  },
+  "80122": {
+    "gemeinde_code": "80122",
+    "gemeinde_name": "Schruns"
+  },
+  "10314": {
+    "gemeinde_code": "10314",
+    "gemeinde_name": "Schützen am Gebirge"
+  },
+  "30739": {
+    "gemeinde_code": "30739",
+    "gemeinde_name": "Schwadorf"
+  },
+  "40442": {
+    "gemeinde_code": "40442",
+    "gemeinde_name": "Schwand im Innkreis"
+  },
+  "41738": {
+    "gemeinde_code": "41738",
+    "gemeinde_name": "Schwanenstadt"
+  },
+  "80235": {
+    "gemeinde_code": "80235",
+    "gemeinde_name": "Schwarzach"
+  },
+  "50421": {
+    "gemeinde_code": "50421",
+    "gemeinde_name": "Schwarzach im Pongau"
+  },
+  "31835": {
+    "gemeinde_code": "31835",
+    "gemeinde_name": "Schwarzau am Steinfeld"
+  },
+  "31836": {
+    "gemeinde_code": "31836",
+    "gemeinde_name": "Schwarzau im Gebirge"
+  },
+  "61057": {
+    "gemeinde_code": "61057",
+    "gemeinde_name": "Schwarzautal"
+  },
+  "32524": {
+    "gemeinde_code": "32524",
+    "gemeinde_name": "Schwarzenau"
+  },
+  "32326": {
+    "gemeinde_code": "32326",
+    "gemeinde_name": "Schwarzenbach"
+  },
+  "31939": {
+    "gemeinde_code": "31939",
+    "gemeinde_name": "Schwarzenbach an der Pielach"
+  },
+  "80236": {
+    "gemeinde_code": "80236",
+    "gemeinde_name": "Schwarzenberg"
+  },
+  "41341": {
+    "gemeinde_code": "41341",
+    "gemeinde_name": "Schwarzenberg am Böhmerwald"
+  },
+  "70926": {
+    "gemeinde_code": "70926",
+    "gemeinde_name": "Schwaz"
+  },
+  "30740": {
+    "gemeinde_code": "30740",
+    "gemeinde_name": "Schwechat"
+  },
+  "32525": {
+    "gemeinde_code": "32525",
+    "gemeinde_name": "Schweiggers"
+  },
+  "70927": {
+    "gemeinde_code": "70927",
+    "gemeinde_name": "Schwendau"
+  },
+  "70418": {
+    "gemeinde_code": "70418",
+    "gemeinde_name": "Schwendt"
+  },
+  "41124": {
+    "gemeinde_code": "41124",
+    "gemeinde_name": "Schwertberg"
+  },
+  "70525": {
+    "gemeinde_code": "70525",
+    "gemeinde_name": "Schwoich"
+  },
+  "62034": {
+    "gemeinde_code": "62034",
+    "gemeinde_name": "Seckau"
+  },
+  "70623": {
+    "gemeinde_code": "70623",
+    "gemeinde_name": "See"
+  },
+  "31837": {
+    "gemeinde_code": "31837",
+    "gemeinde_name": "Seebenstein"
+  },
+  "20634": {
+    "gemeinde_code": "20634",
+    "gemeinde_name": "Seeboden am Millstätter See"
+  },
+  "70351": {
+    "gemeinde_code": "70351",
+    "gemeinde_name": "Seefeld in Tirol"
+  },
+  "31042": {
+    "gemeinde_code": "31042",
+    "gemeinde_name": "Seefeld-Kadolz"
+  },
+  "50332": {
+    "gemeinde_code": "50332",
+    "gemeinde_name": "Seeham"
+  },
+  "50339": {
+    "gemeinde_code": "50339",
+    "gemeinde_name": "Seekirchen am Wallersee"
+  },
+  "41739": {
+    "gemeinde_code": "41739",
+    "gemeinde_name": "Seewalchen am Attersee"
+  },
+  "30633": {
+    "gemeinde_code": "30633",
+    "gemeinde_name": "Seibersdorf"
+  },
+  "60669": {
+    "gemeinde_code": "60669",
+    "gemeinde_name": "Seiersberg-Pirka"
+  },
+  "30532": {
+    "gemeinde_code": "30532",
+    "gemeinde_name": "Seitenstetten"
+  },
+  "70352": {
+    "gemeinde_code": "70352",
+    "gemeinde_name": "Sellrain"
+  },
+  "61243": {
+    "gemeinde_code": "61243",
+    "gemeinde_name": "Selzthal"
+  },
+  "31838": {
+    "gemeinde_code": "31838",
+    "gemeinde_name": "Semmering"
+  },
+  "60645": {
+    "gemeinde_code": "60645",
+    "gemeinde_name": "Semriach"
+  },
+  "41230": {
+    "gemeinde_code": "41230",
+    "gemeinde_name": "Senftenbach"
+  },
+  "31343": {
+    "gemeinde_code": "31343",
+    "gemeinde_name": "Senftenberg"
+  },
+  "70624": {
+    "gemeinde_code": "70624",
+    "gemeinde_name": "Serfaus"
+  },
+  "80237": {
+    "gemeinde_code": "80237",
+    "gemeinde_name": "Sibratsgfäll"
+  },
+  "10315": {
+    "gemeinde_code": "10315",
+    "gemeinde_name": "Siegendorf"
+  },
+  "10613": {
+    "gemeinde_code": "10613",
+    "gemeinde_name": "Sieggraben"
+  },
+  "32131": {
+    "gemeinde_code": "32131",
+    "gemeinde_name": "Sieghartskirchen"
+  },
+  "31226": {
+    "gemeinde_code": "31226",
+    "gemeinde_name": "Sierndorf"
+  },
+  "41516": {
+    "gemeinde_code": "41516",
+    "gemeinde_name": "Sierning"
+  },
+  "41424": {
+    "gemeinde_code": "41424",
+    "gemeinde_name": "Sigharting"
+  },
+  "10614": {
+    "gemeinde_code": "10614",
+    "gemeinde_name": "Sigleß"
+  },
+  "31124": {
+    "gemeinde_code": "31124",
+    "gemeinde_name": "Sigmundsherberg"
+  },
+  "80123": {
+    "gemeinde_code": "80123",
+    "gemeinde_name": "Silbertal"
+  },
+  "70728": {
+    "gemeinde_code": "70728",
+    "gemeinde_name": "Sillian"
+  },
+  "70219": {
+    "gemeinde_code": "70219",
+    "gemeinde_name": "Silz"
+  },
+  "61748": {
+    "gemeinde_code": "61748",
+    "gemeinde_name": "Sinabelkirchen"
+  },
+  "41819": {
+    "gemeinde_code": "41819",
+    "gemeinde_name": "Sipbachzell"
+  },
+  "70353": {
+    "gemeinde_code": "70353",
+    "gemeinde_name": "Sistrans"
+  },
+  "20815": {
+    "gemeinde_code": "20815",
+    "gemeinde_name": "Sittersdorf"
+  },
+  "32132": {
+    "gemeinde_code": "32132",
+    "gemeinde_name": "Sitzenberg-Reidling"
+  },
+  "31043": {
+    "gemeinde_code": "31043",
+    "gemeinde_name": "Sitzendorf an der Schmida"
+  },
+  "61633": {
+    "gemeinde_code": "61633",
+    "gemeinde_name": "Söding-Sankt Johann"
+  },
+  "70220": {
+    "gemeinde_code": "70220",
+    "gemeinde_name": "Sölden"
+  },
+  "61266": {
+    "gemeinde_code": "61266",
+    "gemeinde_name": "Sölk"
+  },
+  "70526": {
+    "gemeinde_code": "70526",
+    "gemeinde_name": "Söll"
+  },
+  "32327": {
+    "gemeinde_code": "32327",
+    "gemeinde_name": "Sollenau"
+  },
+  "30724": {
+    "gemeinde_code": "30724",
+    "gemeinde_name": "Sommerein"
+  },
+  "41623": {
+    "gemeinde_code": "41623",
+    "gemeinde_name": "Sonnberg im Mühlkreis"
+  },
+  "80124": {
+    "gemeinde_code": "80124",
+    "gemeinde_name": "Sonntag"
+  },
+  "30533": {
+    "gemeinde_code": "30533",
+    "gemeinde_name": "Sonntagberg"
+  },
+  "30635": {
+    "gemeinde_code": "30635",
+    "gemeinde_name": "Sooß"
+  },
+  "30854": {
+    "gemeinde_code": "30854",
+    "gemeinde_name": "Spannberg"
+  },
+  "62047": {
+    "gemeinde_code": "62047",
+    "gemeinde_name": "Spielberg"
+  },
+  "31227": {
+    "gemeinde_code": "31227",
+    "gemeinde_name": "Spillern"
+  },
+  "70625": {
+    "gemeinde_code": "70625",
+    "gemeinde_name": "Spiss"
+  },
+  "40918": {
+    "gemeinde_code": "40918",
+    "gemeinde_name": "Spital am Pyhrn"
+  },
+  "62131": {
+    "gemeinde_code": "62131",
+    "gemeinde_name": "Spital am Semmering"
+  },
+  "20635": {
+    "gemeinde_code": "20635",
+    "gemeinde_name": "Spittal an der Drau"
+  },
+  "31344": {
+    "gemeinde_code": "31344",
+    "gemeinde_name": "Spitz"
+  },
+  "41417": {
+    "gemeinde_code": "41417",
+    "gemeinde_name": "St. Aegidi"
+  },
+  "31411": {
+    "gemeinde_code": "31411",
+    "gemeinde_name": "St. Aegyd am Neuwalde"
+  },
+  "40824": {
+    "gemeinde_code": "40824",
+    "gemeinde_name": "St. Agatha"
+  },
+  "20913": {
+    "gemeinde_code": "20913",
+    "gemeinde_name": "St. Andrä"
+  },
+  "50507": {
+    "gemeinde_code": "50507",
+    "gemeinde_name": "St. Andrä im Lungau"
+  },
+  "32142": {
+    "gemeinde_code": "32142",
+    "gemeinde_name": "St. Andrä-Wördern"
+  },
+  "70621": {
+    "gemeinde_code": "70621",
+    "gemeinde_name": "St. Anton am Arlberg"
+  },
+  "32011": {
+    "gemeinde_code": "32011",
+    "gemeinde_name": "St. Anton an der Jeßnitz"
+  },
+  "80119": {
+    "gemeinde_code": "80119",
+    "gemeinde_name": "St. Anton im Montafon"
+  },
+  "31123": {
+    "gemeinde_code": "31123",
+    "gemeinde_name": "St. Bernhard-Frauenhofen"
+  },
+  "31830": {
+    "gemeinde_code": "31830",
+    "gemeinde_name": "St. Corona am Wechsel"
+  },
+  "31831": {
+    "gemeinde_code": "31831",
+    "gemeinde_name": "St. Egyden am Steinfeld"
+  },
+  "41013": {
+    "gemeinde_code": "41013",
+    "gemeinde_name": "St. Florian"
+  },
+  "41418": {
+    "gemeinde_code": "41418",
+    "gemeinde_name": "St. Florian am Inn"
+  },
+  "80120": {
+    "gemeinde_code": "80120",
+    "gemeinde_name": "St. Gallenkirch"
+  },
+  "40435": {
+    "gemeinde_code": "40435",
+    "gemeinde_name": "St. Georgen am Fillmannsbach"
+  },
+  "20523": {
+    "gemeinde_code": "20523",
+    "gemeinde_name": "St. Georgen am Längsee"
+  },
+  "30526": {
+    "gemeinde_code": "30526",
+    "gemeinde_name": "St. Georgen am Reith"
+  },
+  "41119": {
+    "gemeinde_code": "41119",
+    "gemeinde_name": "St. Georgen am Walde"
+  },
+  "30527": {
+    "gemeinde_code": "30527",
+    "gemeinde_name": "St. Georgen am Ybbsfelde"
+  },
+  "41120": {
+    "gemeinde_code": "41120",
+    "gemeinde_name": "St. Georgen an der Gusen"
+  },
+  "32012": {
+    "gemeinde_code": "32012",
+    "gemeinde_name": "St. Georgen an der Leys"
+  },
+  "40825": {
+    "gemeinde_code": "40825",
+    "gemeinde_name": "St. Georgen bei Grieskirchen"
+  },
+  "41226": {
+    "gemeinde_code": "41226",
+    "gemeinde_name": "St. Georgen bei Obernberg am Inn"
+  },
+  "50329": {
+    "gemeinde_code": "50329",
+    "gemeinde_name": "St. Georgen bei Salzburg"
+  },
+  "41734": {
+    "gemeinde_code": "41734",
+    "gemeinde_name": "St. Georgen im Attergau"
+  },
+  "20914": {
+    "gemeinde_code": "20914",
+    "gemeinde_name": "St. Georgen im Lavanttal"
+  },
+  "80121": {
+    "gemeinde_code": "80121",
+    "gemeinde_name": "St. Gerold"
+  },
+  "50330": {
+    "gemeinde_code": "50330",
+    "gemeinde_name": "St. Gilgen"
+  },
+  "41621": {
+    "gemeinde_code": "41621",
+    "gemeinde_name": "St. Gotthard im Mühlkreis"
+  },
+  "20722": {
+    "gemeinde_code": "20722",
+    "gemeinde_name": "St. Jakob im Rosental"
+  },
+  "70724": {
+    "gemeinde_code": "70724",
+    "gemeinde_name": "St. Jakob in Defereggen"
+  },
+  "70415": {
+    "gemeinde_code": "70415",
+    "gemeinde_name": "St. Jakob in Haus"
+  },
+  "40436": {
+    "gemeinde_code": "40436",
+    "gemeinde_name": "St. Johann am Walde"
+  },
+  "41331": {
+    "gemeinde_code": "41331",
+    "gemeinde_name": "St. Johann am Wimberg"
+  },
+  "50418": {
+    "gemeinde_code": "50418",
+    "gemeinde_name": "St. Johann im Pongau"
+  },
+  "70725": {
+    "gemeinde_code": "70725",
+    "gemeinde_name": "St. Johann im Walde"
+  },
+  "70416": {
+    "gemeinde_code": "70416",
+    "gemeinde_name": "St. Johann in Tirol"
+  },
+  "20813": {
+    "gemeinde_code": "20813",
+    "gemeinde_name": "St. Kanzian am Klopeiner See"
+  },
+  "61744": {
+    "gemeinde_code": "61744",
+    "gemeinde_name": "St. Kathrein am Hauenstein"
+  },
+  "50211": {
+    "gemeinde_code": "50211",
+    "gemeinde_name": "St. Koloman"
+  },
+  "40716": {
+    "gemeinde_code": "40716",
+    "gemeinde_name": "St. Konrad"
+  },
+  "31539": {
+    "gemeinde_code": "31539",
+    "gemeinde_name": "St. Leonhard am Forst"
+  },
+  "31340": {
+    "gemeinde_code": "31340",
+    "gemeinde_name": "St. Leonhard am Hornerwald"
+  },
+  "40617": {
+    "gemeinde_code": "40617",
+    "gemeinde_name": "St. Leonhard bei Freistadt"
+  },
+  "70217": {
+    "gemeinde_code": "70217",
+    "gemeinde_name": "St. Leonhard im Pitztal"
+  },
+  "41735": {
+    "gemeinde_code": "41735",
+    "gemeinde_name": "St. Lorenz"
+  },
+  "20428": {
+    "gemeinde_code": "20428",
+    "gemeinde_name": "St. Margareten im Rosental"
+  },
+  "61746": {
+    "gemeinde_code": "61746",
+    "gemeinde_name": "St. Margarethen an der Raab"
+  },
+  "31938": {
+    "gemeinde_code": "31938",
+    "gemeinde_name": "St. Margarethen an der Sierning"
+  },
+  "50508": {
+    "gemeinde_code": "50508",
+    "gemeinde_name": "St. Margarethen im Lungau"
+  },
+  "41020": {
+    "gemeinde_code": "41020",
+    "gemeinde_name": "St. Marien"
+  },
+  "41227": {
+    "gemeinde_code": "41227",
+    "gemeinde_name": "St. Marienkirchen am Hausruck"
+  },
+  "40510": {
+    "gemeinde_code": "40510",
+    "gemeinde_name": "St. Marienkirchen an der Polsenz"
+  },
+  "41419": {
+    "gemeinde_code": "41419",
+    "gemeinde_name": "St. Marienkirchen bei Schärding"
+  },
+  "30932": {
+    "gemeinde_code": "30932",
+    "gemeinde_name": "St. Martin"
+  },
+  "50419": {
+    "gemeinde_code": "50419",
+    "gemeinde_name": "St. Martin am Tennengebirge"
+  },
+  "50620": {
+    "gemeinde_code": "50620",
+    "gemeinde_name": "St. Martin bei Lofer"
+  },
+  "41228": {
+    "gemeinde_code": "41228",
+    "gemeinde_name": "St. Martin im Innkreis"
+  },
+  "41332": {
+    "gemeinde_code": "41332",
+    "gemeinde_name": "St. Martin im Mühlkreis"
+  },
+  "31540": {
+    "gemeinde_code": "31540",
+    "gemeinde_name": "St. Martin-Karlsbach"
+  },
+  "50509": {
+    "gemeinde_code": "50509",
+    "gemeinde_name": "St. Michael im Lungau"
+  },
+  "41121": {
+    "gemeinde_code": "41121",
+    "gemeinde_name": "St. Nikola an der Donau"
+  },
+  "31541": {
+    "gemeinde_code": "31541",
+    "gemeinde_name": "St. Oswald"
+  },
+  "40618": {
+    "gemeinde_code": "40618",
+    "gemeinde_name": "St. Oswald bei Freistadt"
+  },
+  "41333": {
+    "gemeinde_code": "41333",
+    "gemeinde_name": "St. Oswald bei Haslach"
+  },
+  "40916": {
+    "gemeinde_code": "40916",
+    "gemeinde_name": "St. Pankraz"
+  },
+  "40437": {
+    "gemeinde_code": "40437",
+    "gemeinde_name": "St. Pantaleon"
+  },
+  "30529": {
+    "gemeinde_code": "30529",
+    "gemeinde_name": "St. Pantaleon-Erla"
+  },
+  "20918": {
+    "gemeinde_code": "20918",
+    "gemeinde_name": "St. Paul im Lavanttal"
+  },
+  "40438": {
+    "gemeinde_code": "40438",
+    "gemeinde_name": "St. Peter am Hart"
+  },
+  "61425": {
+    "gemeinde_code": "61425",
+    "gemeinde_name": "St. Peter am Kammersberg"
+  },
+  "41334": {
+    "gemeinde_code": "41334",
+    "gemeinde_name": "St. Peter am Wimberg"
+  },
+  "30530": {
+    "gemeinde_code": "30530",
+    "gemeinde_name": "St. Peter in der Au"
+  },
+  "30201": {
+    "gemeinde_code": "30201",
+    "gemeinde_name": "St. Pölten"
+  },
+  "40439": {
+    "gemeinde_code": "40439",
+    "gemeinde_name": "St. Radegund"
+  },
+  "41420": {
+    "gemeinde_code": "41420",
+    "gemeinde_name": "St. Roman"
+  },
+  "70347": {
+    "gemeinde_code": "70347",
+    "gemeinde_name": "St. Sigmund im Sellrain"
+  },
+  "41346": {
+    "gemeinde_code": "41346",
+    "gemeinde_name": "St. Stefan-Afiesl"
+  },
+  "20316": {
+    "gemeinde_code": "20316",
+    "gemeinde_name": "St. Stefan im Gailtal"
+  },
+  "40826": {
+    "gemeinde_code": "40826",
+    "gemeinde_name": "St. Thomas"
+  },
+  "41122": {
+    "gemeinde_code": "41122",
+    "gemeinde_name": "St. Thomas am Blasenstein"
+  },
+  "70417": {
+    "gemeinde_code": "70417",
+    "gemeinde_name": "St. Ulrich am Pillersee"
+  },
+  "41514": {
+    "gemeinde_code": "41514",
+    "gemeinde_name": "St. Ulrich bei Steyr"
+  },
+  "41336": {
+    "gemeinde_code": "41336",
+    "gemeinde_name": "St. Ulrich im Mühlkreis"
+  },
+  "21008": {
+    "gemeinde_code": "21008",
+    "gemeinde_name": "St. Urban"
+  },
+  "30531": {
+    "gemeinde_code": "30531",
+    "gemeinde_name": "St. Valentin"
+  },
+  "20527": {
+    "gemeinde_code": "20527",
+    "gemeinde_name": "St. Veit an der Glan"
+  },
+  "31412": {
+    "gemeinde_code": "31412",
+    "gemeinde_name": "St. Veit an der Gölsen"
+  },
+  "40440": {
+    "gemeinde_code": "40440",
+    "gemeinde_name": "St. Veit im Innkreis"
+  },
+  "41337": {
+    "gemeinde_code": "41337",
+    "gemeinde_name": "St. Veit im Mühlkreis"
+  },
+  "50420": {
+    "gemeinde_code": "50420",
+    "gemeinde_name": "St. Veit im Pongau"
+  },
+  "70726": {
+    "gemeinde_code": "70726",
+    "gemeinde_name": "St. Veit in Defereggen"
+  },
+  "41421": {
+    "gemeinde_code": "41421",
+    "gemeinde_name": "St. Willibald"
+  },
+  "40717": {
+    "gemeinde_code": "40717",
+    "gemeinde_name": "St. Wolfgang im Salzkammergut"
+  },
+  "31649": {
+    "gemeinde_code": "31649",
+    "gemeinde_name": "Staatz"
+  },
+  "41820": {
+    "gemeinde_code": "41820",
+    "gemeinde_name": "Stadl-Paura"
+  },
+  "61445": {
+    "gemeinde_code": "61445",
+    "gemeinde_name": "Stadl-Predlitz"
+  },
+  "10923": {
+    "gemeinde_code": "10923",
+    "gemeinde_name": "Stadtschlaining"
+  },
+  "61267": {
+    "gemeinde_code": "61267",
+    "gemeinde_name": "Stainach-Pürgg"
+  },
+  "60350": {
+    "gemeinde_code": "60350",
+    "gemeinde_name": "Stainz"
+  },
+  "20636": {
+    "gemeinde_code": "20636",
+    "gemeinde_name": "Stall"
+  },
+  "80125": {
+    "gemeinde_code": "80125",
+    "gemeinde_name": "Stallehr"
+  },
+  "61624": {
+    "gemeinde_code": "61624",
+    "gemeinde_name": "Stallhofen"
+  },
+  "70221": {
+    "gemeinde_code": "70221",
+    "gemeinde_name": "Stams"
+  },
+  "70928": {
+    "gemeinde_code": "70928",
+    "gemeinde_name": "Stans"
+  },
+  "70830": {
+    "gemeinde_code": "70830",
+    "gemeinde_name": "Stanzach"
+  },
+  "70626": {
+    "gemeinde_code": "70626",
+    "gemeinde_name": "Stanz bei Landeck"
+  },
+  "62132": {
+    "gemeinde_code": "62132",
+    "gemeinde_name": "Stanz im Mürztal"
+  },
+  "60646": {
+    "gemeinde_code": "60646",
+    "gemeinde_name": "Stattegg"
+  },
+  "31940": {
+    "gemeinde_code": "31940",
+    "gemeinde_name": "Statzendorf"
+  },
+  "70831": {
+    "gemeinde_code": "70831",
+    "gemeinde_name": "Steeg"
+  },
+  "40828": {
+    "gemeinde_code": "40828",
+    "gemeinde_name": "Steegen"
+  },
+  "10414": {
+    "gemeinde_code": "10414",
+    "gemeinde_name": "Stegersbach"
+  },
+  "70355": {
+    "gemeinde_code": "70355",
+    "gemeinde_name": "Steinach am Brenner"
+  },
+  "32014": {
+    "gemeinde_code": "32014",
+    "gemeinde_name": "Steinakirchen am Forst"
+  },
+  "41740": {
+    "gemeinde_code": "41740",
+    "gemeinde_name": "Steinbach am Attersee"
+  },
+  "40919": {
+    "gemeinde_code": "40919",
+    "gemeinde_name": "Steinbach am Ziehberg"
+  },
+  "40920": {
+    "gemeinde_code": "40920",
+    "gemeinde_name": "Steinbach an der Steyr"
+  },
+  "70929": {
+    "gemeinde_code": "70929",
+    "gemeinde_name": "Steinberg am Rofan"
+  },
+  "10821": {
+    "gemeinde_code": "10821",
+    "gemeinde_name": "Steinberg-Dörfl"
+  },
+  "10316": {
+    "gemeinde_code": "10316",
+    "gemeinde_name": "Steinbrunn"
+  },
+  "21009": {
+    "gemeinde_code": "21009",
+    "gemeinde_name": "Steindorf am Ossiacher See"
+  },
+  "41821": {
+    "gemeinde_code": "41821",
+    "gemeinde_name": "Steinerkirchen an der Traun"
+  },
+  "20637": {
+    "gemeinde_code": "20637",
+    "gemeinde_name": "Steinfeld"
+  },
+  "41822": {
+    "gemeinde_code": "41822",
+    "gemeinde_name": "Steinhaus"
+  },
+  "31228": {
+    "gemeinde_code": "31228",
+    "gemeinde_name": "Stetteldorf am Wagram"
+  },
+  "31229": {
+    "gemeinde_code": "31229",
+    "gemeinde_name": "Stetten"
+  },
+  "21010": {
+    "gemeinde_code": "21010",
+    "gemeinde_name": "Steuerberg"
+  },
+  "40201": {
+    "gemeinde_code": "40201",
+    "gemeinde_name": "Steyr"
+  },
+  "41624": {
+    "gemeinde_code": "41624",
+    "gemeinde_name": "Steyregg"
+  },
+  "10415": {
+    "gemeinde_code": "10415",
+    "gemeinde_name": "Stinatz"
+  },
+  "60647": {
+    "gemeinde_code": "60647",
+    "gemeinde_name": "Stiwoll"
+  },
+  "20723": {
+    "gemeinde_code": "20723",
+    "gemeinde_name": "Stockenboi"
+  },
+  "31230": {
+    "gemeinde_code": "31230",
+    "gemeinde_name": "Stockerau"
+  },
+  "10822": {
+    "gemeinde_code": "10822",
+    "gemeinde_name": "Stoob"
+  },
+  "31941": {
+    "gemeinde_code": "31941",
+    "gemeinde_name": "Stössing"
+  },
+  "10321": {
+    "gemeinde_code": "10321",
+    "gemeinde_name": "Stotzing"
+  },
+  "62390": {
+    "gemeinde_code": "62390",
+    "gemeinde_name": "Straden"
+  },
+  "61750": {
+    "gemeinde_code": "61750",
+    "gemeinde_name": "Strallegg"
+  },
+  "31130": {
+    "gemeinde_code": "31130",
+    "gemeinde_name": "Straning-Grafenberg"
+  },
+  "20530": {
+    "gemeinde_code": "20530",
+    "gemeinde_name": "Straßburg"
+  },
+  "70729": {
+    "gemeinde_code": "70729",
+    "gemeinde_name": "Strassen"
+  },
+  "30856": {
+    "gemeinde_code": "30856",
+    "gemeinde_name": "Strasshof an der Nordbahn"
+  },
+  "41741": {
+    "gemeinde_code": "41741",
+    "gemeinde_name": "Straß im Attergau"
+  },
+  "31346": {
+    "gemeinde_code": "31346",
+    "gemeinde_name": "Straß im Straßertale"
+  },
+  "70930": {
+    "gemeinde_code": "70930",
+    "gemeinde_name": "Strass im Zillertal"
+  },
+  "61061": {
+    "gemeinde_code": "61061",
+    "gemeinde_name": "Straß in Steiermark"
+  },
+  "50335": {
+    "gemeinde_code": "50335",
+    "gemeinde_name": "Straßwalchen"
+  },
+  "31347": {
+    "gemeinde_code": "31347",
+    "gemeinde_name": "Stratzing"
+  },
+  "10416": {
+    "gemeinde_code": "10416",
+    "gemeinde_name": "Strem"
+  },
+  "30534": {
+    "gemeinde_code": "30534",
+    "gemeinde_name": "Strengberg"
+  },
+  "70627": {
+    "gemeinde_code": "70627",
+    "gemeinde_name": "Strengen"
+  },
+  "50336": {
+    "gemeinde_code": "50336",
+    "gemeinde_name": "Strobl"
+  },
+  "40512": {
+    "gemeinde_code": "40512",
+    "gemeinde_name": "Stroheim"
+  },
+  "31650": {
+    "gemeinde_code": "31650",
+    "gemeinde_name": "Stronsdorf"
+  },
+  "62256": {
+    "gemeinde_code": "62256",
+    "gemeinde_name": "Stubenberg"
+  },
+  "50621": {
+    "gemeinde_code": "50621",
+    "gemeinde_name": "Stuhlfelden"
+  },
+  "70931": {
+    "gemeinde_code": "70931",
+    "gemeinde_name": "Stumm"
+  },
+  "70932": {
+    "gemeinde_code": "70932",
+    "gemeinde_name": "Stummerberg"
+  },
+  "41425": {
+    "gemeinde_code": "41425",
+    "gemeinde_name": "Suben"
+  },
+  "80420": {
+    "gemeinde_code": "80420",
+    "gemeinde_name": "Sulz"
+  },
+  "80238": {
+    "gemeinde_code": "80238",
+    "gemeinde_name": "Sulzberg"
+  },
+  "30857": {
+    "gemeinde_code": "30857",
+    "gemeinde_name": "Sulz im Weinviertel"
+  },
+  "10720": {
+    "gemeinde_code": "10720",
+    "gemeinde_name": "Tadten"
+  },
+  "41231": {
+    "gemeinde_code": "41231",
+    "gemeinde_name": "Taiskirchen im Innkreis"
+  },
+  "50510": {
+    "gemeinde_code": "50510",
+    "gemeinde_name": "Tamsweg"
+  },
+  "70832": {
+    "gemeinde_code": "70832",
+    "gemeinde_name": "Tannheim"
+  },
+  "70222": {
+    "gemeinde_code": "70222",
+    "gemeinde_name": "Tarrenz"
+  },
+  "40443": {
+    "gemeinde_code": "40443",
+    "gemeinde_name": "Tarsdorf"
+  },
+  "30636": {
+    "gemeinde_code": "30636",
+    "gemeinde_name": "Tattendorf"
+  },
+  "41426": {
+    "gemeinde_code": "41426",
+    "gemeinde_name": "Taufkirchen an der Pram"
+  },
+  "40829": {
+    "gemeinde_code": "40829",
+    "gemeinde_name": "Taufkirchen an der Trattnach"
+  },
+  "50622": {
+    "gemeinde_code": "50622",
+    "gemeinde_name": "Taxenbach"
+  },
+  "20435": {
+    "gemeinde_code": "20435",
+    "gemeinde_name": "Techelsberg am Wörther See"
+  },
+  "30637": {
+    "gemeinde_code": "30637",
+    "gemeinde_name": "Teesdorf"
+  },
+  "70356": {
+    "gemeinde_code": "70356",
+    "gemeinde_name": "Telfes im Stubai"
+  },
+  "70357": {
+    "gemeinde_code": "70357",
+    "gemeinde_name": "Telfs"
+  },
+  "70933": {
+    "gemeinde_code": "70933",
+    "gemeinde_name": "Terfens"
+  },
+  "41517": {
+    "gemeinde_code": "41517",
+    "gemeinde_name": "Ternberg"
+  },
+  "31839": {
+    "gemeinde_code": "31839",
+    "gemeinde_name": "Ternitz"
+  },
+  "61446": {
+    "gemeinde_code": "61446",
+    "gemeinde_name": "Teufenbach-Katsch"
+  },
+  "31551": {
+    "gemeinde_code": "31551",
+    "gemeinde_name": "Texingtal"
+  },
+  "60648": {
+    "gemeinde_code": "60648",
+    "gemeinde_name": "Thal"
+  },
+  "50337": {
+    "gemeinde_code": "50337",
+    "gemeinde_name": "Thalgau"
+  },
+  "41823": {
+    "gemeinde_code": "41823",
+    "gemeinde_name": "Thalheim bei Wels"
+  },
+  "61751": {
+    "gemeinde_code": "61751",
+    "gemeinde_name": "Thannhausen"
+  },
+  "70358": {
+    "gemeinde_code": "70358",
+    "gemeinde_name": "Thaur"
+  },
+  "32217": {
+    "gemeinde_code": "32217",
+    "gemeinde_name": "Thaya"
+  },
+  "32330": {
+    "gemeinde_code": "32330",
+    "gemeinde_name": "Theresienfeld"
+  },
+  "70527": {
+    "gemeinde_code": "70527",
+    "gemeinde_name": "Thiersee"
+  },
+  "31840": {
+    "gemeinde_code": "31840",
+    "gemeinde_name": "Thomasberg"
+  },
+  "50511": {
+    "gemeinde_code": "50511",
+    "gemeinde_name": "Thomatal"
+  },
+  "62147": {
+    "gemeinde_code": "62147",
+    "gemeinde_name": "Thörl"
+  },
+  "80126": {
+    "gemeinde_code": "80126",
+    "gemeinde_name": "Thüringen"
+  },
+  "80127": {
+    "gemeinde_code": "80127",
+    "gemeinde_name": "Thüringerberg"
+  },
+  "70731": {
+    "gemeinde_code": "70731",
+    "gemeinde_name": "Thurn"
+  },
+  "41742": {
+    "gemeinde_code": "41742",
+    "gemeinde_name": "Tiefgraben"
+  },
+  "62368": {
+    "gemeinde_code": "62368",
+    "gemeinde_name": "Tieschen"
+  },
+  "61043": {
+    "gemeinde_code": "61043",
+    "gemeinde_name": "Tillmitsch"
+  },
+  "41743": {
+    "gemeinde_code": "41743",
+    "gemeinde_name": "Timelkam"
+  },
+  "70628": {
+    "gemeinde_code": "70628",
+    "gemeinde_name": "Tobadill"
+  },
+  "10417": {
+    "gemeinde_code": "10417",
+    "gemeinde_name": "Tobaj"
+  },
+  "40830": {
+    "gemeinde_code": "40830",
+    "gemeinde_name": "Tollet"
+  },
+  "70629": {
+    "gemeinde_code": "70629",
+    "gemeinde_name": "Tösens"
+  },
+  "61116": {
+    "gemeinde_code": "61116",
+    "gemeinde_name": "Traboch"
+  },
+  "62148": {
+    "gemeinde_code": "62148",
+    "gemeinde_name": "Tragöß-Sankt Katharein"
+  },
+  "40620": {
+    "gemeinde_code": "40620",
+    "gemeinde_name": "Tragwein"
+  },
+  "31413": {
+    "gemeinde_code": "31413",
+    "gemeinde_name": "Traisen"
+  },
+  "30639": {
+    "gemeinde_code": "30639",
+    "gemeinde_name": "Traiskirchen"
+  },
+  "31943": {
+    "gemeinde_code": "31943",
+    "gemeinde_name": "Traismauer"
+  },
+  "31841": {
+    "gemeinde_code": "31841",
+    "gemeinde_name": "Trattenbach"
+  },
+  "41021": {
+    "gemeinde_code": "41021",
+    "gemeinde_name": "Traun"
+  },
+  "40718": {
+    "gemeinde_code": "40718",
+    "gemeinde_name": "Traunkirchen"
+  },
+  "10317": {
+    "gemeinde_code": "10317",
+    "gemeinde_name": "Trausdorf an der Wulka"
+  },
+  "30726": {
+    "gemeinde_code": "30726",
+    "gemeinde_name": "Trautmannsdorf an der Leitha"
+  },
+  "20638": {
+    "gemeinde_code": "20638",
+    "gemeinde_name": "Trebesing"
+  },
+  "20724": {
+    "gemeinde_code": "20724",
+    "gemeinde_name": "Treffen am Ossiacher See"
+  },
+  "40444": {
+    "gemeinde_code": "40444",
+    "gemeinde_name": "Treubach"
+  },
+  "61247": {
+    "gemeinde_code": "61247",
+    "gemeinde_name": "Trieben"
+  },
+  "70359": {
+    "gemeinde_code": "70359",
+    "gemeinde_name": "Trins"
+  },
+  "70732": {
+    "gemeinde_code": "70732",
+    "gemeinde_name": "Tristach"
+  },
+  "61120": {
+    "gemeinde_code": "61120",
+    "gemeinde_name": "Trofaiach"
+  },
+  "30641": {
+    "gemeinde_code": "30641",
+    "gemeinde_name": "Trumau"
+  },
+  "80128": {
+    "gemeinde_code": "80128",
+    "gemeinde_name": "Tschagguns"
+  },
+  "10423": {
+    "gemeinde_code": "10423",
+    "gemeinde_name": "Tschanigraben"
+  },
+  "32134": {
+    "gemeinde_code": "32134",
+    "gemeinde_name": "Tulbing"
+  },
+  "70360": {
+    "gemeinde_code": "70360",
+    "gemeinde_name": "Tulfes"
+  },
+  "32135": {
+    "gemeinde_code": "32135",
+    "gemeinde_name": "Tulln an der Donau"
+  },
+  "31953": {
+    "gemeinde_code": "31953",
+    "gemeinde_name": "Tullnerbach"
+  },
+  "41232": {
+    "gemeinde_code": "41232",
+    "gemeinde_name": "Tumeltsham"
+  },
+  "62135": {
+    "gemeinde_code": "62135",
+    "gemeinde_name": "Turnau"
+  },
+  "31414": {
+    "gemeinde_code": "31414",
+    "gemeinde_name": "Türnitz"
+  },
+  "70934": {
+    "gemeinde_code": "70934",
+    "gemeinde_name": "Tux"
+  },
+  "50512": {
+    "gemeinde_code": "50512",
+    "gemeinde_name": "Tweng"
+  },
+  "60651": {
+    "gemeinde_code": "60651",
+    "gemeinde_name": "Übelbach"
+  },
+  "40445": {
+    "gemeinde_code": "40445",
+    "gemeinde_name": "Überackern"
+  },
+  "80421": {
+    "gemeinde_code": "80421",
+    "gemeinde_name": "Übersaxen"
+  },
+  "70935": {
+    "gemeinde_code": "70935",
+    "gemeinde_name": "Uderns"
+  },
+  "41342": {
+    "gemeinde_code": "41342",
+    "gemeinde_name": "Ulrichsberg"
+  },
+  "31651": {
+    "gemeinde_code": "31651",
+    "gemeinde_name": "Ulrichskirchen-Schleinbach"
+  },
+  "70223": {
+    "gemeinde_code": "70223",
+    "gemeinde_name": "Umhausen"
+  },
+  "41744": {
+    "gemeinde_code": "41744",
+    "gemeinde_name": "Ungenach"
+  },
+  "50623": {
+    "gemeinde_code": "50623",
+    "gemeinde_name": "Unken"
+  },
+  "30939": {
+    "gemeinde_code": "30939",
+    "gemeinde_name": "Unserfrau-Altweitra"
+  },
+  "41745": {
+    "gemeinde_code": "41745",
+    "gemeinde_name": "Unterach am Attersee"
+  },
+  "10825": {
+    "gemeinde_code": "10825",
+    "gemeinde_name": "Unterfrauenhaid"
+  },
+  "10924": {
+    "gemeinde_code": "10924",
+    "gemeinde_name": "Unterkohlstätten"
+  },
+  "62372": {
+    "gemeinde_code": "62372",
+    "gemeinde_name": "Unterlamm"
+  },
+  "50513": {
+    "gemeinde_code": "50513",
+    "gemeinde_name": "Unternberg"
+  },
+  "70361": {
+    "gemeinde_code": "70361",
+    "gemeinde_name": "Unterperfuss"
+  },
+  "10826": {
+    "gemeinde_code": "10826",
+    "gemeinde_name": "Unterrabnitz-Schwendgraben"
+  },
+  "30858": {
+    "gemeinde_code": "30858",
+    "gemeinde_name": "Untersiebenbrunn"
+  },
+  "31652": {
+    "gemeinde_code": "31652",
+    "gemeinde_name": "Unterstinkenbrunn"
+  },
+  "50422": {
+    "gemeinde_code": "50422",
+    "gemeinde_name": "Untertauern"
+  },
+  "70733": {
+    "gemeinde_code": "70733",
+    "gemeinde_name": "Untertilliach"
+  },
+  "10925": {
+    "gemeinde_code": "10925",
+    "gemeinde_name": "Unterwart"
+  },
+  "40621": {
+    "gemeinde_code": "40621",
+    "gemeinde_name": "Unterweißenbach"
+  },
+  "40622": {
+    "gemeinde_code": "40622",
+    "gemeinde_name": "Unterweitersdorf"
+  },
+  "62036": {
+    "gemeinde_code": "62036",
+    "gemeinde_name": "Unzmarkt-Frauenburg"
+  },
+  "50624": {
+    "gemeinde_code": "50624",
+    "gemeinde_name": "Uttendorf"
+  },
+  "41233": {
+    "gemeinde_code": "41233",
+    "gemeinde_name": "Utzenaich"
+  },
+  "70362": {
+    "gemeinde_code": "70362",
+    "gemeinde_name": "Vals"
+  },
+  "80129": {
+    "gemeinde_code": "80129",
+    "gemeinde_name": "Vandans"
+  },
+  "60653": {
+    "gemeinde_code": "60653",
+    "gemeinde_name": "Vasoldsberg"
+  },
+  "20725": {
+    "gemeinde_code": "20725",
+    "gemeinde_name": "Velden am Wörther See"
+  },
+  "30859": {
+    "gemeinde_code": "30859",
+    "gemeinde_name": "Velm-Götzendorf"
+  },
+  "41427": {
+    "gemeinde_code": "41427",
+    "gemeinde_name": "Vichtenstein"
+  },
+  "30536": {
+    "gemeinde_code": "30536",
+    "gemeinde_name": "Viehdorf"
+  },
+  "50625": {
+    "gemeinde_code": "50625",
+    "gemeinde_name": "Viehhofen"
+  },
+  "80422": {
+    "gemeinde_code": "80422",
+    "gemeinde_name": "Viktorsberg"
+  },
+  "20201": {
+    "gemeinde_code": "20201",
+    "gemeinde_name": "Villach"
+  },
+  "70833": {
+    "gemeinde_code": "70833",
+    "gemeinde_name": "Vils"
+  },
+  "70734": {
+    "gemeinde_code": "70734",
+    "gemeinde_name": "Virgen"
+  },
+  "32219": {
+    "gemeinde_code": "32219",
+    "gemeinde_name": "Vitis"
+  },
+  "41746": {
+    "gemeinde_code": "41746",
+    "gemeinde_name": "Vöcklabruck"
+  },
+  "41747": {
+    "gemeinde_code": "41747",
+    "gemeinde_name": "Vöcklamarkt"
+  },
+  "61625": {
+    "gemeinde_code": "61625",
+    "gemeinde_name": "Voitsberg"
+  },
+  "70365": {
+    "gemeinde_code": "70365",
+    "gemeinde_name": "Volders"
+  },
+  "20817": {
+    "gemeinde_code": "20817",
+    "gemeinde_name": "Völkermarkt"
+  },
+  "70364": {
+    "gemeinde_code": "70364",
+    "gemeinde_name": "Völs"
+  },
+  "70936": {
+    "gemeinde_code": "70936",
+    "gemeinde_name": "Vomp"
+  },
+  "62278": {
+    "gemeinde_code": "62278",
+    "gemeinde_name": "Vorau"
+  },
+  "40720": {
+    "gemeinde_code": "40720",
+    "gemeinde_name": "Vorchdorf"
+  },
+  "70834": {
+    "gemeinde_code": "70834",
+    "gemeinde_name": "Vorderhornbach"
+  },
+  "61118": {
+    "gemeinde_code": "61118",
+    "gemeinde_name": "Vordernberg"
+  },
+  "40921": {
+    "gemeinde_code": "40921",
+    "gemeinde_name": "Vorderstoder"
+  },
+  "41628": {
+    "gemeinde_code": "41628",
+    "gemeinde_name": "Vorderweißenbach"
+  },
+  "31723": {
+    "gemeinde_code": "31723",
+    "gemeinde_name": "Vösendorf"
+  },
+  "61045": {
+    "gemeinde_code": "61045",
+    "gemeinde_name": "Wagna"
+  },
+  "50423": {
+    "gemeinde_code": "50423",
+    "gemeinde_name": "Wagrain"
+  },
+  "32220": {
+    "gemeinde_code": "32220",
+    "gemeinde_name": "Waidhofen an der Thaya"
+  },
+  "32221": {
+    "gemeinde_code": "32221",
+    "gemeinde_name": "Waidhofen an der Thaya-Land"
+  },
+  "30301": {
+    "gemeinde_code": "30301",
+    "gemeinde_name": "Waidhofen an der Ybbs"
+  },
+  "32331": {
+    "gemeinde_code": "32331",
+    "gemeinde_name": "Waidmannsfeld"
+  },
+  "70419": {
+    "gemeinde_code": "70419",
+    "gemeinde_name": "Waidring"
+  },
+  "40831": {
+    "gemeinde_code": "40831",
+    "gemeinde_name": "Waizenkirchen"
+  },
+  "70529": {
+    "gemeinde_code": "70529",
+    "gemeinde_name": "Walchsee"
+  },
+  "61119": {
+    "gemeinde_code": "61119",
+    "gemeinde_name": "Wald am Schoberpaß"
+  },
+  "62279": {
+    "gemeinde_code": "62279",
+    "gemeinde_name": "Waldbach-Mönichwald"
+  },
+  "40623": {
+    "gemeinde_code": "40623",
+    "gemeinde_name": "Waldburg"
+  },
+  "32332": {
+    "gemeinde_code": "32332",
+    "gemeinde_name": "Waldegg"
+  },
+  "30940": {
+    "gemeinde_code": "30940",
+    "gemeinde_name": "Waldenstein"
+  },
+  "32529": {
+    "gemeinde_code": "32529",
+    "gemeinde_name": "Waldhausen"
+  },
+  "41125": {
+    "gemeinde_code": "41125",
+    "gemeinde_name": "Waldhausen im Strudengau"
+  },
+  "50626": {
+    "gemeinde_code": "50626",
+    "gemeinde_name": "Wald im Pinzgau"
+  },
+  "41626": {
+    "gemeinde_code": "41626",
+    "gemeinde_name": "Walding"
+  },
+  "41428": {
+    "gemeinde_code": "41428",
+    "gemeinde_name": "Waldkirchen am Wesen"
+  },
+  "32222": {
+    "gemeinde_code": "32222",
+    "gemeinde_name": "Waldkirchen an der Thaya"
+  },
+  "41518": {
+    "gemeinde_code": "41518",
+    "gemeinde_name": "Waldneukirchen"
+  },
+  "41234": {
+    "gemeinde_code": "41234",
+    "gemeinde_name": "Waldzell"
+  },
+  "40832": {
+    "gemeinde_code": "40832",
+    "gemeinde_name": "Wallern an der Trattnach"
+  },
+  "10721": {
+    "gemeinde_code": "10721",
+    "gemeinde_name": "Wallern im Burgenland"
+  },
+  "30538": {
+    "gemeinde_code": "30538",
+    "gemeinde_name": "Wallsee-Sindelburg"
+  },
+  "32333": {
+    "gemeinde_code": "32333",
+    "gemeinde_name": "Walpersbach"
+  },
+  "50338": {
+    "gemeinde_code": "50338",
+    "gemeinde_name": "Wals-Siezenheim"
+  },
+  "32015": {
+    "gemeinde_code": "32015",
+    "gemeinde_name": "Wang"
+  },
+  "70835": {
+    "gemeinde_code": "70835",
+    "gemeinde_name": "Wängle"
+  },
+  "40922": {
+    "gemeinde_code": "40922",
+    "gemeinde_name": "Wartberg an der Krems"
+  },
+  "40624": {
+    "gemeinde_code": "40624",
+    "gemeinde_name": "Wartberg ob der Aist"
+  },
+  "31843": {
+    "gemeinde_code": "31843",
+    "gemeinde_name": "Warth"
+  },
+  "80239": {
+    "gemeinde_code": "80239",
+    "gemeinde_name": "Warth"
+  },
+  "31844": {
+    "gemeinde_code": "31844",
+    "gemeinde_name": "Wartmannstetten"
+  },
+  "70366": {
+    "gemeinde_code": "70366",
+    "gemeinde_name": "Wattenberg"
+  },
+  "70367": {
+    "gemeinde_code": "70367",
+    "gemeinde_name": "Wattens"
+  },
+  "70937": {
+    "gemeinde_code": "70937",
+    "gemeinde_name": "Weer"
+  },
+  "70938": {
+    "gemeinde_code": "70938",
+    "gemeinde_name": "Weerberg"
+  },
+  "40833": {
+    "gemeinde_code": "40833",
+    "gemeinde_name": "Weibern"
+  },
+  "10510": {
+    "gemeinde_code": "10510",
+    "gemeinde_name": "Weichselbaum"
+  },
+  "10722": {
+    "gemeinde_code": "10722",
+    "gemeinde_name": "Weiden am See"
+  },
+  "30865": {
+    "gemeinde_code": "30865",
+    "gemeinde_name": "Weiden an der March"
+  },
+  "10926": {
+    "gemeinde_code": "10926",
+    "gemeinde_name": "Weiden bei Rechnitz"
+  },
+  "30860": {
+    "gemeinde_code": "30860",
+    "gemeinde_name": "Weikendorf"
+  },
+  "32334": {
+    "gemeinde_code": "32334",
+    "gemeinde_name": "Weikersdorf am Steinfelde"
+  },
+  "41235": {
+    "gemeinde_code": "41235",
+    "gemeinde_name": "Weilbach"
+  },
+  "80423": {
+    "gemeinde_code": "80423",
+    "gemeinde_name": "Weiler"
+  },
+  "31945": {
+    "gemeinde_code": "31945",
+    "gemeinde_name": "Weinburg"
+  },
+  "10827": {
+    "gemeinde_code": "10827",
+    "gemeinde_name": "Weingraben"
+  },
+  "60654": {
+    "gemeinde_code": "60654",
+    "gemeinde_name": "Weinitzen"
+  },
+  "31350": {
+    "gemeinde_code": "31350",
+    "gemeinde_name": "Weinzierl am Walde"
+  },
+  "50627": {
+    "gemeinde_code": "50627",
+    "gemeinde_name": "Weißbach bei Lofer"
+  },
+  "70836": {
+    "gemeinde_code": "70836",
+    "gemeinde_name": "Weißenbach am Lech"
+  },
+  "30645": {
+    "gemeinde_code": "30645",
+    "gemeinde_name": "Weissenbach an der Triesting"
+  },
+  "41748": {
+    "gemeinde_code": "41748",
+    "gemeinde_name": "Weißenkirchen im Attergau"
+  },
+  "31351": {
+    "gemeinde_code": "31351",
+    "gemeinde_name": "Weißenkirchen in der Wachau"
+  },
+  "20639": {
+    "gemeinde_code": "20639",
+    "gemeinde_name": "Weißensee"
+  },
+  "20726": {
+    "gemeinde_code": "20726",
+    "gemeinde_name": "Weißenstein"
+  },
+  "41824": {
+    "gemeinde_code": "41824",
+    "gemeinde_name": "Weißkirchen an der Traun"
+  },
+  "62048": {
+    "gemeinde_code": "62048",
+    "gemeinde_name": "Weißkirchen in Steiermark"
+  },
+  "50514": {
+    "gemeinde_code": "50514",
+    "gemeinde_name": "Weißpriach"
+  },
+  "30539": {
+    "gemeinde_code": "30539",
+    "gemeinde_name": "Weistrach"
+  },
+  "31546": {
+    "gemeinde_code": "31546",
+    "gemeinde_name": "Weiten"
+  },
+  "20531": {
+    "gemeinde_code": "20531",
+    "gemeinde_name": "Weitensfeld im Gurktal"
+  },
+  "31129": {
+    "gemeinde_code": "31129",
+    "gemeinde_name": "Weitersfeld"
+  },
+  "40625": {
+    "gemeinde_code": "40625",
+    "gemeinde_name": "Weitersfelden"
+  },
+  "30942": {
+    "gemeinde_code": "30942",
+    "gemeinde_name": "Weitra"
+  },
+  "61766": {
+    "gemeinde_code": "61766",
+    "gemeinde_name": "Weiz"
+  },
+  "40301": {
+    "gemeinde_code": "40301",
+    "gemeinde_name": "Wels"
+  },
+  "40834": {
+    "gemeinde_code": "40834",
+    "gemeinde_name": "Wendling"
+  },
+  "40446": {
+    "gemeinde_code": "40446",
+    "gemeinde_name": "Weng im Innkreis"
+  },
+  "62262": {
+    "gemeinde_code": "62262",
+    "gemeinde_name": "Wenigzell"
+  },
+  "70224": {
+    "gemeinde_code": "70224",
+    "gemeinde_name": "Wenns"
+  },
+  "10823": {
+    "gemeinde_code": "10823",
+    "gemeinde_name": "Weppersdorf"
+  },
+  "50424": {
+    "gemeinde_code": "50424",
+    "gemeinde_name": "Werfen"
+  },
+  "50425": {
+    "gemeinde_code": "50425",
+    "gemeinde_name": "Werfenweng"
+  },
+  "20727": {
+    "gemeinde_code": "20727",
+    "gemeinde_name": "Wernberg"
+  },
+  "60655": {
+    "gemeinde_code": "60655",
+    "gemeinde_name": "Werndorf"
+  },
+  "41429": {
+    "gemeinde_code": "41429",
+    "gemeinde_name": "Wernstein am Inn"
+  },
+  "70420": {
+    "gemeinde_code": "70420",
+    "gemeinde_name": "Westendorf"
+  },
+  "60341": {
+    "gemeinde_code": "60341",
+    "gemeinde_name": "Wettmannstätten"
+  },
+  "41522": {
+    "gemeinde_code": "41522",
+    "gemeinde_name": "Weyer"
+  },
+  "41749": {
+    "gemeinde_code": "41749",
+    "gemeinde_name": "Weyregg am Attersee"
+  },
+  "90001": {
+    "gemeinde_code": "90001",
+    "gemeinde_name": "Wien"
+  },
+  "31725": {
+    "gemeinde_code": "31725",
+    "gemeinde_name": "Wiener Neudorf"
+  },
+  "30401": {
+    "gemeinde_code": "30401",
+    "gemeinde_name": "Wiener Neustadt"
+  },
+  "31726": {
+    "gemeinde_code": "31726",
+    "gemeinde_name": "Wienerwald"
+  },
+  "60351": {
+    "gemeinde_code": "60351",
+    "gemeinde_name": "Wies"
+  },
+  "32016": {
+    "gemeinde_code": "32016",
+    "gemeinde_name": "Wieselburg"
+  },
+  "32017": {
+    "gemeinde_code": "32017",
+    "gemeinde_name": "Wieselburg-Land"
+  },
+  "10615": {
+    "gemeinde_code": "10615",
+    "gemeinde_name": "Wiesen"
+  },
+  "10927": {
+    "gemeinde_code": "10927",
+    "gemeinde_name": "Wiesfleck"
+  },
+  "70939": {
+    "gemeinde_code": "70939",
+    "gemeinde_name": "Wiesing"
+  },
+  "32335": {
+    "gemeinde_code": "32335",
+    "gemeinde_name": "Wiesmath"
+  },
+  "61251": {
+    "gemeinde_code": "61251",
+    "gemeinde_name": "Wildalpen"
+  },
+  "31653": {
+    "gemeinde_code": "31653",
+    "gemeinde_name": "Wildendürnbach"
+  },
+  "70368": {
+    "gemeinde_code": "70368",
+    "gemeinde_name": "Wildermieming"
+  },
+  "61059": {
+    "gemeinde_code": "61059",
+    "gemeinde_name": "Wildon"
+  },
+  "70530": {
+    "gemeinde_code": "70530",
+    "gemeinde_name": "Wildschönau"
+  },
+  "31654": {
+    "gemeinde_code": "31654",
+    "gemeinde_name": "Wilfersdorf"
+  },
+  "31947": {
+    "gemeinde_code": "31947",
+    "gemeinde_name": "Wilhelmsburg"
+  },
+  "41022": {
+    "gemeinde_code": "41022",
+    "gemeinde_name": "Wilhering"
+  },
+  "31845": {
+    "gemeinde_code": "31845",
+    "gemeinde_name": "Willendorf"
+  },
+  "10318": {
+    "gemeinde_code": "10318",
+    "gemeinde_name": "Wimpassing an der Leitha"
+  },
+  "31846": {
+    "gemeinde_code": "31846",
+    "gemeinde_name": "Wimpassing im Schwarzatale"
+  },
+  "10723": {
+    "gemeinde_code": "10723",
+    "gemeinde_name": "Winden am See"
+  },
+  "40626": {
+    "gemeinde_code": "40626",
+    "gemeinde_name": "Windhaag bei Freistadt"
+  },
+  "41126": {
+    "gemeinde_code": "41126",
+    "gemeinde_name": "Windhaag bei Perg"
+  },
+  "32223": {
+    "gemeinde_code": "32223",
+    "gemeinde_name": "Windigsteig"
+  },
+  "40923": {
+    "gemeinde_code": "40923",
+    "gemeinde_name": "Windischgarsten"
+  },
+  "30541": {
+    "gemeinde_code": "30541",
+    "gemeinde_name": "Winklarn"
+  },
+  "20640": {
+    "gemeinde_code": "20640",
+    "gemeinde_name": "Winklern"
+  },
+  "32336": {
+    "gemeinde_code": "32336",
+    "gemeinde_name": "Winzendorf-Muthmannsdorf"
+  },
+  "41236": {
+    "gemeinde_code": "41236",
+    "gemeinde_name": "Wippenham"
+  },
+  "31948": {
+    "gemeinde_code": "31948",
+    "gemeinde_name": "Wölbling"
+  },
+  "10928": {
+    "gemeinde_code": "10928",
+    "gemeinde_name": "Wolfau"
+  },
+  "41521": {
+    "gemeinde_code": "41521",
+    "gemeinde_name": "Wolfern"
+  },
+  "32018": {
+    "gemeinde_code": "32018",
+    "gemeinde_name": "Wolfpassing"
+  },
+  "30542": {
+    "gemeinde_code": "30542",
+    "gemeinde_name": "Wolfsbach"
+  },
+  "20923": {
+    "gemeinde_code": "20923",
+    "gemeinde_name": "Wolfsberg"
+  },
+  "41750": {
+    "gemeinde_code": "41750",
+    "gemeinde_name": "Wolfsegg am Hausruck"
+  },
+  "31954": {
+    "gemeinde_code": "31954",
+    "gemeinde_name": "Wolfsgraben"
+  },
+  "30728": {
+    "gemeinde_code": "30728",
+    "gemeinde_name": "Wolfsthal"
+  },
+  "80240": {
+    "gemeinde_code": "80240",
+    "gemeinde_name": "Wolfurt"
+  },
+  "31655": {
+    "gemeinde_code": "31655",
+    "gemeinde_name": "Wolkersdorf im Weinviertel"
+  },
+  "32337": {
+    "gemeinde_code": "32337",
+    "gemeinde_name": "Wöllersdorf-Steinabrückl"
+  },
+  "70531": {
+    "gemeinde_code": "70531",
+    "gemeinde_name": "Wörgl"
+  },
+  "61252": {
+    "gemeinde_code": "61252",
+    "gemeinde_name": "Wörschach"
+  },
+  "10419": {
+    "gemeinde_code": "10419",
+    "gemeinde_name": "Wörterberg"
+  },
+  "10319": {
+    "gemeinde_code": "10319",
+    "gemeinde_name": "Wulkaprodersdorf"
+  },
+  "31051": {
+    "gemeinde_code": "31051",
+    "gemeinde_name": "Wullersdorf"
+  },
+  "60656": {
+    "gemeinde_code": "60656",
+    "gemeinde_name": "Wundschuh"
+  },
+  "31847": {
+    "gemeinde_code": "31847",
+    "gemeinde_name": "Würflach"
+  },
+  "32139": {
+    "gemeinde_code": "32139",
+    "gemeinde_name": "Würmla"
+  },
+  "31549": {
+    "gemeinde_code": "31549",
+    "gemeinde_name": "Ybbs an der Donau"
+  },
+  "30543": {
+    "gemeinde_code": "30543",
+    "gemeinde_name": "Ybbsitz"
+  },
+  "31552": {
+    "gemeinde_code": "31552",
+    "gemeinde_name": "Yspertal"
+  },
+  "10323": {
+    "gemeinde_code": "10323",
+    "gemeinde_name": "Zagersdorf"
+  },
+  "70630": {
+    "gemeinde_code": "70630",
+    "gemeinde_name": "Zams"
+  },
+  "50515": {
+    "gemeinde_code": "50515",
+    "gemeinde_name": "Zederhaus"
+  },
+  "30544": {
+    "gemeinde_code": "30544",
+    "gemeinde_name": "Zeillern"
+  },
+  "32140": {
+    "gemeinde_code": "32140",
+    "gemeinde_name": "Zeiselmauer-Wolfpassing"
+  },
+  "31550": {
+    "gemeinde_code": "31550",
+    "gemeinde_name": "Zelking-Matzleinsdorf"
+  },
+  "20441": {
+    "gemeinde_code": "20441",
+    "gemeinde_name": "Zell"
+  },
+  "41751": {
+    "gemeinde_code": "41751",
+    "gemeinde_name": "Zell am Moos"
+  },
+  "41752": {
+    "gemeinde_code": "41752",
+    "gemeinde_name": "Zell am Pettenfirst"
+  },
+  "50628": {
+    "gemeinde_code": "50628",
+    "gemeinde_name": "Zell am See"
+  },
+  "70940": {
+    "gemeinde_code": "70940",
+    "gemeinde_name": "Zell am Ziller"
+  },
+  "41430": {
+    "gemeinde_code": "41430",
+    "gemeinde_name": "Zell an der Pram"
+  },
+  "70941": {
+    "gemeinde_code": "70941",
+    "gemeinde_name": "Zellberg"
+  },
+  "31052": {
+    "gemeinde_code": "31052",
+    "gemeinde_name": "Zellerndorf"
+  },
+  "62038": {
+    "gemeinde_code": "62038",
+    "gemeinde_name": "Zeltweg"
+  },
+  "10618": {
+    "gemeinde_code": "10618",
+    "gemeinde_name": "Zemendorf-Stöttera"
+  },
+  "31053": {
+    "gemeinde_code": "31053",
+    "gemeinde_name": "Ziersdorf"
+  },
+  "32338": {
+    "gemeinde_code": "32338",
+    "gemeinde_name": "Zillingdorf"
+  },
+  "10322": {
+    "gemeinde_code": "10322",
+    "gemeinde_name": "Zillingtal"
+  },
+  "70369": {
+    "gemeinde_code": "70369",
+    "gemeinde_name": "Zirl"
+  },
+  "30863": {
+    "gemeinde_code": "30863",
+    "gemeinde_name": "Zistersdorf"
+  },
+  "31848": {
+    "gemeinde_code": "31848",
+    "gemeinde_name": "Zöbern"
+  },
+  "70837": {
+    "gemeinde_code": "70837",
+    "gemeinde_name": "Zöblen"
+  },
+  "10724": {
+    "gemeinde_code": "10724",
+    "gemeinde_name": "Zurndorf"
+  },
+  "32141": {
+    "gemeinde_code": "32141",
+    "gemeinde_name": "Zwentendorf an der Donau"
+  },
+  "41627": {
+    "gemeinde_code": "41627",
+    "gemeinde_name": "Zwettl an der Rodl"
+  },
+  "32530": {
+    "gemeinde_code": "32530",
+    "gemeinde_name": "Zwettl-Niederösterreich"
+  },
+  "80424": {
+    "gemeinde_code": "80424",
+    "gemeinde_name": "Zwischenwasser"
+  },
+  "30741": {
+    "gemeinde_code": "30741",
+    "gemeinde_name": "Zwölfaxing"
+  }
+}

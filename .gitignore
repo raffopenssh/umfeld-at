@@ -1,0 +1,35 @@
+# binaries
+/umfeld-at
+*.exe
+
+# secrets — never in git
+*.env
+*token*
+!*_token_*.go
+
+# runtime databases and caches (rebuilt by the import flags / at runtime)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.db.tmp
+data/*.log
+data/bev_namen/
+data/ne_cells/*
+!data/ne_cells/dict/
+!data/ne_cells/README.md
+data/ne_diff/
+data/ne_fidx/
+data/ne_mvt/
+data/osm_remote_grid.bin
+data/osm_remote_grid.bin.tmp
+*.gpkg
+logs/
+
+# editors / OS
+__pycache__/
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+*.bak
