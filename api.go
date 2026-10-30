@@ -98,11 +98,14 @@ func RegisterAPIv1(mux *http.ServeMux) {
 // apiMiddleware chains CORS, request logging, and format negotiation.
 func apiMiddleware(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// ── CORS ─────────────────────────────────────────────────────
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization, X-Requested-With")
-		w.Header().Set("Access-Control-Max-Age", "86400")
+		// ── CORS: open for public-tier reads only; token tiers and writes
+		// get no cross-origin grant.
+		if r.Header.Get(tierHeader) == "" && (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, X-Requested-With")
+			w.Header().Set("Access-Control-Max-Age", "86400")
+		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

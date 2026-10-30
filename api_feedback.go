@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -77,6 +78,17 @@ func feedbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Writes: body cap + per-IP budget (feedbackWriteAllow); reads are free.
+	if r.Method == http.MethodPost || r.Method == http.MethodPatch {
+		r.Body = http.MaxBytesReader(w, r.Body, feedbackMaxBody)
+		if ip := neClientIP(r); ip != "" && !feedbackWriteAllow(ip, time.Now()) {
+			w.Header().Set("Retry-After", "3600")
+			w.Header().Set("Cache-Control", "no-store")
+			apiError(w, "rate limit: 20 feedback writes per hour per client", http.StatusTooManyRequests)
+			return
+		}
+	}
+
 	// Route by method, with optional /id suffix for PATCH
 	path := r.URL.Path
 	switch r.Method {
@@ -104,6 +116,55 @@ func feedbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ─── write limits ────────────────────────────────────────────────────────────
+
+const (
+	feedbackMaxBody   = 64 << 10 // JSON body cap (POST / PATCH)
+	feedbackMaxTitle  = 200
+	feedbackMaxText   = 8000 // description, and any single string field
+	feedbackPerHour   = 20   // writes per client IP per hour
+	feedbackIPBuckets = 10000
+)
+
+var (
+	feedbackRateMu sync.Mutex
+	feedbackRate   = map[string]*neBucketT{}
+)
+
+// feedbackWriteAllow — token bucket per client IP: feedbackPerHour, burst the
+// same; idle buckets swept when the map grows (bounded, Invariant 10).
+func feedbackWriteAllow(ip string, now time.Time) bool {
+	feedbackRateMu.Lock()
+	defer feedbackRateMu.Unlock()
+	b := feedbackRate[ip]
+	if b == nil {
+		if len(feedbackRate) > feedbackIPBuckets {
+			for k, v := range feedbackRate {
+				if now.Sub(v.last) > time.Hour {
+					delete(feedbackRate, k)
+				}
+			}
+		}
+		b = &neBucketT{tokens: feedbackPerHour, last: now}
+		feedbackRate[ip] = b
+	}
+	b.tokens = math.Min(feedbackPerHour, b.tokens+now.Sub(b.last).Hours()*feedbackPerHour)
+	b.last = now
+	if b.tokens >= 1 {
+		b.tokens--
+		return true
+	}
+	return false
+}
+
+// feedbackClip — length caps on free-text fields.
+func feedbackClip(s string, n int) string {
+	if len(s) > n {
+		return s[:n]
+	}
+	return s
+}
+
 // ─── POST /api/v1/feedback ───────────────────────────────────────────────────
 
 type feedbackRequest struct {
@@ -128,7 +189,10 @@ func feedbackCreate(w http.ResponseWriter, r *http.Request) {
 		apiError(w, "title is required", 400)
 		return
 	}
-
+	req.Title = feedbackClip(req.Title, feedbackMaxTitle)
+	req.Description = feedbackClip(req.Description, feedbackMaxText)
+	req.Agent = feedbackClip(req.Agent, feedbackMaxTitle)
+	req.Endpoint = feedbackClip(req.Endpoint, feedbackMaxText)
 	if req.Category == "" {
 		req.Category = "other"
 	}

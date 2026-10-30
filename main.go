@@ -170,7 +170,11 @@ func main() {
 		Addr:              ":" + port,
 		Handler:           handler,
 		ReadHeaderTimeout: 15 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		// WriteTimeout bounds a slow reader pinning a handler goroutine. Long
+		// responses (PMTiles archives, CSV exports) stay well inside it; the
+		// proxy in front has its own, shorter, limits.
+		WriteTimeout: 5 * time.Minute,
+		IdleTimeout:  120 * time.Second,
 	}
 	log.Fatal(srv.ListenAndServe())
 }
