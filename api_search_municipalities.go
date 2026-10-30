@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 )
 
 func init() {
@@ -36,7 +37,15 @@ type statAustriaMunicipality struct {
 
 var statAustriaMunicipalities []statAustriaMunicipality
 
-func loadStatAustriaMunicipalities() {
+// statAustriaOnce guards the load: callers (`init`, `/api/v1/context`,
+// land-price lookups) may call loadStatAustriaMunicipalities on every request;
+// without the guard each call re-parsed the gzip and *appended* another full
+// copy of the 2 114 features (unbounded growth, duplicate results, data race).
+var statAustriaOnce sync.Once
+
+func loadStatAustriaMunicipalities() { statAustriaOnce.Do(loadStatAustriaMunicipalitiesOnce) }
+
+func loadStatAustriaMunicipalitiesOnce() {
 	path := "data/statistik_austria_gem.geojson.gz"
 	f, err := os.Open(path)
 	if err != nil {
