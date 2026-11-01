@@ -72,7 +72,7 @@ bar, hash, legend, card order, tile wants) is derived — `neGlyph.state()` retu
 Reserved tokens parse and are ignored today (`dbg: reserved token`), so a link minted later still opens.
 Overlays combine freely; **z-order** bottom → top: profile fill → change → diff → subsidy → roads → relief → trees.
 **Legend merge** (`hiLegendHTML0`): one `.lg12` = head `in view · <profile>` + profile bar, then one
-block per overlay in z-order: `change` (Δ bar, confirmed/candidate, sighting period) · `diff` (`difBlock`: kinds in view, `n of m cells compared`, the *corroborated only / all cells* toggle, mixed-epoch KGs) · `subsidy`
+block per overlay in z-order, every head prefixed `in view ·` so it never reads like the picked unit's own `change`/`declared` rows above: `change` (Δ bar, confirmed/candidate, sighting period) · `diff` (`difBlock`: kinds in view, `n of m cells compared`, the *corroborated only / all cells* toggle, mixed-epoch KGs) · `subsidy`
 (claims; "vs the year before" when change is on) · `roads` line (`rdLine`: km in view by rank, source, weight) · `relief` note · `trees` (count, tallest, band bar).
 **Card source order** (`srcs`): change first when on, then the profile's source, then the rest.
 **Hash grammar**: `;v=obs` profile · `;change ;diff[=raw] ;subsidy ;trees ;relief ;ortho[=op] ;roads[=op]` overlays · `;t=2|2..3|2@d1..d2|@d1..d2` time window (implies change; `at=x,y,z` stays the viewport); legacy `;v=chg` reads
