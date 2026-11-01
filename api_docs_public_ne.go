@@ -385,7 +385,8 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
                           #adm=<code> an admin unit or Natura 2000 site (7, 701, 70101, AT1103112)
                           #pt=lon,lat[;pn=<label | sub>] a found point (address / name): dot + the KG under it
                           A bare #kg= / #adm= / #pt= (no ;at= / ;z=) lands like the find box: full resolution
-                          whenever the fit is deep enough (;nofull keeps the overview).
+                          whenever the fit is deep enough (;nofull keeps the overview). ;z= / ;at= past the
+                          overview's deepest zoom (24×) land at full resolution too, like a pinch that crosses it.
       ;v=obs              profile (declared when absent; legacy ;v=chg reads as declared + ;change)
       ;change             change overlay (vermilion marks, any profile)
       ;diff | ;diff=raw   diff overlay (magenta marks where register and LiDAR disagree, any profile, near tiles

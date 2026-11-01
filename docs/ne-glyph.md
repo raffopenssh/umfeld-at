@@ -161,6 +161,12 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
 - **Share links**: `curHash()` writes `kg= cell= h3= q= v= change diff[=raw] full nofull trees relief ortho[=op] roads[=op] subsidy screen
   at= open below card= export`; `applyHash()` parses the same (regex per token, unknown token → ignore
   all) and applies in order `autoSet → setView → setTree → setRelief → setOrthoOp/setOrtho → setRoadsOp/setRoads → setSub → fs → open → dock`.
+  **Auto full res on a link** (`hiLand` in `applyHash`): a bare `#kg=`/`#adm=`/`#pt=` switches once the fly
+  has landed (`W/vb.w ≥ HI_MIN`, `auto.by`), `;z=`/`;at=` beyond `ZMAX0` lift `ZMAX` and switch (`deep`, same
+  rule as `hiAuto` crossing 24×), `;full` always. The only opt-out is `auto.opt`: `;nofull` sets it for THAT
+  link only (`autoSet(nofull || autoPref())` — the next hash re-reads the saved preference, so a `;nofull`
+  link never makes a later bare `#kg=` land coarse), the saved preference comes from `hiLeave` (esc out of
+  auto full res) alone. `mem.coarse` / `DEVMEM` size the tile budget (`HI_KEEP`), they never gate the switch.
 - **Keys** (`main` keydown): arrows pan/step, `v` cycles views, `c` change, `d` diff, `s` subsidy, `t` trees, `r` relief, `o` photo, `w` roads, `+ - 0`, `Esc`
   unwinds (pin → full → selection → zoom → full screen).
 - **Hook** `window.neGlyph`: `state() card() legend() peek() hover(lon,lat) pin(lon,lat) view(v)
