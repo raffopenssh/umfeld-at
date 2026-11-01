@@ -21,7 +21,7 @@
 // upgrades affine → quadratic when any cell is off by > 0.3 px at LOD 1.
 //
 // Build: neCollect(lu+obs, bevFirst) of the bin plus a one-cell halo → subsidy
-// bin (neSubLRU / peer) → srtm cells bin (one fetch per bin per epoch) → N2K
+// bin (neSubLRU / peer) → srtm cells bin (one 0.1° block fetch fills 16 bins) → N2K
 // membership (rasterised rings, 25 m grid) → road / water distance (OSM rtree,
 // chamfer transform on the same grid) → change state (chunk log) → cont / het /
 // edge (flood fill over bin + halo) → IJ + polynomial fit.
@@ -98,6 +98,7 @@ func NEFidxStats() map[string]interface{} {
 	m["disk_hits"] = neFidxDiskHits.Load()
 	m["disk_bytes"] = neFidxDiskSize()
 	m["srtm_epoch"] = neFidxSrtmEpoch()
+	m["srtm_blk"] = neFidxSrtmBlk.stats()
 	m["warm"] = neFidxWarmStats()
 	return m
 }
@@ -1325,12 +1326,27 @@ func (s *neFidxSrtm) find(id uint64) int {
 	return -1
 }
 
-// neFidxSrtmFetch — one aligned bin from {OBS_NAME} (NEX1: header JSON with
-// columns[], ids as u64 deltas, then planar columns). nil when the peer is down
-// (remembered for 2 min) or the body is not what we expect.
+// neFidxSrtmFetch — one aligned 0.025° bin from {OBS_NAME}. The peer serves
+// a whole 0.1° block (16 bins, NEXB) in one body, so a miss fetches the block
+// the bin lies in and fills all 16 per-bin entries of neFidxSrtmBlk (single
+// flight per block); the other 15 bins of the same view then cost nothing.
+// nil when the peer is down (remembered for 2 min) or the body is not what
+// we expect; a peer without block mode (400/404 on &block=1) falls back to
+// the single-bin NEX1 request.
 func neFidxSrtmFetch(w, s, e, n float64) *neFidxSrtm {
 	if time.Since(neFidxSrtmDown.get()) < 2*time.Minute {
 		return nil
+	}
+	i, j := int(math.Floor(w/neFidxBinDeg+0.5)), int(math.Floor(s/neFidxBinDeg+0.5))
+	key := fmt.Sprintf("%d/%d", i, j)
+	if v, ok := neFidxSrtmBlk.get(key); ok {
+		neFidxSrtmBlkHits.Add(1)
+		return v
+	}
+	if neFidxSrtmBlockFetch(i, j) {
+		if v, ok := neFidxSrtmBlk.get(key); ok {
+			return v
+		}
 	}
 	url := fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&fields=%s", peers().ObsAPI+"/api/v1/cells", w, s, e, n, neFidxSrtmFlds)
 	req, _ := http.NewRequest("GET", url, nil)
@@ -1350,7 +1366,207 @@ func neFidxSrtmFetch(w, s, e, n float64) *neFidxSrtm {
 		return nil
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if err != nil || len(body) < 8 || string(body[:4]) != "NEX1" {
+	if err != nil {
+		return nil
+	}
+	out := neFidxSrtmParse(body, resp.Header.Get("X-Cells-Epoch"))
+	if out != nil {
+		neFidxSrtmBlk.put(key, out)
+	}
+	return out
+}
+
+// neFidxSrtmBlk — parsed srtm bins keyed "i/j" (0.025° bin), filled 16 at a
+// time by the block fetch. Bounded by count (256 bins ≈ 16 blocks ≈ 20 MB
+// parsed), 15 min TTL so a new peer generation is picked up; size on the
+// inflight page under ne_fidx.srtm_blk.
+var (
+	neFidxSrtmBlk        = newNeFidxSrtmBlkLRU(256, 15*time.Minute)
+	neFidxSrtmBlkHits    atomic.Int64
+	neFidxSrtmBlkFetches atomic.Int64
+	neFidxSrtmBlkMu      sync.Mutex
+	neFidxSrtmBlkFlight  = map[string]*sync.WaitGroup{}
+	neFidxSrtmNoBlock    atomicTime // peer answered 400/404/405 to &block=1 → single bins for 10 min
+)
+
+type neFidxSrtmBlkEnt struct {
+	v  *neFidxSrtm
+	at time.Time
+}
+
+type neFidxSrtmBlkLRU struct {
+	mu    sync.Mutex
+	cap   int
+	ttl   time.Duration
+	m     map[string]*neFidxSrtmBlkEnt
+	order []string
+}
+
+func newNeFidxSrtmBlkLRU(cap int, ttl time.Duration) *neFidxSrtmBlkLRU {
+	return &neFidxSrtmBlkLRU{cap: cap, ttl: ttl, m: map[string]*neFidxSrtmBlkEnt{}}
+}
+
+func (l *neFidxSrtmBlkLRU) get(k string) (*neFidxSrtm, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	e := l.m[k]
+	if e == nil {
+		return nil, false
+	}
+	if time.Since(e.at) > l.ttl {
+		delete(l.m, k)
+		return nil, false
+	}
+	return e.v, true
+}
+
+func (l *neFidxSrtmBlkLRU) put(k string, v *neFidxSrtm) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if _, ok := l.m[k]; !ok {
+		l.order = append(l.order, k)
+	}
+	l.m[k] = &neFidxSrtmBlkEnt{v: v, at: time.Now()}
+	for len(l.order) > l.cap {
+		delete(l.m, l.order[0])
+		l.order = l.order[1:]
+	}
+}
+
+func (l *neFidxSrtmBlkLRU) stats() map[string]interface{} {
+	l.mu.Lock()
+	n, bytes := len(l.m), 0
+	for _, e := range l.m {
+		bytes += 8 * len(e.v.ids)
+		for _, c := range e.v.cols {
+			bytes += len(c)
+		}
+	}
+	l.mu.Unlock()
+	return map[string]interface{}{"bins": n, "cap": l.cap, "bytes": bytes,
+		"hits": neFidxSrtmBlkHits.Load(), "block_fetches": neFidxSrtmBlkFetches.Load()}
+}
+
+// neFidxSrtmBlockFetch — GET the 0.1° block holding bin (i,j) with &block=1
+// (NEXB: 'NEXB' u32 hlen header{bins:[{i,j,off,len,n}]} frames…; frame_k is a
+// NEX1 body), parse the 16 frames into neFidxSrtmBlk. true when the block was
+// fetched (every bin of it is now cached, possibly as an empty bin).
+func neFidxSrtmBlockFetch(i, j int) bool {
+	if time.Since(neFidxSrtmNoBlock.get()) < 10*time.Minute {
+		return false
+	}
+	bi, bj := int(math.Floor(float64(i)/4)), int(math.Floor(float64(j)/4))
+	bkey := fmt.Sprintf("%d/%d", bi, bj)
+	neFidxSrtmBlkMu.Lock()
+	if wg := neFidxSrtmBlkFlight[bkey]; wg != nil {
+		neFidxSrtmBlkMu.Unlock()
+		wg.Wait()
+		return true
+	}
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	neFidxSrtmBlkFlight[bkey] = wg
+	neFidxSrtmBlkMu.Unlock()
+	defer func() {
+		neFidxSrtmBlkMu.Lock()
+		delete(neFidxSrtmBlkFlight, bkey)
+		neFidxSrtmBlkMu.Unlock()
+		wg.Done()
+	}()
+	w, s := float64(bi)*0.1, float64(bj)*0.1
+	url := fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&block=1&fields=%s", peers().ObsAPI+"/api/v1/cells", w, s, w+0.1, s+0.1, neFidxSrtmFlds)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("User-Agent", "umfeld-at/fidx (+"+publicURL()+")")
+	t0 := time.Now()
+	resp, err := neFidxClient.Do(req)
+	if err != nil {
+		neFidxSrtmDown.set(time.Now())
+		return false
+	}
+	defer resp.Body.Close()
+	neFidxSrtmBlkFetches.Add(1)
+	ep := resp.Header.Get("X-Cells-Epoch")
+	empty := func() bool {
+		neFidxSrtmEpochStore(ep)
+		for a := 0; a < 4; a++ {
+			for b := 0; b < 4; b++ {
+				neFidxSrtmBlk.put(fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+b), &neFidxSrtm{epoch: ep, cols: map[string][]byte{}})
+			}
+		}
+		return true
+	}
+	switch resp.StatusCode {
+	case 200:
+	case 404:
+		// no cells in the whole block — or no block mode; the body tells
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if strings.Contains(strings.ToLower(string(body)), "block") {
+			neFidxSrtmNoBlock.set(time.Now())
+			return false
+		}
+		return empty()
+	case 400, 405:
+		neFidxSrtmNoBlock.set(time.Now())
+		return false
+	default:
+		neFidxSrtmDown.set(time.Now())
+		return false
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+	if err != nil || len(body) < 8 || string(body[:4]) != "NEXB" {
+		neFidxSrtmNoBlock.set(time.Now())
+		return false
+	}
+	hl := int(binary.LittleEndian.Uint32(body[4:]))
+	if 8+hl > len(body) {
+		return false
+	}
+	var hdr struct {
+		Bins []struct {
+			I, J int
+			Off  int `json:"off"`
+			Len  int `json:"len"`
+		} `json:"bins"`
+	}
+	if json.Unmarshal(body[8:8+hl], &hdr) != nil || len(hdr.Bins) == 0 {
+		return false
+	}
+	base := 8 + hl
+	seen := map[string]bool{}
+	for _, b := range hdr.Bins {
+		o, e := base+b.Off, base+b.Off+b.Len
+		if b.Off < 0 || b.Len < 0 || e > len(body) {
+			continue
+		}
+		k := fmt.Sprintf("%d/%d", b.I, b.J)
+		seen[k] = true
+		if b.Len == 0 {
+			neFidxSrtmBlk.put(k, &neFidxSrtm{epoch: ep, cols: map[string][]byte{}})
+			continue
+		}
+		if v := neFidxSrtmParse(body[o:e], ep); v != nil {
+			neFidxSrtmBlk.put(k, v)
+		} else {
+			neFidxSrtmBlk.put(k, &neFidxSrtm{epoch: ep, cols: map[string][]byte{}})
+		}
+	}
+	// bins the header does not list hold no cells
+	for a := 0; a < 4; a++ {
+		for b := 0; b < 4; b++ {
+			if k := fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+b); !seen[k] {
+				neFidxSrtmBlk.put(k, &neFidxSrtm{epoch: ep, cols: map[string][]byte{}})
+			}
+		}
+	}
+	neFidxSrtmEpochStore(ep)
+	log.Printf("fidx srtm block %d/%d: %d bins %d KB %.0f ms", bi, bj, len(hdr.Bins), len(body)>>10, float64(time.Since(t0).Milliseconds()))
+	return true
+}
+
+// neFidxSrtmParse — one NEX1 body (header JSON with columns[], ids as u64
+// deltas, then planar columns) → rows sorted by id. nil when malformed.
+func neFidxSrtmParse(body []byte, ep string) *neFidxSrtm {
+	if len(body) < 8 || string(body[:4]) != "NEX1" {
 		return nil
 	}
 	hl := int(binary.LittleEndian.Uint32(body[4:]))
@@ -1370,7 +1586,6 @@ func neFidxSrtmFetch(w, s, e, n float64) *neFidxSrtm {
 	if json.Unmarshal(body[8:8+hl], &hdr) != nil {
 		return nil
 	}
-	ep := resp.Header.Get("X-Cells-Epoch")
 	if ep == "" {
 		ep = hdr.Epoch
 	}

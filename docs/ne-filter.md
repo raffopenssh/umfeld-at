@@ -380,7 +380,11 @@ and the declared-group histogram of the match; ha = cells × 307 m²), `partial`
 Principle: **we pull one aligned bin from a peer once per epoch and keep the bytes in the fidx**;
 a peer never ships Austria, never re-POSTs, never sees a per-reader request. Both peers already have
 the shape (aligned 0.025° bins, `format=bin`, sorted H3 ids, strong ETag, immutable per release) —
-we ask each for **extra columns on the existing endpoint**. A missing column is `255/65535` (*unknown*,
+we ask each for **extra columns on the existing endpoint**.
+Both peers answer a whole **0.1° block** (16 bins) in one body (`&block=1`: subsidy peer → `neSubLRU`,
+observed-layer peer → `NEXB` container, `neFidxSrtmBlk` RAM cache 256 bins / 15 min, single flight per
+block); a bin miss fetches its block once, the 15 sibling bins of the same view then build without a
+peer request (≈ 80 ms a bin). Same bytes on the wire as 16 single bins, 1/16 of the requests, no disk. A missing column is `255/65535` (*unknown*,
 never matches), so the filter ships before they do and degrades to "no data" chips, never to errors.
 
 What it costs them, worst case (every bin of Austria asked once): 12 k bins × one request × ~20–60 KB
