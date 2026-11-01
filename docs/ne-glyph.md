@@ -139,8 +139,11 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   `cellsInPath` (centre inside the outline, evenodd on `ringsOf(d)`) and `kgsOf(idx)` for the KG list.
   Observed for a set = `obsSet` → the observed-layer peer's `/api/v1/kgs/summary?<filt>` (400 → `codes=`, ≤ 500); change for
   a set = `/ne/stats?<filt>` or `kg=` list, cached under `row.k` (`chgKey`). Subsidy: `subSumOv(idx)`.
-  The veil is on whenever an area is selected, in the overview too (`svg.glyph.veiled`: fill and stroke
-  of the selection go, the un-veiled land is the selection); the pinned res-7 cell is veiled in full res only.
+  The veil is on whenever an area was asked for by name (KG · Gemeinde · Bezirk · Land · site), in the
+  overview too (`svg.glyph.veiled`: fill and stroke of the selection go, the un-veiled land is the selection).
+  Browsing never veils: a pinned res-7 cell (zoom, arrow keys, click) and a KG inferred from a point
+  (address · toponym · own position, `pt` set) show no veil — the only whitening left in those states is
+  the observed view's own "not observed yet" picture.
   A future filter component = build `{idx, a, row, d, b}` the same way and call `drawSelD` + `showSel`.
   Wheel zoom is coalesced per frame (`whl`/`wheelFlush`): deltas of one frame are summed, one
   `zoomAt` per rAF, events older than 250 ms dropped — slow office PCs otherwise replay a stale

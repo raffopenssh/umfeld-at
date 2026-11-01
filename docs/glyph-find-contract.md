@@ -92,7 +92,8 @@ GET /api/v1/ne/glyph/admin/outline?c=701      {c,kind,n,d:"M…Z",bbox,notice}  
 An address (`/addresses/search`) or a DLM toponym (`/toponyms/search?near=`) is a **point**: the
 client flies to it (`goPoint`), draws a dot that stays (`g.pt`, screen-sized via `ptSync`, the
 tour's one-shot ping on arrival), asks `/ne/glyph/cell?lon&lat` for the res-12 cell's `kgs{}` and
-selects the dominant KG around it (`selectKG(code, false, keep=true)` — outline, veil, card, but the
+selects the dominant KG around it (`selectKG(code, false, keep=true)` — outline and card, **no veil**
+(`veilSync` skips `sel` while `pt` is set: a point is browsing, not a selection), but the
 history entry and the hash stay the point's: `#pt=lon,lat;pn=<label | sub>`). Until the KG is
 known, or if the lookup fails, the res-7 hexagon under the point stands in.
 
