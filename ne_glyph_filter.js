@@ -11,16 +11,21 @@
                                              {t:'bin', b, n, match, state} per bin (counts) — b = bin key 'i/j' (0.025°), tiles are the view's
                                              LOD-0/1 tiles painted at px screen pixels per frame unit (crisp at any zoom, bounded canvas)
         {t:'at', x, y}                       → {t:'at', hit:{match, rows:[[label, text]]}|null}
+        {t:'pts', k, xs, ys, bk:[bin keys], bi} → {t:'pts', k, m:Uint8Array (1 match · 0 veiled or no cell · 2 bin not here yet), done}
+                                             a registered point set (the trees of one apex tile): re-sent whenever its bins land or the
+                                             expression changes, until {t:'pts', k, drop:1}
+        {t:'range', f}                       → {t:'range', f, fields:{id:{lo,hi,n,unk}}} the value span of every field of f over the loaded bins (the zero-match hint)
         {t:'theme', veil, acc}
    The page revokes blob URLs it drops. */
 'use strict';
-var ESEQ=0,BASE='',CAT=null,CATP=null,FIELDS={},WORDS={},EXPR=null,EXT=false,BINS={},ORDER=[],WANT={},TILES={},PX=0,VEIL=[255,255,255],ACC=[40,110,70],KEEP=32,SEQ=0;
+var ESEQ=0,BASE='',CAT=null,CATP=null,FIELDS={},WORDS={},EXPR=null,EXT=false,BINS={},ORDER=[],WANT={},TILES={},PX=0,VEIL=[255,255,255],ACC=[40,110,70],DBG=false,KEEP=32,SEQ=0;
 var NBR=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1]];
 function catalogue(){if(CATP)return CATP;return CATP=fetch(BASE+'/api/v1/ne/filter/fields').then(function(r){return r.json()}).then(function(j){CAT=j;FIELDS={};j.fields.forEach(function(f){FIELDS[f.id]=f});WORDS=j.words||{};return j})}
 /* ── parser (= neFiltParse) ── */
 function rangeOK(fd){return fd.kind==='num'||fd.kind==='bucket'}
 function member(fd,m){if(!fd.members)return-1;var i,lm=m.toLowerCase();for(i=0;i<fd.members.length;i++)if(fd.members[i]&&fd.members[i].toLowerCase()===lm)return i;if(fd.labels)for(i=0;i<fd.labels.length&&i<fd.members.length;i++)if(fd.labels[i]&&fd.labels[i].toLowerCase().replace(/ /g,'-')===lm.replace(/ /g,'-'))return i;return-1}
-function parseTerm(t){var m=/^([a-z][a-z0-9]*)(.*)$/.exec(t);if(!m)return null;var f=m[1],rest=m[2],term={f:f,lo:NaN,hi:NaN,set:[],unk:false,flag:false};
+var ALIAS={tree:'ht',trees:'ht',treeheight:'ht',height:'h',slope:'sl',elevation:'el',building:'hb',buildings:'hb',structure:'hb',structures:'hb',canopycover:'canopy',crown:'canopy',use:'d',declared:'d',observed:'o',subsidy:'sub',claim:'sub',natura:'n2k',road:'rd',water:'wat'};/* = neFiltAlias */
+function parseTerm(t){var m=/^([a-z][a-z0-9]*)(.*)$/.exec(t);if(!m)return null;var f=ALIAS[m[1]]||m[1],rest=m[2],term={f:f,lo:NaN,hi:NaN,set:[],unk:false,flag:false};
  if(f==='k'){var r=rest.indexOf('>=')===0?rest.slice(2):rest.indexOf('=')===0?rest.slice(1):null;if(r==null)return null;var v=+r;if(!isFinite(v))return null;term.lo=v;return term}
  var fd=FIELDS[f];if(!fd)return null;
  if(rest===''){if(fd.kind==='flag'||fd.kind==='sites'){term.flag=true;return term}if(f==='chg'){term.set=['cand','conf'];return term}return null}
@@ -70,9 +75,9 @@ function loaded(B){return !!B.core&&(!EXT||!!B.ext||!!B.empty||!!B.core.hasExt)}
 function ensure(b){var B=binOf(b);if(B.err)return;var need=null;if(!B.core)need='core';else if(EXT&&!loaded(B))need='ext';if(!need){if(!B.busy)ready(B);return}if(B.busy)return;B.busy=1;
  fetchBin(b,B.i,B.j,need).then(function(bin){B.busy=0;if(!BINS[b])return;if(!bin){B.core={hdr:{a:[0,0,0,0,0,0],hex:[],n2k:[]},n:0,ij:new Int32Array(0),cols:{},state:''};B.empty=true}else if(need==='core')B.core=bin;else{B.ext=bin;if(bin.n===B.core.n)for(var c in bin.cols)B.core.cols[c]=bin.cols[c];B.core.hasExt=true}B.mseq=-1;ensure(b)},function(e){B.busy=0;B.err=String(e&&e.message||e);post({t:'bin',b:b,n:0,match:0,err:B.err});for(var tk in WANT)if(WANT[tk].bins.indexOf(b)>=0)post({t:'tile',k:tk,url:null,err:B.err})})}
 /* the bin is complete for this expression: evaluate once per expression (ESEQ), report counts, repaint the tiles whose bins are all here */
-function ready(B){if(!EXPR)return;if(B.mseq!==ESEQ){var bin=B.core,n=bin.n,m=B.m=evaluate(bin,EXPR),match=0;for(var k=0;k<n;k++)match+=m[k];B.match=match;B.mseq=ESEQ;post({t:'bin',b:B.k,n:n,match:match,state:bin.state,ext:!!bin.hasExt,empty:!!B.empty});for(var t in TILES)if(TILES[t].bins.indexOf(B.k)>=0)TILES[t].dirty=true}
+function ready(B){if(!EXPR)return;if(B.mseq!==ESEQ){var bin=B.core,n=bin.n,m=B.m=evaluate(bin,EXPR),match=0;for(var k=0;k<n;k++)match+=m[k];B.match=match;B.mseq=ESEQ;post({t:'bin',b:B.k,n:n,match:match,state:bin.state,ext:!!bin.hasExt,empty:!!B.empty});ptsTouch(B.k);for(var t in TILES)if(TILES[t].bins.indexOf(B.k)>=0)TILES[t].dirty=true}
  for(var tk in WANT){var w=WANT[tk];if(w.bins.indexOf(B.k)<0)continue;var all=true;for(var q=0;q<w.bins.length;q++){var Q=BINS[w.bins[q]];if(!Q||!loaded(Q)||Q.mseq!==ESEQ){all=false;break}}if(!all)continue;var T=TILES[tk];if(!T)T=TILES[tk]={k:tk,bins:w.bins,box:w,px:0,dirty:true,pseq:0};if(T.dirty||T.px!==PX){T.box=w;paintTile(T)}}}
-function evict(){var used={};for(var tk in WANT)WANT[tk].bins.forEach(function(b){used[b]=1});for(var t in TILES)if(!WANT[t])delete TILES[t];while(ORDER.length>KEEP){var k=null;for(var q=0;q<ORDER.length;q++)if(!used[ORDER[q]]){k=ORDER[q];break}if(k==null)break;ORDER.splice(ORDER.indexOf(k),1);delete BINS[k]}}
+function evict(){var used={};for(var tk in WANT)WANT[tk].bins.forEach(function(b){used[b]=1});for(var pk in PTS)PTS[pk].bk.forEach(function(b){used[b]=1});for(var t in TILES)if(!WANT[t])delete TILES[t];while(ORDER.length>KEEP){var k=null;for(var q=0;q<ORDER.length;q++)if(!used[ORDER[q]]){k=ORDER[q];break}if(k==null)break;ORDER.splice(ORDER.indexOf(k),1);delete BINS[k]}}
 /* ── painter: one PNG per view tile, at the view's pixel density ────────────────────────────────────────────────────────────────
    veil = translucent page colour over every non-matching cell (hex polygons, slightly grown so neighbours fuse into one sheet);
    accent hairline on the outer boundary of matching clusters (edges whose neighbour does not match). Tiles are the LOD tiles of the
@@ -92,20 +97,36 @@ function paintTile(T){var box=T.box;T.px=PX;T.dirty=false;var any=false,allIn=tr
   for(k=0;k<n;k++){if(m[k])continue;p=pos(bin,k);if(p[0]<x0||p[0]>x1||p[1]<y0||p[1]>y1)continue;var cx=(p[0]-bx)*sx,cy=(p[1]-by)*sy;for(v=0;v<6;v++){xs[v]=cx+hx[v];ys[v]=cy+hy[v]}fillHex(buf,W,H,xs,ys)}}
  /* accent hairline on the outer boundary of matching clusters */
  var ar=ACC[0],ag=ACC[1],ab=ACC[2];
+ if(DBG){var fx0=R*sx,fy0=R*sy,fx1=(R+box.w)*sx,fy1=(R+box.h)*sy;lineTo(buf,W,H,fx0,fy0,fx1,fy0,ar,ag,ab);lineTo(buf,W,H,fx1,fy0,fx1,fy1,ar,ag,ab);lineTo(buf,W,H,fx1,fy1,fx0,fy1,ar,ag,ab);lineTo(buf,W,H,fx0,fy1,fx0,fy0,ar,ag,ab)}
  for(bi=0;bi<bins.length;bi++){var B2=bins[bi];if(!B2||!B2.core||!B2.core.n||!B2.match)continue;var bin2=B2.core,hex2=bin2.hdr.hex,m2=B2.m,lat=lattice(bin2),E=edgeMap(bin2);if(hex2.length<6)continue;for(k=0;k<bin2.n;k++){if(!m2[k])continue;p=pos(bin2,k);if(p[0]<x0||p[0]>x1||p[1]<y0||p[1]>y1)continue;var cx2=(p[0]-bx)*sx,cy2=(p[1]-by)*sy,ci=bin2.ij[2*k],cj=bin2.ij[2*k+1];for(var d=0;d<6;d++){var q=lat.get(key(ci+NBR[d][0],cj+NBR[d][1]));if(q!=null&&m2[q])continue;var v0=E[d],v1=(v0+1)%6;lineTo(buf,W,H,cx2+hex2[v0][0]*sx,cy2+hex2[v0][1]*sy,cx2+hex2[v1][0]*sx,cy2+hex2[v1][1]*sy,ar,ag,ab)}}}
  var cv=new OffscreenCanvas(W,H),g=cv.getContext('2d');g.putImageData(new ImageData(buf,W,H),0,0);
  var seq=++SEQ;T.pseq=seq;cv.convertToBlob({type:'image/png'}).then(function(blob){if(T.pseq!==seq||!WANT[T.k])return;post({t:'tile',k:T.k,url:URL.createObjectURL(blob)})})}
 /* ── the cell under a point ── */
 function at(x,y){var best=null,bd=1e9;for(var k0 in BINS){var B=BINS[k0],bin=B.core;if(!bin||!B.m||!bin.n)continue;for(var k=0;k<bin.n;k++){var p=pos(bin,k),dd=(p[0]-x)*(p[0]-x)+(p[1]-y)*(p[1]-y);if(dd<bd){bd=dd;best={B:B,k:k}}}}
  if(!best||bd>0.03)return null;var bin=best.B.core,rows=[],seen={};EXPR.groups.forEach(function(g){g.forEach(function(t){if(seen[t.f])return;seen[t.f]=1;var fd=FIELDS[t.f];if(!fd)return;var c=bin.cols[fd.id];if(!c){rows.push([fd.label,'—']);return}var v=rawFn(fd,c)(best.k),s;if(v===fd.nodata)s='unknown';else if(fd.kind==='set')s=fd.labels&&fd.labels[v]!=null?fd.labels[v]:fd.members[v]==null?String(v):(fd.members[v]||'none');else if(fd.kind==='flag')s=v?'yes':'no';else if(fd.kind==='bits'){var b=[];fd.members.forEach(function(mm,i){if(v&(1<<i))b.push(mm)});s=b.length?b.join(' '):'none'}else if(fd.kind==='sites')s=(bin.hdr.n2k||[])[v]||String(v);else if(fd.kind==='bucket'){var E=fd.edges;s=v+1<E.length?E[v]+'–'+E[v+1]+'\u202f'+fd.unit:'≥ '+E[v]+'\u202f'+fd.unit}else if(fd.halo)s=(v&128)?'≥ '+Math.max(64,v&127)+' (leaves the bin)':String(v);else{if((fd.id==='loss'||fd.id==='snar'||fd.id==='snar2')&&v===0)s='none';else{var pv=v*(fd.scale||1)+(fd.off||0);s=fnum(pv)+(fd.unit?'\u202f'+fd.unit:'')}}rows.push([fd.label,s])})});return{match:!!best.B.m[best.k],rows:rows}}
+/* ── point sets: the cell under each of many points (trees), by inverting the bin's IJ → frame polynomial ── */
+var PTS={},PTSR=0;
+function binInv(bin){if(bin.inv!==undefined)return bin.inv;var a=bin.hdr.a,q=a.length>=12,A=q?[a[1],a[2],a[7],a[8]]:[a[1],a[2],a[4],a[5]],o=q?[a[0],a[6]]:[a[0],a[3]],det=A[0]*A[3]-A[1]*A[2];if(!det||!isFinite(det))return bin.inv=null;return bin.inv={m:[A[3]/det,-A[1]/det,-A[2]/det,A[0]/det],o:o,q:q}}
+function posIJ(bin,i,j){var a=bin.hdr.a;if(a.length>=12)return[a[0]+a[1]*i+a[2]*j+a[3]*i*i+a[4]*i*j+a[5]*j*j,a[6]+a[7]*i+a[8]*j+a[9]*i*i+a[10]*i*j+a[11]*j*j];return[a[0]+a[1]*i+a[2]*j,a[3]+a[4]*i+a[5]*j]}
+function cellAt(bin,x,y){var inv=binInv(bin);if(!inv||!bin.n)return-1;var dx=x-inv.o[0],dy=y-inv.o[1],i=inv.m[0]*dx+inv.m[1]*dy,j=inv.m[2]*dx+inv.m[3]*dy;if(inv.q)for(var it=0;it<2;it++){var p=posIJ(bin,i,j);dx=x-p[0];dy=y-p[1];i+=inv.m[0]*dx+inv.m[1]*dy;j+=inv.m[2]*dx+inv.m[3]*dy}
+ var ri=Math.round(i),rj=Math.round(j),lat=lattice(bin),best=-1,bd=Infinity;for(var di=-1;di<=1;di++)for(var dj=-1;dj<=1;dj++){var k=lat.get(key(ri+di,rj+dj));if(k==null)continue;var pp=pos(bin,k),dd=(pp[0]-x)*(pp[0]-x)+(pp[1]-y)*(pp[1]-y);if(dd<bd){bd=dd;best=k}}
+ if(best<0)return-1;var h=bin.hdr.hex,r2=0;for(var v=0;v<6;v++){var q2=h[v][0]*h[v][0]+h[v][1]*h[v][1];if(q2>r2)r2=q2}return bd<=r2*1.05?best:-1}
+function evalPts(P){var n=P.xs.length,m=new Uint8Array(n),done=true;for(var i=0;i<n;i++){var B=BINS[P.bk[P.bi[i]]];if(!B||!B.core||!B.m||B.mseq!==ESEQ){m[i]=2;done=false;continue}if(!B.core.n){m[i]=0;continue}var k=cellAt(B.core,P.xs[i],P.ys[i]);m[i]=k<0?0:B.m[k]?1:0}P.dirty=false;post({t:'pts',k:P.k,m:m,done:done})}
+function ptsFlush(){PTSR=0;if(!EXPR)return;for(var k in PTS)if(PTS[k].dirty)evalPts(PTS[k])}
+function ptsTouch(b){for(var k in PTS){var P=PTS[k];if(b&&P.bk.indexOf(b)<0)continue;P.dirty=true}if(!PTSR)PTSR=setTimeout(ptsFlush,0)}
+/* the value span of every field in f over the loaded bins — tells a reader with 0 matches what the data in view actually holds */
+function ranges(e){var out={};e.groups.forEach(function(g){g.forEach(function(t){var fd=FIELDS[t.f];if(!fd||out[fd.id]||(fd.kind!=='num'&&fd.kind!=='bucket'))return;var lo=Infinity,hi=-Infinity,n=0,unk=0,zn=fd.id==='loss'||fd.id==='snar'||fd.id==='snar2';for(var b in BINS){var bin=BINS[b].core;if(!bin||!bin.n)continue;var c=bin.cols[fd.id];if(!c){unk+=bin.n;continue}var raw=rawFn(fd,c);for(var k=0;k<bin.n;k++){var v=raw(k);if(v===fd.nodata||(zn&&v===0)){unk++;continue}if(fd.halo)v&=127;n++;if(v<lo)lo=v;if(v>hi)hi=v}}
+ if(fd.kind==='bucket'){var E=fd.edges;out[fd.id]={lo:n?E[lo]:null,hi:n?(hi+1<E.length?E[hi+1]:null):null,n:n,unk:unk,open:n&&hi+1>=E.length}}else out[fd.id]={lo:n?lo*(fd.scale||1)+(fd.off||0):null,hi:n?hi*(fd.scale||1)+(fd.off||0):null,n:n,unk:unk}})});return out}
 /* ── messages ── */
 function post(m){self.postMessage(m)}
 function repaintAll(){var bins={};for(var tk in WANT)WANT[tk].bins.forEach(function(b){bins[b]=1});for(var b in bins)ensure(b)}
 self.onmessage=function(ev){var m=ev.data;
- if(m.t==='init'){BASE=m.base||'';if(m.veil)VEIL=m.veil;if(m.acc)ACC=m.acc;catalogue().then(function(c){post({t:'cat',cat:c})},function(e){post({t:'err',err:'fields: '+(e&&e.message||e)})});return}
+ if(m.t==='init'){BASE=m.base||'';if(m.veil)VEIL=m.veil;if(m.acc)ACC=m.acc;DBG=!!m.dbg;catalogue().then(function(c){post({t:'cat',cat:c})},function(e){post({t:'err',err:'fields: '+(e&&e.message||e)})});return}
  if(m.t==='theme'){if(m.veil)VEIL=m.veil;if(m.acc)ACC=m.acc;for(var t in TILES)TILES[t].dirty=true;repaintAll();return}
  catalogue().then(function(){
-  if(m.t==='expr'){EXPR=parse(m.f);EXPR.empty=!EXPR.groups.length&&!EXPR.k;EXT=needsExt(EXPR);ESEQ++;post({t:'expr',f:m.f,canon:canonical(EXPR),words:words(EXPR),groups:EXPR.groups.map(function(g){return{canon:g.map(termStr).join('|'),words:g.map(termWords).join(' or ')}}).concat(EXPR.k>1?[{canon:'k>='+EXPR.k,words:'clusters \u2265 '+EXPR.k+' cells'}]:[]),ignored:EXPR.ignored,ext:EXT,empty:EXPR.empty});repaintAll();return}
+  if(m.t==='expr'){EXPR=parse(m.f);EXPR.empty=!EXPR.groups.length&&!EXPR.k;EXT=needsExt(EXPR);ESEQ++;post({t:'expr',f:m.f,canon:canonical(EXPR),words:words(EXPR),groups:EXPR.groups.map(function(g){return{canon:g.map(termStr).join('|'),words:g.map(termWords).join(' or ')}}).concat(EXPR.k>1?[{canon:'k>='+EXPR.k,words:'clusters \u2265 '+EXPR.k+' cells'}]:[]),ignored:EXPR.ignored,ext:EXT,empty:EXPR.empty});repaintAll();ptsTouch(null);return}
   if(m.t==='want'){WANT={};if(m.px)PX=m.px;m.tiles.forEach(function(w){WANT[w.k]=w;var T=TILES[w.k];if(T&&T.bins.join()!==w.bins.join()){T.bins=w.bins;T.dirty=true}});evict();repaintAll();return}
   if(m.t==='at'){post({t:'at',id:m.id,hit:EXPR?at(m.x,m.y):null});return}
+  if(m.t==='pts'){if(m.drop){delete PTS[m.k];return}var P=PTS[m.k]={k:m.k,xs:m.xs,ys:m.ys,bk:m.bk,bi:m.bi,dirty:true};P.bk.forEach(function(b){ensure(b)});if(!PTSR)PTSR=setTimeout(ptsFlush,0);return}
+  if(m.t==='range'){post({t:'range',f:m.f,fields:EXPR?ranges(EXPR):{}});return}
  },function(e){post({t:'err',err:String(e&&e.message||e)})})};

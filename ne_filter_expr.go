@@ -141,7 +141,16 @@ var neFiltByID = func() map[string]*neFiltField {
 
 // neFiltWords — named ranges (FT_WORDS): presets, the find box and the legend
 // speak these; the hash always carries the numeric form.
+// neFiltAlias — plain words a reader types for a field (`trees>=20` = `ht>=20`);
+// the canonical form always carries the field id. Mirrored in ne_glyph_filter.js.
+var neFiltAlias = map[string]string{
+	"tree": "ht", "trees": "ht", "treeheight": "ht", "height": "h", "slope": "sl", "elevation": "el",
+	"building": "hb", "buildings": "hb", "structure": "hb", "structures": "hb", "canopycover": "canopy", "crown": "canopy",
+	"use": "d", "declared": "d", "observed": "o", "subsidy": "sub", "claim": "sub", "natura": "n2k", "road": "rd", "water": "wat",
+}
+
 var neFiltWords = map[string]string{
+	"tall-trees": "ht>=20", "treeless": "ht=unk", "sparse": "canopy<=25", "dense": "canopy>=75",
 	"steep": "sl>=20", "flat": "sl<=3", "high": "el>=1500", "low": "el<=400",
 	"south-facing": "as=s+sw+se", "north-facing": "as=n+nw+ne",
 	"tall": "hb>=12", "built": "bn>=1", "unbuilt": "bn=0", "wooded": "canopy>=50", "open": "canopy<=10",
@@ -247,6 +256,9 @@ func neFiltParseTerm(t string) (neFiltTerm, bool) {
 	f, rest := t[:i], t[i:]
 	if f == "" {
 		return term, false
+	}
+	if a, ok := neFiltAlias[f]; ok {
+		f = a
 	}
 	term.F = f
 	if f == "k" {

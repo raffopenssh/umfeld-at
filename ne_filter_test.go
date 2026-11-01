@@ -272,7 +272,7 @@ var neFiltTestExprs = []string{
 	"", "d=geb", "d=geb+bau", "d=geb+bau,sl>=3", "dsh>=50", "dsh<=10", "hb=12..30", "hb<=5|ht>=25", "n2k", "n2k=unk", "sl=unk",
 	"n2ks=AT1304000", "n2ks=AT1110137+AT1304000", "chg=conf", "chg=cand+conf", "as=s+sw", "sub=wein|bio", "el=1500..2000", "el>=3000",
 	"cont>=10", "cont<=5", "cont>=64", "rd<=50", "wat<=100,d=gruen", "stor>=4,d=geb", "oepul=bio", "nutz=unk", "loss>=1", "snar>=1",
-	"dh>=2", "dh<=-2", "tpi>=10", "tri<=3", "ver=unk", "d=geb,k>=4", "sl>=10,k>=2", "steep,forest", "settlement", "protected,farmland",
+	"trees>=20", "tree=10..20,slope<=5", "tall-trees|treeless", "height>=8,buildings>=12", "dh>=2", "dh<=-2", "tpi>=10", "tri<=3", "ver=unk", "d=geb,k>=4", "sl>=10,k>=2", "steep,forest", "settlement", "protected,farmland",
 	"d=wald|o=wald,ht>=15", "osh>=80,d=acker", "bcov>=30,bn>=2", "phen=crop", "roof=flat", "hmax>=40", "sl90>=30", "scov>=50,sub=acker",
 	"h=unk,d=geb", "bogus,d=geb", "k>=3", "hb>=0", "el<=100",
 }
