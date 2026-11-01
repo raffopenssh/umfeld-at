@@ -85,7 +85,13 @@ func main() {
 	neNatStart()        // national cell table behind the tiles' low zooms (ne_mvt_nat.go)
 	go neFidxWarmLoop() // filter index: prebuild the bins behind recent near tiles (ne_glyph_fidx.go)
 	go func() {
-		time.Sleep(45 * time.Second)
+		time.Sleep(20 * time.Second)
+		// change over time (the glyph's time strip, /ne/glyph/passes): the
+		// first build reads the report scan + ~150 KG change logs cold (~15 s
+		// when it races the tile burst of a fresh page) — warm it before a
+		// visitor asks; later rebuilds are stale-while-revalidate (~2 s).
+		StatsMemo("ne_passes", 5*time.Minute, false, nePassNational)
+		time.Sleep(25 * time.Second)
 		neDeclWarm() // declared-view states for the manifest (ne_change_declared.go)
 		StatsMemo(neRevisitMemoKey, neRevisitTTL, false, neRevisitCompute)
 	}()

@@ -2298,7 +2298,7 @@ function tlPassNote(p){if(!p)return'';if(p.done)return'complete '+tlDate(p.done)
 function pct0(x){return Math.round((x||0)*100)+'\u202f%'}
 /* ── render ── one row: head (scope · pass state · all · play) · strip of bins · readout. Updates in place so bars, fills and selection animate (CSS transitions); a change of level or scope swaps the strip with a short slide; the whole strip unfolds/folds with the change toggle (grid-rows transition on .glyph-time). */
 function tlRender(){if(!tlEl)return;var show=cg.on&&(tl.d||tl.busy||tl.err);if(show&&tlEl.hidden){tlEl.hidden=false;requestAnimationFrame(function(){tlEl.classList.add('on')})}else if(!show){tlEl.classList.remove('on');tlDateSet('');clearTimeout(tl.hT);tl.hT=setTimeout(function(){if(!tlEl.classList.contains('on')){tlEl.hidden=true;tlEl.innerHTML='';tl.sig=''}},420);return}
- tlBins();var d=tlData(),scope=sel&&d&&d.scope==='kg'?sel.name||('KG '+sel.kg):'Austria',i;
+ tlBins();var d=tlData(),scope=sel&&d&&d.scope==='kg'?((sel.e&&sel.e[1])||('KG '+sel.code)):'Austria',i;
  if(tl.busy&&!tl.d){tlSet('<div class="tl-h"><span class="tl-t mut">change over time'+ldots()+'</span></div>','wait');return}
  if(!d||!(d.passes||[]).length){tlSet('<div class="tl-h"><span class="tl-t mut">'+(tl.err?offTxt('change'):(sel?'no second pass yet in '+esc(scope):'no second pass yet'))+'</span></div>','none');return}
  var mx=1;for(i=0;i<tl.bins.length;i++)mx=Math.max(mx,tl.bins[i].conf+tl.bins[i].cand);var p2=null;for(i=0;i<d.passes.length;i++)if(d.passes[i].k===2)p2=d.passes[i];

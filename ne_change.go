@@ -125,6 +125,7 @@ type neChangeLRUT struct {
 	order        []string // oldest first
 	bytes        int
 	hits, misses int
+	loading      map[string]chan struct{} // KGs being read right now (single flight)
 }
 
 var neChangeLRU = &neChangeLRUT{kgs: map[string]*neChangeKG{}}
@@ -165,14 +166,33 @@ func neChangeGet(kg string) *neChangeKG {
 		return c
 	}
 	l.misses++
+	// single flight per KG: a burst of ~48 change tiles after a zoom shares
+	// most of its KGs — without this each tile decoded the same log again.
+	if l.loading == nil {
+		l.loading = map[string]chan struct{}{}
+	}
+	if ch, busy := l.loading[kg]; busy {
+		l.mu.Unlock()
+		<-ch
+		l.mu.Lock()
+		c := l.kgs[kg]
+		l.mu.Unlock()
+		return c
+	}
+	ch := make(chan struct{})
+	l.loading[kg] = ch
 	l.mu.Unlock()
 	c, err := neChangeLoad(kg)
+	l.mu.Lock()
+	if err == nil && c != nil {
+		l.putLocked(c)
+	}
+	delete(l.loading, kg)
+	close(ch)
+	l.mu.Unlock()
 	if err != nil || c == nil {
 		return nil
 	}
-	l.mu.Lock()
-	l.putLocked(c)
-	l.mu.Unlock()
 	return c
 }
 
