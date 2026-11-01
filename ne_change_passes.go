@@ -172,7 +172,7 @@ func (c *neChangeKG) passes() *nePassKG {
 	}
 	c.pass = p
 	c.rowsMu.Lock()
-	c.ram += len(p.ord)*16 + p.Chunks*nePassKeep*12
+	c.ram.Add(int64(len(p.ord)*16 + p.Chunks*nePassKeep*12))
 	c.rowsMu.Unlock()
 	return p
 }

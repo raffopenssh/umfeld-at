@@ -386,7 +386,7 @@ func neFidxBox(i, j int) (w, s, e, n float64) {
 func neFidxState(i, j int) string {
 	w, s, e, n := neFidxBox(i, j)
 	h := sha256.New()
-	h.Write([]byte("nfx" + strconv.Itoa(neFidxVer) + ";" + neGlyphTileState(KGCodesInBBoxMem(w-neFidxHaloDeg, s-neFidxHaloDeg, e+neFidxHaloDeg, n+neFidxHaloDeg))))
+	h.Write([]byte("nfx" + strconv.Itoa(neFidxVer) + ";" + neGlyphTileState(KGCodesInBBoxMem(w-neFidxHaloDeg, s-neFidxHaloDeg, e+neFidxHaloDeg, n+neFidxHaloDeg), true)))
 	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch()))
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }

@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/uber/h3-go/v4"
@@ -37,8 +38,8 @@ const (
 	neChangeSkipMagic    = 0x184D2A5E
 	neChangeLogKind      = "chunks.zst"
 	neChangeDerived      = "changes.jsonl"
-	neChangeLRUMaxKGs    = 256
-	neChangeLRUMaxB      = 24 << 20
+	neChangeLRUMaxKGs    = 1024 // a LOD-2 change tile reads ~30 KGs; a pan across a Bezirk a few hundred
+	neChangeLRUMaxB      = 96 << 20
 	neChangeMaxBody      = 2 << 20
 	neChunkRes10         = 10
 	neRegOff0, neRegOff1 = 24, 25 // the two register-derived bytes — zero in every stored row
@@ -96,7 +97,7 @@ type neChangeKG struct {
 	latest   map[uint64]string
 	rowsLRU  map[int][]byte // entry index → inflated rows (small, bounded by the KG's own size)
 	deltas   *neChangeDeltas
-	ram      int
+	ram      atomic.Int64 // bytes held: log headers + rows LRU + deltas + pass tables (grows after the put — the LRU recounts)
 
 	// A loaded KG is shared by every request goroutine that reads it (tiles of
 	// one KG arrive in bursts of a dozen). entries/versions/seen/latest are
@@ -185,18 +186,27 @@ func (l *neChangeLRUT) touchLocked(kg string) {
 	l.order = append(l.order, kg)
 }
 
-func (l *neChangeLRUT) putLocked(c *neChangeKG) {
-	if old, ok := l.kgs[c.kg]; ok {
-		l.bytes -= old.ram
+// recountLocked — Σ ram over the held KGs. An entry's ram grows after its
+// put (rows, deltas and pass tables load lazily), so the total is recounted
+// rather than kept by add/subtract — the old bookkeeping drifted negative and
+// the byte bound never fired.
+func (l *neChangeLRUT) recountLocked() {
+	var b int64
+	for _, c := range l.kgs {
+		b += c.ram.Load()
 	}
+	l.bytes = int(b)
+}
+
+func (l *neChangeLRUT) putLocked(c *neChangeKG) {
 	l.kgs[c.kg] = c
-	l.bytes += c.ram
 	l.touchLocked(c.kg)
+	l.recountLocked()
 	for (len(l.kgs) > neChangeLRUMaxKGs || l.bytes > neChangeLRUMaxB) && len(l.order) > 1 {
 		k := l.order[0]
 		l.order = l.order[1:]
 		if o, ok := l.kgs[k]; ok {
-			l.bytes -= o.ram
+			l.bytes -= int(o.ram.Load())
 			delete(l.kgs, k)
 		}
 	}
@@ -206,9 +216,7 @@ func (l *neChangeLRUT) drop(kg string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if o, ok := l.kgs[kg]; ok {
-		o.rowsMu.Lock()
-		l.bytes -= o.ram
-		o.rowsMu.Unlock()
+		l.bytes -= int(o.ram.Load())
 		delete(l.kgs, kg)
 		for i, k := range l.order {
 			if k == kg {
@@ -325,7 +333,7 @@ func (c *neChangeKG) ingest(h *neChangeBatchHdr, dataOff int64, hdrLen int) {
 			}
 		}
 		c.entries = append(c.entries, neChunkVersion{Kind: "tiles", Token: h.Token, Observer: h.Observer, Source: h.Source, Epoch: h.Epoch, At: h.At, Chunks: h.Chunks})
-		c.ram += 160 + hdrLen
+		c.ram.Add(int64(160 + hdrLen))
 		return
 	}
 	if h.Kind == "seen" {
@@ -334,7 +342,7 @@ func (c *neChangeKG) ingest(h *neChangeBatchHdr, dataOff int64, hdrLen int) {
 			c.seen[ap]++
 		}
 		c.entries = append(c.entries, v)
-		c.ram += 160 + hdrLen
+		c.ram.Add(int64(160 + hdrLen))
 		return
 	}
 	off := dataOff
@@ -359,7 +367,7 @@ func (c *neChangeKG) ingest(h *neChangeBatchHdr, dataOff int64, hdrLen int) {
 		c.seen[v.AP]++
 		c.versions[v.chunk] = append(c.versions[v.chunk], idx)
 		c.latest[v.chunk] = v.AP
-		c.ram += 200
+		c.ram.Add(200)
 	}
 }
 
@@ -428,7 +436,7 @@ func (c *neChangeKG) rows(i int) ([]byte, error) {
 		r = prev
 	} else {
 		c.rowsLRU[i] = r
-		c.ram += len(r)
+		c.ram.Add(int64(len(r)))
 	}
 	c.rowsMu.Unlock()
 	return r, nil
@@ -862,7 +870,7 @@ func (c *neChangeKG) deltasOf() (*neChangeDeltas, error) {
 	d.cum = c.cumulate(d.rows, neChangeWin{})
 	c.deltas = d
 	c.rowsMu.Lock()
-	c.ram += len(d.rows)*96 + len(d.cum)*120
+	c.ram.Add(int64(len(d.rows)*96 + len(d.cum)*120))
 	c.rowsMu.Unlock()
 	neChangeWriteDerived(c, d)
 	return d, nil

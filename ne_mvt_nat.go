@@ -113,7 +113,7 @@ func neNatAllKGs() []string {
 }
 
 func neNatState() string {
-	return "nat" + string(rune('0'+neNatVer)) + ":" + neGlyphTileState(neNatAllKGs())
+	return "nat" + string(rune('0'+neNatVer)) + ":" + neGlyphTileState(neNatAllKGs(), true)
 }
 
 // neNatStart — load the file, then keep the table fresh. Called once from main.

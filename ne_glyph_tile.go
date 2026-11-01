@@ -387,7 +387,16 @@ func neGlyphTileRenderWin(lod neGlyphLOD, i, j int, view string, raw bool, win n
 	kgs := KGCodesInBBoxMem(w, s, e, n)
 	m.pending = nePendingKGs(kgs)
 	const padDeg = 0.0005 // cells whose centre sits just across the edge still paint their half of the seam
-	ids := neBBoxCells(w-padDeg, s-padDeg, e+padDeg, n+padDeg)
+	// The cell list is only enumerated for the views that paint every cell
+	// (base, obs, tree, dif). A LOD-2 tile holds ~280 k res-12 cells and the
+	// H3 polygon fill alone costs ~0.2 s — the overlays (chg, sub, subc, rd)
+	// paint from their own sources and report n=0 (the page reads n from the
+	// base tile only).
+	var ids []uint64
+	switch view {
+	case "", "obs", "tree", "dif":
+		ids = neBBoxCells(w-padDeg, s-padDeg, e+padDeg, n+padDeg)
+	}
 	var img image.Image
 	var poly [8][2]float64
 	switch view {
@@ -406,7 +415,6 @@ func neGlyphTileRenderWin(lod neGlyphLOD, i, j int, view string, raw bool, win n
 			m.sub.down = true
 			return nil, m
 		}
-		m.n = len(ids)
 	case "dif":
 		// declared vs observed of the same cell, the three corroborated kinds (ne_glyph_dif.go)
 		img = neGlyphDifRender(&g, ids, kgs, raw, &m)
@@ -457,7 +465,6 @@ func neGlyphTileRenderWin(lod neGlyphLOD, i, j int, view string, raw bool, win n
 	case "chg":
 		pimg := image.NewPaletted(image.Rect(0, 0, g.pw, g.ph), neGlyphOverlayPalette(view))
 		img = pimg
-		m.n = len(ids)
 		seen := map[uint64]bool{}
 		head := neGlyphHead(win)
 		full, gone := neGlyphAgeScale(head)
@@ -836,7 +843,7 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 		// the chunk log, bev, lu, obs digests), so a report or an upload that
 		// changes the picture misses the cache instead of serving a stale tile
 		tw, ts, te, tn := neGlyphTileBox(L, i, j)
-		key += "/" + neGlyphTileState(KGCodesInBBoxMem(tw, ts, te, tn))
+		key += "/" + neGlyphTileState(KGCodesInBBoxMem(tw, ts, te, tn), view != "chg") // a change tile reads the chunk log only: an obs upload must not evict it
 	}
 	if sub || (view == "chg" && win.D2 == "") {
 		key += "/" + time.Now().UTC().Format("2006-01-02") // the peer's release may move / change ages; a day of staleness at most
@@ -892,7 +899,7 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 
 // neGlyphTileState — sha256[:12] over the declared/obs state of the KGs a tile
 // reads; cheap (in-memory headers + one stat per KG for the chunk-log view).
-func neGlyphTileState(kgs []string) string {
+func neGlyphTileState(kgs []string, withObs bool) string {
 	h := sha256.New()
 	for _, kg := range kgs {
 		k := neStore.get(kg)
@@ -900,7 +907,7 @@ func neGlyphTileState(kgs []string) string {
 			continue
 		}
 		h.Write([]byte(kg + ":" + neDeclaredDigest(k, true)))
-		if l := k.Hdr.Layers["obs"]; l != nil {
+		if l := k.Hdr.Layers["obs"]; l != nil && withObs {
 			h.Write([]byte(":" + l.Digest))
 		}
 		h.Write([]byte(";"))
