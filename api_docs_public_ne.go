@@ -287,6 +287,12 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     right-click / wheel adjust). Legend adds "roads · n km of ways and rail in view · by rank · OpenStreetMap · op %"
     (km = the tiles on screen, clipped so they add up); the reading of the ink is a one-time tap hint, not a legend
     line.
+    My position (view-bar locate icon after roads, phones and tablets only; key l everywhere): the browser's own
+    Geolocation, drawn as a pulsing dot in the found point's ink with the reported accuracy as a halo. Tap 1: watch +
+    fly to the dot — nothing is written (not in the link, not in the recent list, never sent: the server sees only the
+    tile requests of the view). Tap 2: zoom in fully and pin it as the point of the view — from then on it is pt= in the
+    link exactly like a searched address, so the view can be shared. Tap 3: off — watch cleared, point and card gone.
+    Outside Austria, denied or timed out → off with a hint.
     Filter (funnel icon after the find box, ;f= in the link, key f shows/hides the row, F = full screen): a chip row
     under the status line — each chip one AND group, the input adds a condition (type words, fields, members:
     suggestions list presets → words → fields → members; click a chip to edit it, × removes, Escape in the row

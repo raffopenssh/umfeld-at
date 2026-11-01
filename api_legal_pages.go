@@ -7,7 +7,7 @@
 // "E-Mail anzeigen" (spam harvesters). The page is still complete for a human. Everything here must describe what the service ACTUALLY does — keep
 // it in step with api.go (request log: no IP), api_ne_public.go (IP only in an
 // in-memory rate-limit bucket), api_feedback.go (free-text feedback is stored
-// and published), ne_glyph.go (localStorage for view prefs, no cookies), and
+// and published), ne_glyph.go (localStorage for view prefs, no cookies; locate = Geolocation in the browser only, never sent), and
 // the landing page (no third-party fonts/CSS/JS — the only cross-origin
 // traffic is the glyph's live data fetches to {OBS_NAME}, §3/§4
 // below). TestNoExternalAssets (api_no_external_assets_test.go) enforces
@@ -60,6 +60,9 @@ Es dient der Information der Öffentlichkeit und der Demonstration von Datenvera
 oder Eigentümerdaten. Alle Produkte sind nach Punkt, Rechteck, Verwaltungscode oder H3-Zelle (≈ 300 m²) geschlüsselt und enthalten
 ausschließlich Statistiken, aus denen keine Objekte rekonstruierbar sind. Wer Katastergeometrie benötigt, setzt sie selbst aus den
 offenen BEV-Vektorkacheln zusammen (<a href="https://github.com/raffopenssh/vtcseamless">vtcseamless / bevdirect</a>, MIT).</p>
+<h2>Kein Standort-Tracking</h2>
+<p>Die Standortanzeige der Karte („my position“, Telefone und Tablets) läuft vollständig im Browser: keine Übertragung, keine
+Speicherung, kein Protokoll der Position auf diesem Server (siehe <a href="/datenschutz">Datenschutz</a> 2.6).</p>
 <h2>Haftungsausschluss</h2>
 <p>Die Inhalte wurden mit größtmöglicher Sorgfalt erstellt; für Richtigkeit, Vollständigkeit und Aktualität wird keine Gewähr übernommen.
 Bodenpreise sind <em>Modellschätzungen</em>, keine amtlichen Bewertungen. Flächennutzungs- und Veränderungswerte sind statistische
@@ -102,8 +105,17 @@ Löschung auf Anfrage per E-Mail.</p>
 <p>Partnerdienste (<code>{OBS_NAME}</code>, <code>{MAP_NAME}</code>, <code>{SUB_NAME}</code>) liefern mit Zugangsschlüsseln
 aggregierte Zellstatistiken an. Diese enthalten keine personenbezogenen Daten; gespeichert wird der Name des Partnerdienstes, nicht die Person.</p>
 <h3>2.5 Was nicht verarbeitet wird</h3>
-<p>Keine Registrierung, keine Benutzerkonten, keine Eigentümer- oder Grundstücksdaten, keine Standortabfrage des Geräts (GPS).
+<p>Keine Registrierung, keine Benutzerkonten, keine Eigentümer- oder Grundstücksdaten.
 Koordinaten, die Sie in der Karte oder per API abfragen, werden beantwortet und erscheinen nur im Zugriffsprotokoll nach 2.1.</p>
+<h3>2.6 Eigener Standort in der Karte</h3>
+<p>Die Karte hat auf Telefonen und Tablets eine Schaltfläche „my position“. Erst wenn Sie diese antippen, fragt Ihr Browser die
+Standortfreigabe ab (Geolocation-API des Geräts); ohne Antippen findet keine Standortabfrage statt. Die Position wird
+<strong>ausschließlich im Browser</strong> als pulsierender Punkt gezeichnet und weder an diesen Server noch an Partnerdienste
+übertragen, nicht im <code>localStorage</code> abgelegt und nicht in die Liste der letzten Suchen aufgenommen. Der Server erhält nur
+die üblichen Kachelabrufe des sichtbaren Ausschnitts (2.1), wie bei jedem Verschieben der Karte. Ein zweites Antippen zoomt auf die
+Position und setzt sie als Punkt der Ansicht – erst dann steht sie wie eine gesuchte Adresse als <code>pt=</code> in der Adresszeile
+und damit in einem von Ihnen geteilten Link; ein drittes Antippen beendet die Standortabfrage und entfernt den Punkt wieder. Ein in
+den Hintergrund gewechselter Tab beendet die Abfrage ebenfalls, solange die Position nicht als Punkt gesetzt ist.</p>
 <h2>3. Cookies und lokale Speicherung</h2>
 <p>Diese Website verwendet <strong>keine Cookies</strong> und keine Tracking- oder Analysedienste. Die interaktive Karte merkt sich
 Anzeige-Einstellungen (ein-/ausgeblendete Ebenen, Vollauflösung, die letzten zehn Suchen) im <code>localStorage</code> Ihres Browsers;

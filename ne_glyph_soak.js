@@ -8,7 +8,7 @@
    Invoke from a browser driver on http://localhost:8000/ :
      (await import('/api/v1/ne/glyph/soak.js')).run({rounds:1,spots:2})
    Options: rounds (default 1), spots (KGs per round, default 2), seed (deterministic pick),
-            verbose (list ok checks), settle (ms per settle, 20000), relief/subsidy/trees/ortho/roads (bool, default true),
+            verbose (list ok checks), settle (ms per settle, 20000), relief/subsidy/trees/ortho/roads/locate (bool, default true),
             kgs (explicit KG codes), filter:false skips the filter step. Returns a string; also window.neGlyphSoak.last = full result object.
    Cheaper single calls (same module, docs/ne-glyph.md §soak):
      check('#change;t=2') / check('#kg=63330;change;t=@2026-10-09..2026-10-20;full')  the time window (ne-change.md §6e): strip on, window applied, chg tiles keyed by it
@@ -75,7 +75,8 @@ export async function run(o) {
   /* dot classes: .e empty · .h held (ink) · .n fresh (a second dot on a held cell) · .o observed · .c change · .ca candidate-only · .ch halo under both */
   const dHeld = dots('.h'), dFresh = dots('.n'), dEmpty = dots('.e'), dObs = dots('.o'), dChg = dots('.c'), dCand = dots('.ca'), dHalo = dots('.ch');
   wantDom('dom.dots held=json', dHeld === held, [dHeld, held]);
-  wantDom('dom.dots fresh≈json', Math.abs(dFresh - freshN) <= Math.max(3, freshN * 0.05), [dFresh, freshN]); /* age_h is rounded in the JSON */
+  const agedOut = C.filter(c => c[2] > 0 && c[5] >= D.fresh_hours && c[5] < D.fresh_hours + 0.5).length; /* the page's SVG was built up to a memo lifetime before the JSON: cells that crossed the fresh window in between are still fresh dots on the page (a peer burst 6 h ago ages out in one go) */
+  wantDom('dom.dots fresh≈json', dFresh >= freshN - Math.max(3, freshN * 0.05) && dFresh <= freshN + Math.max(3, freshN * 0.05) + agedOut, [dFresh, freshN, agedOut]); /* age_h is rounded in the JSON */
   wantDom('dom.dots halo=change∪cand', dHalo === chgCells + candOnly, [dHalo, chgCells + candOnly]);
   wantDom('dom.dots empty=json', dEmpty === unheld, [dEmpty, unheld]);
   wantDom('dom.dots observed=json', dObs === obsN, [dObs, obsN]);
@@ -143,6 +144,17 @@ export async function run(o) {
         const rt = s.tiles.find(t => t.v === 'rd' && t.ok); want(P + 'roads tile meta', !!rt && 'rd' in rt.m && 'km' in rt.m && 'rdc' in rt.m, rt && rt.m); const rtk = s.tiles.find(t => t.v === 'rd' && t.ok && +t.m.km > 0.3 && (+t.m.rdc.split(',')[0] + +t.m.rdc.split(',')[1] + +t.m.rdc.split(',')[2]) > 0); if (rtk) want(P + 'roads remoteness meta (rm 0–100, rmb 4 bands)', 'rm' in rtk.m && +rtk.m.rm >= 0 && +rtk.m.rm <= 100 && (rtk.m.rmb || '').split(',').length === 4, rtk.m);
         s = await go(`#kg=${kg};full;roads;z=20`); layers(P + 'roads/20 (coarse: token kept, layer off)', s, { view: '', lod: 2, roads: true });
         want(P + 'roads button faded at lod 2', document.querySelector('.gv-rd').classList.contains('off'), document.querySelector('.gv-rd').className);
+      }
+      /* locate (the reader's position, phones/tablets; docs/ne-glyph.md row 'my position'): a fed fix draws the pulsing dot and writes nothing; the second stage pins it as the found point (pt= in the hash, full resolution); off removes the point, the selection and the card; nothing lands in localStorage */
+      if (o.locate !== false) {
+        s = await go(`#kg=${kg};z=20`); const ll = G.locate().center;
+        s = await G.locate({ lon: ll[0], lat: ll[1], acc: 40 }); await sleep(400); const lg = document.querySelector('svg.glyph g.lc'), lb = document.querySelector('.gv-loc');
+        want(P + 'locate stage 1 dot, nothing in the hash', !!lg && lg.classList.contains('on') && !lg.classList.contains('pin') && lb.getAttribute('aria-pressed') === 'true' && !/pt=|loc/.test(location.hash) && G.locate().stage === 1, { hash: location.hash, st: G.locate() });
+        s = await G.locate(true); { const until = Date.now() + 8000; while (!/pt=/.test(location.hash) && Date.now() < until) await sleep(150); await G.settled(); }
+        want(P + 'locate stage 2 pinned as pt= at full resolution', lg.classList.contains('pin') && lb.classList.contains('fix') && /pt=/.test(location.hash) && /;full/.test(location.hash) && G.locate().stage === 2, { hash: location.hash, st: G.locate() });
+        want(P + 'locate never in the recent list', !JSON.stringify(localStorage).includes(ll[1].toFixed(4)), null);
+        s = await G.locate(false); await sleep(400);
+        want(P + 'locate off removes everything', !lg.classList.contains('on') && lb.getAttribute('aria-pressed') === 'false' && !/pt=|kg=|cell=/.test(location.hash) && !document.querySelector('svg.glyph g.pt.on'), { hash: location.hash });
       }
       /* filter (docs/ne-filter.md): ;f= round trip, worker bins + tiles complete, veil group shown, counts sane, chips, legend row, label input canonicalised, LOD-2 readout, clear */
       if (o.filter !== false) {
