@@ -24,7 +24,7 @@ function catalogue(){if(CATP)return CATP;return CATP=fetch(BASE+'/api/v1/ne/filt
 /* ── parser (= neFiltParse) ── */
 function rangeOK(fd){return fd.kind==='num'||fd.kind==='bucket'}
 function member(fd,m){if(!fd.members)return-1;var i,lm=m.toLowerCase();for(i=0;i<fd.members.length;i++)if(fd.members[i]&&fd.members[i].toLowerCase()===lm)return i;if(fd.labels)for(i=0;i<fd.labels.length&&i<fd.members.length;i++)if(fd.labels[i]&&fd.labels[i].toLowerCase().replace(/ /g,'-')===lm.replace(/ /g,'-'))return i;return-1}
-var ALIAS={tree:'ht',trees:'ht',treeheight:'ht',height:'h',slope:'sl',elevation:'el',building:'hb',buildings:'hb',structure:'hb',structures:'hb',canopycover:'canopy',crown:'canopy',use:'d',declared:'d',observed:'o',subsidy:'sub',claim:'sub',natura:'n2k',road:'rd',water:'wat'};/* = neFiltAlias */
+var ALIAS={tree:'ht',trees:'ht',treeheight:'ht',height:'h',slope:'sl',elevation:'el',building:'hb',buildings:'hb',structure:'hb',structures:'hb',canopycover:'canopy',crown:'canopy',use:'d',declared:'d',observed:'o',subsidy:'sub',claim:'sub',natura:'n2k',road:'rd',water:'wat',remoteness:'rem',giant:'ht'};/* = neFiltAlias */
 function parseTerm(t){var m=/^([a-z][a-z0-9]*)(.*)$/.exec(t);if(!m)return null;var f=ALIAS[m[1]]||m[1],rest=m[2],term={f:f,lo:NaN,hi:NaN,set:[],unk:false,flag:false};
  if(f==='k'){var r=rest.indexOf('>=')===0?rest.slice(2):rest.indexOf('=')===0?rest.slice(1):null;if(r==null)return null;var v=+r;if(!isFinite(v))return null;term.lo=v;return term}
  var fd=FIELDS[f];if(!fd)return null;

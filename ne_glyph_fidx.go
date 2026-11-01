@@ -59,7 +59,7 @@ import (
 )
 
 const (
-	neFidxVer      = 2 // 2: bins built before e8d7338 (declared view serving log-only res-9 chunks) lacked those cells and their state hash did not move
+	neFidxVer      = 3 // 3: rem column (remoteness grid). 2: bins built before e8d7338 (declared view serving log-only res-9 chunks) lacked those cells and their state hash did not move
 	neFidxBinDeg   = 0.025
 	neFidxHaloDeg  = 0.0005 // > one res-12 cell (≈ 16 m ≈ 0.0002°)
 	neFidxDiskCap  = 2 << 30
@@ -1297,10 +1297,14 @@ func neFidxDist(bin *neFidxBin, cells []neFidxCell, ord []int, w, s, e, n float6
 		}
 		return uint8(neFiltBucketOf(neFiltDistEdges, m))
 	}
+	rg := remoteGridGet()
 	for q, k := range ord {
 		if x, y, ok := rd.at(cells[k].lon, cells[k].lat); ok {
 			bin.Cols["rd"][q] = bucket(dr[y*rd.gw+x])
 			bin.Cols["wat"][q] = bucket(dw[y*wt.gw+x])
+		}
+		if v := rg.At(cells[k].lon, cells[k].lat); v >= 0 {
+			bin.Cols["rem"][q] = uint8(v)
 		}
 	}
 }

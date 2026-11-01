@@ -113,6 +113,7 @@ var neFiltFields = []neFiltField{
 	{ID: "nutz", Label: "AMA land-use category", Kind: nfSet, Plane: "ext", Dtype: "u8", Nodata: 255, Members: neFiltNutz, Source: "subsidy peer nutz", Group: "subsidy"},
 	{ID: "rd", Label: "distance to a road", Kind: nfBucket, Unit: "m", Plane: "ext", Dtype: "u8", Nodata: 255, Edges: neFiltDistEdges, Source: "OSM roads", Group: "nearby"},
 	{ID: "wat", Label: "distance to water", Kind: nfBucket, Unit: "m", Plane: "ext", Dtype: "u8", Nodata: 255, Edges: neFiltDistEdges, Source: "OSM water (lines + areas)", Group: "nearby"},
+	{ID: "rem", Label: "remoteness", Kind: nfNum, Unit: "/100", Plane: "ext", Dtype: "u8", Scale: 1, Nodata: 255, Min: 0, Max: 100, Source: "OSM remoteness grid 250 m (major roads, transit, settlements; docs/osm-proximity.md)", Group: "nearby"},
 }
 
 var neFiltGroupLabels = []string{"buildings", "building land", "cropland", "grassland", "forest", "water", "traffic", "alpine", "other"}
@@ -146,11 +147,11 @@ var neFiltByID = func() map[string]*neFiltField {
 var neFiltAlias = map[string]string{
 	"tree": "ht", "trees": "ht", "treeheight": "ht", "height": "h", "slope": "sl", "elevation": "el",
 	"building": "hb", "buildings": "hb", "structure": "hb", "structures": "hb", "canopycover": "canopy", "crown": "canopy",
-	"use": "d", "declared": "d", "observed": "o", "subsidy": "sub", "claim": "sub", "natura": "n2k", "road": "rd", "water": "wat",
+	"use": "d", "declared": "d", "observed": "o", "subsidy": "sub", "claim": "sub", "natura": "n2k", "road": "rd", "water": "wat", "remoteness": "rem", "giant": "ht",
 }
 
 var neFiltWords = map[string]string{
-	"tall-trees": "ht>=20", "treeless": "ht=unk", "sparse": "canopy<=25", "dense": "canopy>=75",
+	"tall-trees": "ht>=20", "giants": "ht>=40", "treeless": "ht=unk", "remote": "rem>=60", "central": "rem<=20", "sparse": "canopy<=25", "dense": "canopy>=75",
 	"steep": "sl>=20", "flat": "sl<=3", "high": "el>=1500", "low": "el<=400",
 	"south-facing": "as=s+sw+se", "north-facing": "as=n+nw+ne",
 	"tall": "hb>=12", "built": "bn>=1", "unbuilt": "bn=0", "wooded": "canopy>=50", "open": "canopy<=10",
@@ -164,6 +165,8 @@ var neFiltPresets = [][2]string{
 	{"steep south-facing farmland", "d=acker+gruen,sl>=15,as=s+sw+se"},
 	{"tall structures outside settlements", "hb>=12,d=acker+gruen+wald+sonst"},
 	{"Natura 2000 land under subsidy claim", "n2k,scov>=50"},
+	{"tree giants (over 40 m)", "ht>=40"},
+	{"remote forest, no road within 500 m", "d=wald,remote,rd>=500"},
 }
 
 // ── terms ────────────────────────────────────────────────────────────────────
