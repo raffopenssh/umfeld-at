@@ -508,6 +508,36 @@ func neChangeAttachTiles(kg, token, observer, source, epoch, at string, pairs ma
 
 const neSamePassWindow = 20 * time.Hour
 
+// sightings — the re-sighting roll-up of the log (neChangeSightings).
+func (c *neChangeKG) sightings() neChangeSightings {
+	s := neChangeSightings{ByObserver: map[string]string{}}
+	for id, vs := range c.versions {
+		if len(vs) == 0 {
+			continue
+		}
+		if c.seen[c.latest[id]] >= 2 {
+			s.ChunksConfirmed++
+		} else {
+			s.ChunksSingle++
+		}
+	}
+	for _, e := range c.entries {
+		if e.Kind != "version" && e.Kind != "seen" {
+			continue
+		}
+		if e.At > s.ByObserver[e.Observer] {
+			s.ByObserver[e.Observer] = e.At
+		}
+		if e.At > s.LastAt {
+			s.LastAt, s.LastObserver = e.At, e.Observer
+		}
+	}
+	if len(s.ByObserver) == 0 {
+		s.ByObserver = nil
+	}
+	return s
+}
+
 func neLaterPass(prevAt, at string) bool {
 	a, err1 := time.Parse(time.RFC3339, prevAt)
 	b, err2 := time.Parse(time.RFC3339, at)
@@ -851,7 +881,7 @@ func neRowMap(rows []byte) map[uint64][]byte {
 // neChangeSummary — the roll-up of one KG (edge cells counted where kg_share ≥ 128).
 // neChangeSummarySchema — bump when the summary gains fields; a derived file
 // with an older schema is recomputed from the log.
-const neChangeSummarySchema = 5
+const neChangeSummarySchema = 6
 
 type neChangeSummary struct {
 	Schema    int                        `json:"schema"`
@@ -867,6 +897,20 @@ type neChangeSummary struct {
 	CandByDay map[string]*neChangeTotals `json:"candidate_by_day,omitempty"` // candidate (one sighting), same key
 	QC        neChangeQC                 `json:"qc"`
 	QCByDay   map[string]*neQCDay        `json:"qc_by_day,omitempty"` // pipeline/jitter/coverage exclusions by the day the new version arrived (counts only)
+	Sightings neChangeSightings          `json:"sightings"`           // per-chunk re-sighting state (revisit `stale`, api_ne_revisit.go)
+}
+
+// neChangeSightings — how much of the log's latest picture has been seen
+// twice. The revisit `stale` list is derived from this, not from the reports
+// walk: a chunk-bearing report that is change_suspect (layout_change vs a
+// legacy baseline) or an unchanged:true re-post still confirms chunks in the
+// log, and only the log knows.
+type neChangeSightings struct {
+	ChunksConfirmed int               `json:"chunks_confirmed"` // chunks whose latest version was sighted ≥ 2 times
+	ChunksSingle    int               `json:"chunks_single"`    // chunks whose latest version was sighted once
+	LastAt          string            `json:"last_at"`          // newest version/seen entry
+	LastObserver    string            `json:"last_observer"`
+	ByObserver      map[string]string `json:"by_observer,omitempty"` // observer → its newest version/seen entry
 }
 
 // neQCDay — the two QC exclusions by day (counts only; clustering is a
@@ -1052,6 +1096,7 @@ func (c *neChangeKG) summary(d *neChangeDeltas) neChangeSummary {
 		(*byDay)[day].add(x)
 	}
 	s.Cells = len(cells)
+	s.Sightings = c.sightings()
 	for _, e := range c.entries {
 		if e.Kind == "version" {
 			s.QC.VersionsTotal++

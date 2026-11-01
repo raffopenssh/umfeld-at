@@ -87,15 +87,26 @@ func neReportHeaderOnly(w http.ResponseWriter, kg string, tokIdx int, tokName st
 // reports get no wants: their diffs are not change (docs/ne-cells.md §coverage).
 func neReportWants(kg, tokName, now string, rep *neReport, ap map[string]string, resp map[string]interface{}) {
 	resp["ap_version"] = rep.APVersion
-	if sus, _ := resp["change_suspect"].(string); sus != "" {
-		resp["want_chunks"] = []string{}
-		resp["want_note"] = "report is change_suspect:" + sus + " — no chunk rows requested"
-		return
-	}
 	held := map[string]neWant{}
 	c := neChangeGet(kg)
 	if c != nil {
 		held = c.latestDigests()
+	}
+	if sus, _ := resp["change_suspect"].(string); sus != "" {
+		// layout_change is a since_last verdict against stored REPORTS (an
+		// aligned build vs a legacy per-bbox baseline, neLayoutKey). It
+		// protects the chunk log from re-baselining under a layout switch —
+		// when there is no log yet there is nothing to protect: a digest-only
+		// or legacy baseline has no chunk layout, and the log's own baseline
+		// is whatever this report carries (01607, 2026-10-31: the hinted
+		// no_log KG looped every night on a 2026-10-07 digest-only report).
+		if sus == "layout_change" && c == nil {
+			resp["want_note"] = "since_last is change_suspect:layout_change vs an earlier report, but no chunk log exists yet — this report becomes the log's baseline, chunk rows requested"
+		} else {
+			resp["want_chunks"] = []string{}
+			resp["want_note"] = "report is change_suspect:" + sus + " — no chunk rows requested"
+			return
+		}
 	}
 	want := map[string]neWant{}
 	wantAP := map[string]string{}

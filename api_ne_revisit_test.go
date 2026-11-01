@@ -30,10 +30,29 @@ func neRevisitFixture(t *testing.T) (dir string, cleanup func()) {
 			"to":   map[string]string{"digest_ap": toAP, "at": toAt, "observer": toObs, "source": "bevdirect@v0.3.4"}})
 		return string(b)
 	}
+	// sightings per log: chunks_confirmed / chunks_single and per-observer newest entry
+	type sight struct {
+		confirmed, single int
+		since, lastAt, lastObs string
+		by                     map[string]string
+	}
+	sights := map[string]sight{
+		"01002": {0, 3, "2026-10-02T00:00:00Z", "2026-10-02T00:00:00Z", "peer-vm-1", map[string]string{"peer-vm-1": "2026-10-02T00:00:00Z"}},
+		"01004": {1, 0, "2026-10-02T00:00:00Z", "2026-10-11T01:00:00Z", "peer-vm-3", nil},
+		"40014": {1, 0, "2026-10-02T00:00:00Z", "2026-10-12T01:00:00Z", "peer-vm-2", nil},
+		"42005": {1, 0, "2026-10-02T00:00:00Z", "2026-10-13T01:00:00Z", "peer-vm-4", nil},
+		// 01007: layout_change report + unchanged re-posts in the reports file, but the log confirmed everything → not stale
+		"01007": {5, 0, "2026-10-02T00:00:00Z", "2026-10-28T01:00:00Z", "map-peer", map[string]string{"map-peer": "2026-10-28T01:00:00Z"}},
+		// 01008: baseline by peer-vm-1, re-posted by map-peer an hour ago (same-pass, not a sighting) → stale, hidden for observer=map-peer
+		"01008": {0, 4, "2026-10-03T00:00:00Z", time.Now().UTC().Add(-time.Hour).Format(time.RFC3339), "map-peer", map[string]string{"peer-vm-1": "2026-10-03T00:00:00Z", "map-peer": time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)}},
+	}
 	writeLog := func(kg string, rows ...string) {
 		log := []byte(strings.Repeat("x", 100+len(kg)))
 		os.WriteFile(filepath.Join(dir, kg+".chunks.zst"), log, 0o644)
-		sum, _ := json.Marshal(map[string]interface{}{"schema": neChangeSummarySchema, "kg": kg, "log_bytes": len(log), "versions": 1 + len(rows)})
+		sg := sights[kg]
+		sum, _ := json.Marshal(map[string]interface{}{"schema": neChangeSummarySchema, "kg": kg, "log_bytes": len(log), "versions": 1 + len(rows), "since": sg.since,
+			"chunks": sg.confirmed + sg.single,
+			"sightings": map[string]interface{}{"chunks_confirmed": sg.confirmed, "chunks_single": sg.single, "last_at": sg.lastAt, "last_observer": sg.lastObs, "by_observer": sg.by}})
 		os.WriteFile(filepath.Join(dir, kg+".changes.jsonl"), []byte(string(sum)+"\n"+strings.Join(rows, "\n")+"\n"), 0o644)
 	}
 	// 51119: two pending versions (one old, one new), different observers, 2 cells each side
@@ -53,6 +72,8 @@ func neRevisitFixture(t *testing.T) (dir string, cleanup func()) {
 		row("c7", "e7", "confirmed", "bevdirect@v0.3.4", "ap7b", "2026-10-13T01:00:00Z", "peer-vm-4", [9]int{5, 0, 0, -5, 0, 0, 0, 0, 0}))
 	// 01002: baseline only (log, no rows); pipeline-only 01004
 	writeLog("01002")
+	writeLog("01007")
+	writeLog("01008")
 	writeLog("01004", row("c8", "e8", "pipeline", "bevdirect@v0.3.3", "ap8", "2026-10-11T01:00:00Z", "peer-vm-3", [9]int{10, 0, 0, -10, 0, 0, 0, 0, 0}))
 	// reports: 01002 one chunk-bearing report (stale, old), 01005 one but young, 51119 two, 01006 header-only
 	rep := func(kg, at, obs string, chunks int) string {
@@ -71,6 +92,10 @@ func neRevisitFixture(t *testing.T) (dir string, cleanup func()) {
 	w("01005", rep("01005", time.Now().UTC().Add(-time.Hour).Format(time.RFC3339), "map-peer", 3))
 	w("51119", rep("51119", "2026-10-01T00:00:00Z", "peer-vm-1", 3), rep("51119", "2026-10-21T00:00:00Z", "map-peer", 3))
 	w("01006", rep("01006", "2026-10-01T00:00:00Z", "peer-vm-1", 0))
+	w("01007", rep("01007", "2026-10-02T00:00:00Z", "map-peer", 5))
+	w("01008", rep("01008", "2026-10-03T00:00:00Z", "peer-vm-1", 4))
+	// 01009: no log, one digest-only report by map-peer an hour ago (no_log, hidden for observer=map-peer)
+	w("01009", rep("01009", time.Now().UTC().Add(-time.Hour).Format(time.RFC3339), "map-peer", 0))
 	return dir, func() {
 		neDirOverride(old)
 		statsMemoMapMu.Lock()
@@ -124,12 +149,38 @@ func TestNERevisitHandler(t *testing.T) {
 		}
 	}
 	stale, _ := js["stale"].([]interface{})
-	if len(stale) != 1 || stale[0].(map[string]interface{})["kg"] != "01002" || stale[0].(map[string]interface{})["reports"].(float64) != 1 || stale[0].(map[string]interface{})["last_observer"] != "peer-vm-1" || stale[0].(map[string]interface{})["bbox"] != "10.4200,47.1000,10.5000,47.1800" {
+	// 01002 (baseline only) and 01008 (re-posted inside the pass window) are stale; 01007 (log confirmed) and 01005 (no log) are not
+	if len(stale) != 2 || stale[0].(map[string]interface{})["kg"] != "01002" || stale[0].(map[string]interface{})["reports"].(float64) != 1 || stale[0].(map[string]interface{})["last_observer"] != "peer-vm-1" || stale[0].(map[string]interface{})["bbox"] != "10.4200,47.1000,10.5000,47.1800" ||
+		stale[0].(map[string]interface{})["chunks"].(float64) != 3 || stale[0].(map[string]interface{})["chunks_confirmed"].(float64) != 0 || stale[1].(map[string]interface{})["kg"] != "01008" {
 		t.Fatalf("stale: %v", js["stale"])
 	}
-	// min_age_days=0 → the young one appears too, oldest first; limit=1 clips
+	// observer=map-peer: 01008 hides (map-peer was there an hour ago), 01009 leaves no_log for the same reason
+	_, js = get("/k/api/v1/ne/revisit?observer=map-peer")
+	if stale, _ = js["stale"].([]interface{}); len(stale) != 1 || stale[0].(map[string]interface{})["kg"] != "01002" {
+		t.Fatalf("stale observer: %v", js["stale"])
+	}
+	hasNoLog := func(js map[string]interface{}, kg string) bool {
+		for _, r := range js["no_log"].([]interface{}) {
+			if r.(map[string]interface{})["kg"] == kg {
+				return true
+			}
+		}
+		return false
+	}
+	if hasNoLog(js, "01009") {
+		t.Fatalf("no_log observer: %v", js["no_log"])
+	}
+	_, js = get("/k/api/v1/ne/revisit?observer=peer-vm-1&all=1") // (the fixture store holds no KGs, so no_log stays empty here)
+	if hasNoLog(js, "01009") || js["limit"].(float64) != neRevisitMax {
+		t.Fatalf("no_log all: %v", js["no_log"])
+	}
+	// kind= returns only that list
+	_, js = get("/k/api/v1/ne/revisit?kind=no_log")
+	if _, ok := js["stale"]; ok || js["no_log"] == nil {
+		t.Fatalf("kind: %v", js)
+	}
 	_, js = get("/k/api/v1/ne/revisit?min_age_days=0")
-	if stale, _ = js["stale"].([]interface{}); len(stale) != 2 || stale[1].(map[string]interface{})["kg"] != "01005" {
+	if stale, _ = js["stale"].([]interface{}); len(stale) != 2 {
 		t.Fatalf("stale young: %v", js["stale"])
 	}
 	_, js = get("/k/api/v1/ne/revisit?limit=1&min_age_days=0")
@@ -147,6 +198,23 @@ func TestNERevisitHandler(t *testing.T) {
 	}
 	if cacheablePath("/api/v1/ne/revisit") {
 		t.Fatal("revisit must not be cacheable (live values)")
+	}
+	// ETag → 304
+	rr := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/k/api/v1/ne/revisit?kind=no_log&all=1", nil)
+	r.Header.Set("Authorization", "Bearer "+tok)
+	h.ServeHTTP(rr, r)
+	etag := rr.Header().Get("ETag")
+	if rr.Code != 200 || etag == "" {
+		t.Fatalf("etag: %d %q", rr.Code, etag)
+	}
+	rr = httptest.NewRecorder()
+	r = httptest.NewRequest("GET", "/k/api/v1/ne/revisit?kind=no_log&all=1", nil)
+	r.Header.Set("Authorization", "Bearer "+tok)
+	r.Header.Set("If-None-Match", etag)
+	h.ServeHTTP(rr, r)
+	if rr.Code != 304 {
+		t.Fatalf("304: %d", rr.Code)
 	}
 }
 

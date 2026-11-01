@@ -966,6 +966,16 @@ func neScanReportFiles() map[string]interface{} {
 			totalLines++
 			daily.add(kg, s)
 			glyph.add(kg, &s)
+			{
+				ks := kgStats[kg]
+				if ks.ByObserver == nil {
+					ks.ByObserver = map[string]string{}
+				}
+				if s.ReceivedAt > ks.ByObserver[s.Report.Observer] {
+					ks.ByObserver[s.Report.Observer] = s.ReceivedAt
+				}
+				kgStats[kg] = ks
+			}
 			if len(s.Report.Chunks) > 0 && !neStoredSuspect(&s) {
 				ks := kgStats[kg]
 				ks.ChunkReports++

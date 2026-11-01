@@ -289,27 +289,41 @@ steers revisits — it does not touch the baseline, the confirm rule or any stor
   `candidate`: not the baseline, not `pipeline`/`jitter`/`coverage`; lossy builds never enter the log; a
   superseded candidate is not pending), oldest `oldest_since` first. `candidate_m2` = positive
   Δlu of those cells. `baseline_source` = source of the version the oldest pending one is compared against.
-- `stale[] = {kg, baseline_at, reports, last_observer, bbox}` — KGs with exactly one chunk-bearing,
-  non-lossy report, oldest baseline first; `?min_age_days=` (default 7).
+- `stale[] = {kg, baseline_at, reports, last_observer, last_at, chunks, chunks_confirmed, bbox}` —
+  KGs whose chunk log was not re-sighted: more chunks hold a single-sighting latest version than a
+  confirmed one and nothing is pending; oldest `baseline_at` (= the log's `since`) first;
+  `?min_age_days=` (default 7). Derived from the log's `sightings` roll-up in the summary line of
+  `{kg}.changes.jsonl` (`neChangeSightings`, schema 6) — **not** from the reports walk: a
+  chunk-bearing report flagged `layout_change` (aligned build vs a legacy baseline) and an
+  `unchanged:true` re-post both confirm chunks in the log, which the reports walk cannot see
+  (01205, 2026-10-25…28: 109 chunks confirmed in the log, yet `reports:1 stale` every night).
+  A KG leaves `stale` by itself once the log confirms — another observer, or the same one after
+  `neSamePassWindow`.
 - `bbox` (both lists) = `"w,s,e,n"` of the last chunk-bearing report. A revisit should
   **cover** this box so every pending chunk is in the report; wider is fine — since bevdirect v0.3.3
   the request bbox is not a layout (`neLayoutKey`, ne-cells.md §coverage), a narrower one merely
   omits edge chunks. (A wider viewport is never a `layout_change`.) Covering the box also gives the revisit its coverage reference (ne-cells.md §coverage): a
   build truncated by an incomplete fetch is `coverage_lossy` against the block instead of entering
   the log; a narrower viewport is caught per chunk (`coverage` deltas).
-- `no_log[] = {kg, has_obs, reports, bbox}` — KGs without any chunk log: their declared
-  picture is still the index epoch (§4b); one report with chunk rows covering `bbox` (the KG's
-  universe bbox) gives them a baseline. KGs with an observed layer first.
+- `no_log[] = {kg, has_obs, reports, last_report_at, last_observer, bbox}` — KGs without any chunk
+  log: their declared picture is still the index epoch (§4b); one report with chunk rows covering
+  `bbox` (the KG's universe bbox) gives them a baseline. KGs with an observed layer first. A
+  digest-only or legacy earlier report under another bbox is no obstacle: `layout_change` blocks
+  `want_chunks` only when a log exists (there is a layout to protect); without one the report
+  becomes the log's baseline and chunk rows are requested at once (`want_note` says so).
 - `obs_on_index[] = {kg, obs_at, has_view, view_source, bbox}` — KGs whose observed layer was
   validated against the index epoch's cell set: re-post NEO1 built on `GET /contrib/api/v1/ne/{kg}/declared`
   (`has_view`), or NEC1+NEO1. `totals.kgs_no_log`, `totals.kgs_obs_on_index`.
-- `?limit=` (default 100, max 1000; all four lists); `?observer=<name>` drops pending KGs whose every pending
-  version that observer posted itself (its own re-post inside `neSamePassWindow` = 20 h is not a
-  sighting); `?refresh=1` recomputes synchronously.
+- `?limit=` (default 100, max 8000 ≥ the universe; all four lists), `?all=1` = the whole list,
+  `?kind=no_log,stale` = only those lists; `?observer=<name>` is the per-peer view: drops pending
+  KGs whose every pending version that observer posted itself (its own re-post inside
+  `neSamePassWindow` = 20 h is not a sighting) and stale / no_log KGs it reported within
+  `min_age_days`; `?refresh=1` recomputes synchronously. The body carries an `ETag`
+  (`If-None-Match` → 304, `Cache-Control: no-cache`), so a sweep re-reads the full list at zero bytes.
 - Derived only from `{kg}.changes.jsonl` (refreshed via `neChangeSummaryOf` when a log grew) and
   the reports walk `neScanReportFiles` already does (per-KG facts ride on it, no second walk).
   `StatsMemo("ne_revisit", 10 min)`, stale-while-revalidate, warmed 45 s after start; cold ≈ 10 s,
-  warm ≈ 0.2 s, ≈ 8 MB; both lists bounded to 1 000 rows; `ne_revisit` line on `the debug inflight page`.
+  warm ≈ 0.2 s, ≈ 8 MB; lists bounded to 8 000 rows; `ne_revisit` line on `the debug inflight page`.
 - Peers: fetch `revisit?observer=<me>&limit=50` at the start of a pass, observe `pending`, `stale`,
   `no_log`, `obs_on_index` in that order, then the normal order (`docs/ne-cells.md` §triage peer note). No client change needed.
 

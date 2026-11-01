@@ -126,8 +126,9 @@ would confirm or supersede), then `stale[].kg` (baseline only), then
 index epoch) and, observed-layer peer only, `obs_on_index[].kg` (re-post NEO1
 built on `GET /contrib/api/v1/ne/{kg}/declared`), then continue your normal
 order. `?observer=` drops KGs whose pending versions you posted yourself — a
-re-post of your own digest inside 20 h is not a sighting. The answer is a
-snapshot ≤ 10 min old.
+re-post of your own digest inside 20 h is not a sighting — and stale/no_log KGs
+you reported within `min_age_days`. A whole list for a monthly sweep:
+`?kind=no_log&all=1` (ETag → 304). The answer is a snapshot ≤ 10 min old.
 
 **Reading rules learnt from the first passes:**
 - Almost everything in a first pass is `baseline:this_report` — expected;

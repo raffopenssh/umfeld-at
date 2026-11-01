@@ -10,29 +10,38 @@
 //	          baseline, not pipeline/jitter, lossy builds never enter the log),
 //	          oldest first. Derived from {kg}.changes.jsonl (the delta rows the
 //	          chunk log already produces, refreshed by neChangeSummaryOf).
-//	stale   — KGs with exactly one chunk-bearing report (baseline only), oldest
-//	          baseline first. Derived from the reports walk neScanReportFiles
-//	          already does (no second walk).
+//	stale   — KGs whose chunk log was never (mostly) re-sighted: more chunks
+//	          hold a single-sighting latest version than a confirmed one, and
+//	          nothing is pending. Derived from the log's sightings roll-up in
+//	          the summary line of {kg}.changes.jsonl (neChangeSightings) — NOT
+//	          from the reports walk: a chunk-bearing report flagged
+//	          layout_change (aligned build vs a legacy baseline) and an
+//	          unchanged:true re-post both confirm chunks in the log, which the
+//	          reports walk cannot see (01205, 2026-10-25…28: 109 chunks
+//	          confirmed in the log, "reports:1 stale" every night).
 //
 // Nothing is written; the baseline, the comparison rule and the stored data are
-// untouched. Memoised with StatsMemo (10 min, stale-while-revalidate), bounded
-// to neRevisitMax rows per list, size on the debug inflight page.
+// untouched. Memoised with StatsMemo (10 min, stale-while-revalidate), lists
+// bounded by the universe (neRevisitMax), size on the debug inflight page.
 package main
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
 
 const (
-	neRevisitMax     = 1000 // rows kept per list = the ?limit= ceiling
+	neRevisitMax     = 8000 // rows kept per list = the ?limit= ceiling (≥ the KG universe: ?all=1 is the whole list)
 	neRevisitDefault = 100
 	neRevisitTTL     = 10 * time.Minute
 	neRevisitMemoKey = "ne_revisit"
@@ -52,32 +61,41 @@ type neRevisitPending struct {
 	observers       map[string]bool
 }
 
-// neRevisitStale — one KG whose only chunk-bearing report is its baseline.
+// neRevisitStale — one KG whose chunk log was not re-sighted (see header).
 type neRevisitStale struct {
-	KG           string `json:"kg"`
-	BaselineAt   string `json:"baseline_at"`
-	Reports      int    `json:"reports"`
-	LastObserver string `json:"last_observer"`
-	BBox         string `json:"bbox,omitempty"` // bbox of the baseline report (same hint as pending)
+	KG              string            `json:"kg"`
+	BaselineAt      string            `json:"baseline_at"` // `since` of the log: when its first chunk rows arrived
+	Reports         int               `json:"reports"`     // chunk-bearing, non-lossy reports stored (informational)
+	LastObserver    string            `json:"last_observer"`
+	LastAt          string            `json:"last_at"` // newest version/seen entry of the log
+	Chunks          int               `json:"chunks"`
+	ChunksConfirmed int               `json:"chunks_confirmed"` // chunks whose latest version was sighted twice
+	BBox            string            `json:"bbox,omitempty"`   // bbox of the last chunk-bearing report (same hint as pending)
+	byObserver      map[string]string // observer → newest entry (the ?observer= filter)
 }
 
-// neKGReportStat — per-KG facts the reports walk collects for `stale`
-// (api_ne_reports.go neScanReportFiles): chunk-bearing, non-lossy reports.
+// neKGReportStat — per-KG facts the reports walk collects for the revisit
+// lists (api_ne_reports.go neScanReportFiles): chunk-bearing, non-lossy
+// reports, plus the newest report of ANY kind per observer.
 type neKGReportStat struct {
 	ChunkReports int
 	FirstAt      string
 	LastAt       string
 	LastObserver string
-	LastBBox     string // neBBoxKey of the last chunk-bearing report: the box a revisit should cover
+	LastBBox     string            // neBBoxKey of the last chunk-bearing report: the box a revisit should cover
+	ByObserver   map[string]string // observer → received_at of its newest report (any kind, digest-only included)
 }
 
 // neRevisitNoLog — a KG without a chunk log: the declared picture there is
 // still the index epoch; one report with chunk rows gives it a baseline.
 type neRevisitNoLog struct {
-	KG      string `json:"kg"`
-	HasObs  bool   `json:"has_obs"`
-	Reports int    `json:"reports"` // reports seen (none carried chunk rows, or all were lossy)
-	BBox    string `json:"bbox,omitempty"`
+	KG           string            `json:"kg"`
+	HasObs       bool              `json:"has_obs"`
+	Reports      int               `json:"reports"` // chunk-bearing non-lossy reports seen (none produced a log)
+	LastReportAt string            `json:"last_report_at,omitempty"`
+	LastObserver string            `json:"last_observer,omitempty"`
+	BBox         string            `json:"bbox,omitempty"` // the KG's universe bbox; any aligned build is the same layout, so a digest-only earlier report with another bbox does not matter
+	byObserver   map[string]string // observer → newest report (the ?observer= filter)
 }
 
 // neRevisitObsOnIndex — a KG whose observed layer was validated against the
@@ -116,13 +134,14 @@ type neRevisitDeltaRow struct {
 // rows, nil when nothing is pending. A version counts when it is the LATEST
 // version of its chunk (a superseded candidate cannot be confirmed any more)
 // and at least one of its delta rows is a plain candidate.
-func neRevisitPendingOf(kg string) *neRevisitPending {
-	if _, ok := neChangeSummaryOf(kg); !ok { // refreshes the derived file when the log grew
-		return nil
+func neRevisitPendingOf(kg string) (*neRevisitPending, *neChangeSummary) {
+	sum, ok := neChangeSummaryOf(kg) // refreshes the derived file when the log grew
+	if !ok {
+		return nil, nil
 	}
 	f, err := os.Open(neFilePath(kg, neChangeDerived))
 	if err != nil {
-		return nil
+		return nil, &sum
 	}
 	defer f.Close()
 	type ver struct {
@@ -178,23 +197,30 @@ func neRevisitPendingOf(kg string) *neRevisitPending {
 		}
 	}
 	if p.PendingVersions == 0 {
-		return nil
+		return nil, &sum
 	}
-	return p
+	return p, &sum
 }
 
 // neRevisitCompute — the memo body: every KG with a chunk log, bounded lists.
 func neRevisitCompute() map[string]interface{} {
 	t0 := time.Now()
 	var pending []*neRevisitPending
-	for _, kg := range neChangeKGs() {
-		if p := neRevisitPendingOf(kg); p != nil {
-			pending = append(pending, p)
-		}
-	}
+	var stale []neRevisitStale
 	kgStats := neReportKGStats()
-	for _, p := range pending {
-		p.BBox = kgStats[p.KG].LastBBox
+	for _, kg := range neChangeKGs() {
+		p, sum := neRevisitPendingOf(kg)
+		if p != nil {
+			p.BBox = kgStats[kg].LastBBox
+			pending = append(pending, p)
+			continue
+		}
+		if sum == nil || sum.Sightings.ChunksSingle <= sum.Sightings.ChunksConfirmed {
+			continue // nothing logged, or the log's latest picture is mostly re-sighted
+		}
+		stale = append(stale, neRevisitStale{KG: kg, BaselineAt: sum.Since, Reports: kgStats[kg].ChunkReports,
+			LastObserver: sum.Sightings.LastObserver, LastAt: sum.Sightings.LastAt, Chunks: sum.Chunks,
+			ChunksConfirmed: sum.Sightings.ChunksConfirmed, BBox: kgStats[kg].LastBBox, byObserver: sum.Sightings.ByObserver})
 	}
 	sort.Slice(pending, func(i, j int) bool {
 		if pending[i].OldestSince != pending[j].OldestSince {
@@ -210,12 +236,6 @@ func neRevisitCompute() map[string]interface{} {
 	kgsPending := len(pending)
 	if len(pending) > neRevisitMax {
 		pending = pending[:neRevisitMax]
-	}
-	var stale []neRevisitStale
-	for kg, s := range kgStats {
-		if s.ChunkReports == 1 {
-			stale = append(stale, neRevisitStale{KG: kg, BaselineAt: s.FirstAt, Reports: s.ChunkReports, LastObserver: s.LastObserver, BBox: s.LastBBox})
-		}
 	}
 	sort.Slice(stale, func(i, j int) bool {
 		if stale[i].BaselineAt != stale[j].BaselineAt {
@@ -243,7 +263,14 @@ func neRevisitCompute() map[string]interface{} {
 	for _, kg := range neStore.kgCodes() {
 		e := neEntry(kg)
 		if !logged[kg] {
-			noLog = append(noLog, neRevisitNoLog{KG: kg, HasObs: e.Obs != nil, Reports: kgStats[kg].ChunkReports, BBox: boxes[kg]})
+			ks := kgStats[kg]
+			row := neRevisitNoLog{KG: kg, HasObs: e.Obs != nil, Reports: ks.ChunkReports, BBox: boxes[kg], byObserver: ks.ByObserver}
+			for obs, at := range ks.ByObserver {
+				if at > row.LastReportAt {
+					row.LastReportAt, row.LastObserver = at, obs
+				}
+			}
+			noLog = append(noLog, row)
 		}
 		if e.Obs != nil && (e.Obs.DeclaredSource == luSource || e.Obs.DeclaredSource == "") {
 			row := neRevisitObsOnIndex{KG: kg, ObsAt: e.Obs.BuiltAt, BBox: boxes[kg]}
@@ -295,10 +322,20 @@ func NERevisitStats() map[string]interface{} {
 }
 
 // handleNERevisit — GET /api/v1/ne/revisit (contributor or private token; the
-// public tier never sees it). ?limit= (default 100, max 1000), ?observer=
-// drops pending KGs whose every pending version that observer posted itself
-// (its own re-post inside neSamePassWindow is not a sighting), ?min_age_days=
-// (default 7) for stale.
+// public tier never sees it).
+//
+//	?limit=<n>      rows per list (default 100, max neRevisitMax); ?all=1 = the whole list
+//	?kind=a,b       only these lists (pending, stale, no_log, obs_on_index); default all four
+//	?observer=<me>  per-peer view: drops pending KGs whose every pending version
+//	                I posted myself, and stale / no_log KGs I reported within
+//	                min_age_days (my own re-post inside neSamePassWindow is not a
+//	                sighting; after it the log confirms and the KG leaves by itself)
+//	?min_age_days=  (default 7) stale: baseline older than this; with ?observer=
+//	                also the "I was here recently" window on stale and no_log
+//	?refresh=1      recompute the snapshot synchronously
+//
+// ETag = hash of the body; If-None-Match → 304 (a nightly sweep re-reads the
+// full no_log list at zero bytes when nothing moved).
 func handleNERevisit(w http.ResponseWriter, r *http.Request) {
 	if _, ok := neReportGate(w, r); !ok {
 		return
@@ -308,52 +345,97 @@ func handleNERevisit(w http.ResponseWriter, r *http.Request) {
 	if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 {
 		limit = min(n, neRevisitMax)
 	}
+	if q.Get("all") == "1" {
+		limit = neRevisitMax
+	}
 	minAge := 7.0
 	if v, err := strconv.ParseFloat(q.Get("min_age_days"), 64); err == nil && v >= 0 {
 		minAge = v
 	}
 	observer := q.Get("observer")
+	kinds := map[string]bool{}
+	if k := q.Get("kind"); k != "" {
+		for _, x := range strings.Split(k, ",") {
+			kinds[strings.TrimSpace(x)] = true
+		}
+	}
+	want := func(k string) bool { return len(kinds) == 0 || kinds[k] }
 	m := StatsMemo(neRevisitMemoKey, neRevisitTTL, q.Get("refresh") == "1", neRevisitCompute)
-	all, _ := m["pending"].([]*neRevisitPending)
-	pending := make([]*neRevisitPending, 0, limit)
-	for _, p := range all {
-		if observer != "" && len(p.observers) == 1 && p.observers[observer] {
-			continue
-		}
-		pending = append(pending, p)
-		if len(pending) == limit {
-			break
-		}
-	}
 	cutoff := time.Now().Add(-time.Duration(minAge * float64(24*time.Hour))).UTC().Format(time.RFC3339)
-	allStale, _ := m["stale"].([]neRevisitStale)
-	stale := make([]neRevisitStale, 0, limit)
-	for _, s := range allStale {
-		if s.BaselineAt > cutoff {
-			continue
-		}
-		stale = append(stale, s)
-		if len(stale) == limit {
-			break
-		}
+	recent := func(by map[string]string) bool { // the asking observer was here within min_age_days
+		return observer != "" && by[observer] > cutoff
 	}
-	allNoLog, _ := m["no_log"].([]neRevisitNoLog)
-	noLog := allNoLog[:min(limit, len(allNoLog))]
-	allObsIdx, _ := m["obs_on_index"].([]neRevisitObsOnIndex)
-	obsIdx := allObsIdx[:min(limit, len(allObsIdx))]
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, 200, map[string]interface{}{
+	out := map[string]interface{}{
 		"generated_at":     m["stats_computed_at"],
-		"pending":          pending,
-		"stale":            stale,
-		"no_log":           noLog,
-		"obs_on_index":     obsIdx,
 		"totals":           map[string]interface{}{"kgs_pending": m["kgs_pending"], "pending_versions": m["pending_versions"], "candidate_m2": m["candidate_m2"], "kgs_stale": m["kgs_stale"], "kgs_no_log": m["kgs_no_log"], "kgs_obs_on_index": m["kgs_obs_on_index"]},
 		"limit":            limit,
 		"min_age_days":     minAge,
 		"observer":         observer,
 		"same_pass_window": neSamePassWindow.String(),
 		"note": "Hints only, oldest first. pending = KGs holding chunk versions sighted once (candidate: not baseline, not pipeline/jitter/coverage; lossy builds are never logged) — a second sighting of the same digest_ap by another observer, or by the same one after same_pass_window, confirms them. " +
-			"stale = KGs with a single chunk-bearing report (baseline only). no_log = KGs without any chunk log yet (declared picture still the index epoch; one report with chunk rows gives them a baseline, cover bbox). obs_on_index = KGs whose observed layer was validated against the index epoch's cell set: re-post NEO1 built on GET {kg}/declared (has_view) or NEC1+NEO1. Order: pending, stale, no_log, obs_on_index, then your normal order. Nothing here changes baselines or the confirm rule; values are a snapshot ≤ 10 min old (?refresh=1 recomputes).",
-	})
+			"stale = KGs whose chunk log was not re-sighted (more chunks with a single-sighting latest version than confirmed ones, nothing pending) — one report with chunk rows covering bbox by another observer, or by the same one after same_pass_window, confirms them. no_log = KGs without any chunk log yet (declared picture still the index epoch; one report with chunk rows gives them a baseline — a digest-only earlier report is not a layout, chunk rows are requested at once). obs_on_index = KGs whose observed layer was validated against the index epoch's cell set: re-post NEO1 built on GET {kg}/declared (has_view) or NEC1+NEO1. Order: pending, stale, no_log, obs_on_index, then your normal order. ?observer=<me> hides what I reported within min_age_days; ?kind=no_log&all=1 is the whole list (ETag, 304). Nothing here changes baselines or the confirm rule; values are a snapshot ≤ 10 min old (?refresh=1 recomputes).",
+	}
+	if want("pending") {
+		all, _ := m["pending"].([]*neRevisitPending)
+		pending := make([]*neRevisitPending, 0, min(limit, len(all)))
+		for _, p := range all {
+			if observer != "" && len(p.observers) == 1 && p.observers[observer] {
+				continue
+			}
+			pending = append(pending, p)
+			if len(pending) == limit {
+				break
+			}
+		}
+		out["pending"] = pending
+	}
+	if want("stale") {
+		all, _ := m["stale"].([]neRevisitStale)
+		stale := make([]neRevisitStale, 0, min(limit, len(all)))
+		for _, s := range all {
+			if s.BaselineAt > cutoff || recent(s.byObserver) {
+				continue
+			}
+			stale = append(stale, s)
+			if len(stale) == limit {
+				break
+			}
+		}
+		out["stale"] = stale
+	}
+	if want("no_log") {
+		all, _ := m["no_log"].([]neRevisitNoLog)
+		noLog := make([]neRevisitNoLog, 0, min(limit, len(all)))
+		for _, s := range all {
+			if recent(s.byObserver) {
+				continue
+			}
+			noLog = append(noLog, s)
+			if len(noLog) == limit {
+				break
+			}
+		}
+		out["no_log"] = noLog
+	}
+	if want("obs_on_index") {
+		all, _ := m["obs_on_index"].([]neRevisitObsOnIndex)
+		out["obs_on_index"] = all[:min(limit, len(all))]
+	}
+	body, err := json.Marshal(out)
+	if err != nil {
+		http.Error(w, "encode", 500)
+		return
+	}
+	sum := sha256.Sum256(body)
+	etag := `"` + hex.EncodeToString(sum[:12]) + `"`
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "no-cache") // always revalidate; the ETag makes that free
+	if strings.Contains(r.Header.Get("If-None-Match"), etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(200)
+	_, _ = w.Write(body)
 }
