@@ -131,7 +131,7 @@ export async function run(o) {
       if (o.ortho !== false) {
         s = await go(`#kg=${kg};full;ortho;z=400`); layers(P + 'ortho/400', s, { view: '', lod: 1, ortho: true }); want(P + 'ortho default weight', s.orthoOp === 0.5 && /;ortho(;|$)/.test(s.hash), { op: s.orthoOp, hash: s.hash });
         s = await go(`#kg=${kg};v=obs;change;full;ortho=0.8;z=200`); layers(P + 'obs+chg+ortho=0.8/200', s, { view: 'obs', change: true, lod: 0, ortho: true }); want(P + 'ortho weight kept', s.orthoOp === 0.8 && /;ortho=0\.8(;|$)/.test(s.hash), { op: s.orthoOp, hash: s.hash });
-        const otf = getComputedStyle(document.querySelector('svg.glyph .hi .b')).filter; want(P + 'ortho fills step back past the half', /opacity\(0\.6/.test(otf), otf);
+        const otf = getComputedStyle(document.querySelector('svg.glyph .hi .b')).opacity; want(P + 'ortho fills step back with the slider (obs base .3 × .48 = .144)', Math.abs(+otf - 0.144) < 0.01, otf);
         s = await go(`#kg=${kg};full;ortho;z=20`); layers(P + 'ortho/20 (coarse: token kept, layer off)', s, { view: '', lod: 2, ortho: true });
         want(P + 'ortho button faded at lod 2', document.querySelector('.gv-ortho').classList.contains('off'), document.querySelector('.gv-ortho').className);
       }

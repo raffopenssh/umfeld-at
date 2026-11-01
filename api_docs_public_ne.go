@@ -277,7 +277,7 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     (GET https://mapsneu.wien.gv.at/basemap/bmaporthofoto30cm/normal/google3857/{z}/{y}/{x}.jpeg, CC BY 4.0 'basemap.at',
     fetched by the browser) laid UNDER the base at the near tiles (≥110×, LOD 0/1); the layer's weight is the reader's
     (default .5): a click toggles it and shows the opacity popover for a moment, a hold / right-click / wheel on the icon
-    adjusts without toggling; past the half the profile fills step back so the photo reads through. Legend adds the
+    adjusts without toggling; the profile fills step back with the slider (to .675 at the default) so the photo reads through from the first tap. Legend adds the
     source line with the percentage. Any profile, any overlay, no data of ours.
     Roads (view-bar route icon, ;roads[=op] in the link, key w; near tiles only, ≥110× — the icon fades below): OSM
     roads and rail (tile?v=rd above) over the fills, subsidy and change marks, under the relief and the trees — one
