@@ -25,7 +25,7 @@ var publicAllowListGolden = []string{
 	"/api/v1/land_prices/gemeinde/61630", "/api/v1/land_prices/bezirk/616", "/api/v1/land_prices/bundesland/6",
 	"/api/v1/toponyms", "/api/v1/toponyms/search", "/api/v1/toponyms/near", "/api/v1/toponyms/stats", "/api/v1/toponyms/{32B3}",
 	"/api/v1/kg/63349/toponyms",
-	"/api/v1/docs/ne.md", "/api/v1/docs/ne-change.md", "/api/v1/ne", "/api/v1/ne/manifest", "/api/v1/ne/glyph", "/api/v1/ne/glyph/kgs", "/api/v1/ne/glyph/tile", "/api/v1/ne/glyph/cell", "/api/v1/ne/glyph/kg", "/api/v1/ne/glyph/sub", "/api/v1/ne/glyph/fidx", "/api/v1/ne/glyph/filter.js", "/api/v1/ne/filter", "/api/v1/ne/filter/fields", "/api/v1/ne/stats/unit", "/api/v1/docs/stats-envelope.md", "/api/v1/docs/qgis-layer.md", "/api/v1/ne/glyph/passes", "/api/v1/ne/glyph/soak.js", "/api/v1/ne/63330", "/api/v1/ne/63330/head", "/api/v1/ne/dict/lu-1",
+	"/api/v1/docs/ne.md", "/api/v1/docs/ne-change.md", "/api/v1/ne", "/api/v1/ne/manifest", "/api/v1/ne/glyph", "/api/v1/ne/glyph/kgs", "/api/v1/ne/glyph/tile", "/api/v1/ne/glyph/cell", "/api/v1/ne/glyph/kg", "/api/v1/ne/glyph/sub", "/api/v1/ne/glyph/fnat", "/api/v1/ne/glyph/fidx", "/api/v1/ne/glyph/filter.js", "/api/v1/ne/filter", "/api/v1/ne/filter/fields", "/api/v1/ne/stats/unit", "/api/v1/docs/stats-envelope.md", "/api/v1/docs/qgis-layer.md", "/api/v1/ne/glyph/passes", "/api/v1/ne/glyph/soak.js", "/api/v1/ne/63330", "/api/v1/ne/63330/head", "/api/v1/ne/dict/lu-1",
 	"/api/v1/ne/chunk/891e108cc93ffff", "/api/v1/ne/cell/8c1e108cc922dff", "/api/v1/ne/cells",
 }
 

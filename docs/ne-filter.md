@@ -27,6 +27,18 @@ the row is 14 px like the find list, the input 16 px (no iOS zoom), the list spa
 the row is in the lower half; `fltAdd` drops the keyboard on coarse pointers. (7) `neFidxVer`=2: bins built before
 e8d7338 lacked the log-only res-9 chunks and their state hash had not moved.
 
+(8) **Overview preview** (`ne_glyph_fnat.go`, `fv*` in `ne_glyph_filt.go`): below full resolution the filter
+is no longer dead. `GET /api/v1/ne/glyph/fnat?f=<expr>` folds the `d` / `o` / `chg` terms (the only ones the
+national res-7 table `ne_mvt_nat.go` holds) and answers, per hexagon of the glyph frame, the share of its
+res-12 cells that match (`share[]` 0..254, 255 = no digest, plus `n[]` digested cells) — within an OR group the
+member counts add, across AND groups the share is the minimum (an upper bound, `exact=false`); an OR group
+with an unfoldable member is skipped whole; `k>=` is skipped; `skipped[]` names the terms that apply at full
+resolution only. The page veils the res-7 dots and hex faces by share (8 opacity buckets, `.62` max), the
+readout reads "m of n cells · ha · Austria | k hexagons in view · overview · <terms> at full resolution",
+the res-7 card gets a "filter n % of the cells" row, and the funnel button dims when nothing folds (e.g. a
+bare `sl>=15`). Cached in `neGlyphTileLRU` under table state + canonical form, `max-age` 1 h, 503 without the
+table. Test `TestNEFnatEval`. Debug: `?dbgveil` + `window.__fv(lon,lat)` (`docs/ne-glyph.md` §Agent toolkit).
+
 Original design (kept as the rationale):
 
 Status at design time: **design, nothing built.** Scope: one filter component on the landing glyph that veils every
@@ -92,9 +104,10 @@ Pressed = the **chip row** `.glyph-filt` slides in under the view bar (above the
   term alone would keep, 120 ms delay, like the find rows preview outlines). Keyboard: chips are
   focusable, `Del` removes, `Enter` opens, `Esc` closes the popover, then the row (`Esc` chain of
   `main` keydown: pop → filter row → pin → full → selection → zoom → full screen).
-- **Below `HI_MIN`** (LOD 2, overview): the filter row stays, the chips stay in the link, the readout
-  says *zoom in to filter cells*; the res-7 picture is not filtered (no res-7 index for these fields —
-  §6 lists it as a later option). The funnel icon takes `off` like trees/diff do.
+- **Below `HI_MIN`** (LOD 2, overview): the filter row stays, the chips stay in the link; the res-7
+  picture is veiled by the **overview preview** (change (8) above: d / o / chg terms via `/ne/glyph/fnat`),
+  the readout names the terms that wait for full resolution; the funnel icon takes `off` only when
+  nothing folds.
 - **Hints**, once each (`setX.h`): first chip → *veiled = does not match · the un-veiled land is
   what you asked for*; first `∨` → *one of these is enough*.
 - **Presets** (three rows at the top of the empty popover, each one link): *steep south-facing

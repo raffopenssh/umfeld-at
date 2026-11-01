@@ -218,6 +218,13 @@ GET /api/v1/ne/stats/unit?kg=|h3=|bbox=|adm=|pt=|share=[&f=][&format=json|flat|c
                                             sub.<key> merged in; csv = header + one row per unit (=IMPORTDATA / Power Query); keys= prefix
                                             filter. Same cells as /ne/filter (exact centres and areas); kg= and h3= agree with srtm cell
                                             for cell. ETag, 10 min cache; first call on a cold area builds the bins (seconds).
+GET /api/v1/ne/glyph/fnat?f=<expr>          the filter at the Austria view: the d / o / chg terms of <expr> folded over the
+                                            national res-7 table → {f, canon, words, exact, coarse[] (fields folded), skipped[]
+                                            (terms that apply at full resolution only), ignored[], cells, match, rows, state,
+                                            share[] (0..254 per cells[] entry of /ne/glyph, 255 = no digest; null when nothing
+                                            folds), n[] (digested cells per hexagon; Σ share/254·n = match), units}. Member
+                                            counts add inside an OR group, AND groups take the minimum (an upper bound,
+                                            exact=false); an OR group with an unfoldable member is skipped whole. 1 h cache.
 GET /api/v1/ne/glyph/fidx?i=&j=&p=core|ext|all
                                             the per-bin index the page filters on (bin = 0.025° cell, w = i·0.025, s = j·0.025;
                                             same grid as LOD-0 tiles): application/vnd.ne-fidx, NFX1 — "NFX1" u8 ver u16 ncol
@@ -297,8 +304,9 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     under the status line — each chip one AND group, the input adds a condition (type words, fields, members:
     suggestions list presets → words → fields → members; click a chip to edit it, × removes, Escape in the row
     clears). Cells that do NOT meet the expression are veiled (page colour .55, .7 under the photo) over the data
-    overlays and under relief/trees, matching clusters get a hairline, at the near tiles only (≥110× — the readout
-    says "zoom in to filter cells" below). Readout "m of n cells · ha", legend row "filter <words> · m of n · ha"
+    overlays and under relief/trees, matching clusters get a hairline, at the near tiles (≥110×); farther out the
+    overview preview veils each res-7 hexagon by the share of its cells that match (d / o / chg terms,
+    /ne/glyph/fnat) and the readout says "… · overview · <terms> at full resolution". Readout "m of n cells · ha", legend row "filter <words> · m of n · ha"
     (+ "all passes" when a time window is set and the filter uses chg: the filter counts change over all passes,
     the window only shapes the change layer beneath), card row per cell with the cell's values for the terms.
     Grammar = /api/v1/ne/filter (above); unknown terms are not errors — they stay in the input with a hint and
