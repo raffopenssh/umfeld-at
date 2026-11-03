@@ -1,6 +1,7 @@
 package main
 
 import (
+	"image"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -856,5 +857,21 @@ func TestNEFidxEdgeMap(t *testing.T) {
 				t.Fatalf("len(a)=%d d=%d → edge %d: cos=%.3f", len(a), d, E[d], cos)
 			}
 		}
+	}
+}
+
+// TestNEFltFeatherEdge — the feather never paints the picture's border: the tile edge over matching
+// (transparent) cells must stay transparent, otherwise two tiles' rings show as light vertical seams.
+func TestNEFltFeatherEdge(t *testing.T) {
+	img := image.NewPaletted(image.Rect(0, 0, 8, 8), neGlyphFltPalette(false))
+	img.Pix[4*img.Stride+4] = 1
+	neFltFeather(img)
+	for x := 0; x < 8; x++ {
+		if img.Pix[x] != 0 || img.Pix[7*img.Stride+x] != 0 || img.Pix[x*img.Stride] != 0 || img.Pix[x*img.Stride+7] != 0 {
+			t.Fatalf("border feathered at %d", x)
+		}
+	}
+	if img.Pix[4*img.Stride+3] != 3 || img.Pix[4*img.Stride+2] != 4 {
+		t.Fatal("feather missing next to the veil")
 	}
 }

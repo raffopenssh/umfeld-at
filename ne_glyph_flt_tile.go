@@ -101,7 +101,7 @@ func neFltFeather(img *image.Paletted) {
 	pix := img.Pix
 	at := func(x, y int) uint8 {
 		if x < 0 || y < 0 || x >= w || y >= h {
-			return 1
+			return 0 // beyond the picture is not veil: a 1 would feather every image edge into a light seam across matching cells where two tiles' rings overlap
 		}
 		return pix[y*img.Stride+x]
 	}
