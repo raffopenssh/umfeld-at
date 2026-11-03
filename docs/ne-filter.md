@@ -514,3 +514,34 @@ the `ne_fidx` LRU hit rate on `the debug inflight page`.
 5. Docs: `llm.txt` §7 grammar + examples, `ne-glyph.md` row + view-model line, `payload-caching-contract.md`
    (br on fidx), this file → status *live*.
 6. Peers ship §4 → `hb`/`snar`/… chips leave *unknown*.
+
+## 8. Next: every term at every zoom, prewarmed (plan, nothing built)
+
+Measured 2026-11-03: a bin builds in **100–130 ms** when the peer blocks are in RAM, **11 s** when the
+observed-layer peer has to build its block (10.6 s on its side); an observed-layer block body is **4.8 MB
+per 16 bins** (sorted 8-byte ids + 9 columns, uncompressed); a bin on the wire is 110 KB gz, ~200 KB zstd on
+disk; Austria ≈ 16 k bins ≈ 1 000 blocks. The overview veil (`fnat`) folds only `d/o/chg`.
+
+Three changes, in this order:
+
+1. **Peer bytes on disk per epoch** — `data/ne_fidx/peer/{obs|sub}/<epoch>/<bi>_<bj>.zst` (our own planar
+   encoding, ~60 KB a bin), bounded to 2 epochs each (≈ 1.3 GB). A KG report rebuilds its bins from local
+   bytes; a peer is asked for a block **once per epoch**, really. `srtm_blk` RAM cache stays in front.
+2. **Full-country prewarm** — `-ne-fidx-warm-all` / idle loop: every block of both peers (≤ 2 in flight per
+   peer, resumable from a block manifest, ~7 min of pulls at warm peers), then every bin (16 k × 0.1 s ≈ 30 min
+   on one core, idle-only). Disk cap 2 → 4 GB; state dirs of bins that moved are pruned, not the whole set.
+   Cold-open of any region = disk hit (3 ms), never a peer wait.
+3. **National sample store** — one row per res-10 cell = the res-12 **centre child** (1 of 49; 5.6 M rows),
+   written per bin as a 14 KB slice at build time, assembled in RAM: core columns (~26 B → 150 MB heap, `nsamp`
+   on the inflight page), ext columns in an mmap'd file (page cache, not heap), plus the res-7/8/9 ancestor
+   per row. `fnat?f=` then evaluates **every** term with the existing `neFiltEval` (5.6 M rows ≈ 20–50 ms,
+   cached per canonical form 1 h) and folds to res 7 (343 samples a hexagon, ±3 % share) for the overview and
+   to res 9 (`&res=9&bbox=`, 7 samples) for the mid band (full res, > `FLT_BINS`); `exact:false`, `sample:49`,
+   only `k>=` stays "at full resolution". Expressions with only `d/o/chg` terms keep the exact national
+   table. Same store answers `/ne/filter?adm=…&format=count` and `/ne/stats/unit?adm=&f=` nationally in ms
+   (counts ×49, `approx:true`) and the `/filter/fields` histograms.
+
+Asked of the peers (both already serve the §4 columns): blocks **prebuilt per epoch** (no 10 s cold), block
+bodies compressed and ids delta-coded (target ≤ 1.2 MB a block → ≤ 1.2 GB a full pull), a **block manifest**
+per epoch (`bi,bj,etag,bytes`) so a pull skips empty/unchanged blocks and knows when it is complete, the
+epoch announced in one header/endpoint, 304 on `If-None-Match`, and a sustained 2-in-flight pull tolerated.
