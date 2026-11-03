@@ -515,33 +515,36 @@ the `ne_fidx` LRU hit rate on `the debug inflight page`.
    (br on fidx), this file → status *live*.
 6. Peers ship §4 → `hb`/`snar`/… chips leave *unknown*.
 
-## 8. Next: every term at every zoom, prewarmed (plan, nothing built)
+## 8. Next: every term at every zoom — fleet-cheap (plan, nothing built)
 
 Measured 2026-11-03: a bin builds in **100–130 ms** when the peer blocks are in RAM, **11 s** when the
 observed-layer peer has to build its block (10.6 s on its side); an observed-layer block body is **4.8 MB
 per 16 bins** (sorted 8-byte ids + 9 columns, uncompressed); a bin on the wire is 110 KB gz, ~200 KB zstd on
 disk; Austria ≈ 16 k bins ≈ 1 000 blocks. The overview veil (`fnat`) folds only `d/o/chg`.
 
-Three changes, in this order:
+**Rejected:** a full-country fidx prewarm (3–4 GB disk here, 1–5 GB pulled per peer epoch, 30 min CPU) and a
+peer-bytes disk cache. The national question needs *joint* rows (AND across fields), not histograms — but a
+**1-in-49 sample** is enough for a res-7 share (343 samples a hexagon, ±3 %) and a res-9 mid band (7). The
+peers hold their national columns already; sampling is free for them and 20 MB on the wire.
 
-1. **Peer bytes on disk per epoch** — `data/ne_fidx/peer/{obs|sub}/<epoch>/<bi>_<bj>.zst` (our own planar
-   encoding, ~60 KB a bin), bounded to 2 epochs each (≈ 1.3 GB). A KG report rebuilds its bins from local
-   bytes; a peer is asked for a block **once per epoch**, really. `srtm_blk` RAM cache stays in front.
-2. **Full-country prewarm** — `-ne-fidx-warm-all` / idle loop: every block of both peers (≤ 2 in flight per
-   peer, resumable from a block manifest, ~7 min of pulls at warm peers), then every bin (16 k × 0.1 s ≈ 30 min
-   on one core, idle-only). Disk cap 2 → 4 GB; state dirs of bins that moved are pruned, not the whole set.
-   Cold-open of any region = disk hit (3 ms), never a peer wait.
-3. **National sample store** — one row per res-10 cell = the res-12 **centre child** (1 of 49; 5.6 M rows),
-   written per bin as a 14 KB slice at build time, assembled in RAM: core columns (~26 B → 150 MB heap, `nsamp`
-   on the inflight page), ext columns in an mmap'd file (page cache, not heap), plus the res-7/8/9 ancestor
-   per row. `fnat?f=` then evaluates **every** term with the existing `neFiltEval` (5.6 M rows ≈ 20–50 ms,
-   cached per canonical form 1 h) and folds to res 7 (343 samples a hexagon, ±3 % share) for the overview and
-   to res 9 (`&res=9&bbox=`, 7 samples) for the mid band (full res, > `FLT_BINS`); `exact:false`, `sample:49`,
-   only `k>=` stays "at full resolution". Expressions with only `d/o/chg` terms keep the exact national
-   table. Same store answers `/ne/filter?adm=…&format=count` and `/ne/stats/unit?adm=&f=` nationally in ms
+1. **Peers, per epoch** (they store per release anyway): every block **prebuilt** (no cold 10 s); block bodies
+   without ids — the cell set is the shared enumeration *all res-12 cells with centre in the half-open bin,
+   ascending H3* + a present-bitmap + an id checksum (fallback to ids on mismatch), zstd → ≈ 1 MB a block
+   (5× less on every on-demand pull); a **national sample** `…/sample?res=10&format=bin`: one row per res-10
+   cell = its res-12 **centre child**, ascending, same columns as the bin, strong ETag = epoch, zstd
+   (observed-layer ≈ 20 MB, subsidy sparse ≈ 10 MB); the epoch in one header/endpoint, 304 on `If-None-Match`.
+2. **Here:** the national build (`ne_mvt_nat.go`, same 4-min pass over every KG) also writes our columns for
+   the centre-child rows (`d dsh o osh h90 hmax ht bn bcov sl sl90 as el chg cont het edge`), joins the two
+   peer sample files by H3 id and adds `n2k pa` (point-in-polygon, bbox-indexed), `rem` (250 m grid) and
+   `rd wat` from a national 100 m distance raster (20 MB, built once from `osm_proximity.db` — not 5.6 M rtree
+   queries) → `data/ne_mvt/samp.bin`: planar columns, **mmap'd** (≈ 225 MB page cache, ~0 heap; size line
+   `ne_mvt.sample` on the inflight page), rebuilt with the national table (state ⊕ both peer epochs).
+3. `fnat?f=` evaluates **every** term with `neFiltEval` over the sample (5.6 M rows ≈ 20–50 ms, cached per
+   canonical form 1 h) and folds to res 7 for the overview and res 9 (`&res=9&bbox=`) for full res beyond
+   `FLT_BINS`; `exact:false`, `sample:49`; only `k>=` stays "at full resolution"; `d/o/chg`-only expressions
+   keep the exact table. The same store answers `/ne/filter?adm=&format=count`, `/ne/stats/unit?adm=&f=`
    (counts ×49, `approx:true`) and the `/filter/fields` histograms.
 
-Asked of the peers (both already serve the §4 columns): blocks **prebuilt per epoch** (no 10 s cold), block
-bodies compressed and ids delta-coded (target ≤ 1.2 MB a block → ≤ 1.2 GB a full pull), a **block manifest**
-per epoch (`bi,bj,etag,bytes`) so a pull skips empty/unchanged blocks and knows when it is complete, the
-epoch announced in one header/endpoint, 304 on `If-None-Match`, and a sustained 2-in-flight pull tolerated.
+Fleet cost: disk +225 MB here, +≈ 1 GB per epoch at the observed-layer peer (prebuilt blocks it builds on demand
+today); bandwidth ≈ 30 MB per epoch + on-demand blocks at 1/5 of today's size; RAM ≈ 0 heap. Full-res bins
+stay view-driven (2 GB LRU), cold-open ≈ 0.4 s instead of 11 s because the peer side is warm.
