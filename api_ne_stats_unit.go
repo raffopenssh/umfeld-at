@@ -976,15 +976,23 @@ func neStatsPeerFetchCells(p neStatsPeer, c *neStatsCells, year string) (map[str
 	// Large lists: the observed-layer peer answers 202 {"status":"computing",
 	// "retry_after_s":N} + Retry-After while it aggregates (≈ 15 s for 10⁵
 	// ids); poll within neStatsCellsPollTO, then report "still computing".
+	// A 202 that carries unit.key lets the polls be GET ?unit=cells&key=
+	// (no re-upload); a peer without that form answers 400/404/405 → re-POST.
 	var resp *http.Response
 	var body []byte
 	start := time.Now()
+	pollKey := ""
 	for {
-		req, _ := http.NewRequest("POST", u, bytes.NewReader(c.body))
+		var req *http.Request
+		if pollKey != "" {
+			req, _ = http.NewRequest("GET", u+"&key="+url.QueryEscape(pollKey), nil)
+		} else {
+			req, _ = http.NewRequest("POST", u, bytes.NewReader(c.body))
+			req.Header.Set("Content-Type", "application/octet-stream")
+			req.Header.Set("Content-Encoding", "gzip")
+			req.ContentLength = int64(len(c.body))
+		}
 		req.Header.Set("User-Agent", "umfeld-at/stats-unit")
-		req.Header.Set("Content-Type", "application/octet-stream")
-		req.Header.Set("Content-Encoding", "gzip")
-		req.ContentLength = int64(len(c.body))
 		var err error
 		resp, err = neStatsCellsClient.Do(req)
 		if err != nil {
@@ -996,8 +1004,25 @@ func neStatsPeerFetchCells(p neStatsPeer, c *neStatsCells, year string) (map[str
 		}
 		body, _ = io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 		resp.Body.Close()
+		if pollKey != "" && (resp.StatusCode == 400 || resp.StatusCode == 404 || resp.StatusCode == 405) {
+			pollKey = "" // the peer has no key= polling form: re-POST instead
+			continue
+		}
 		if resp.StatusCode != 202 {
 			break
+		}
+		var st struct {
+			Key  string `json:"key"`
+			Unit struct {
+				Key string `json:"key"`
+			} `json:"unit"`
+		}
+		if json.Unmarshal(body, &st) == nil {
+			if st.Unit.Key != "" {
+				pollKey = st.Unit.Key
+			} else if st.Key != "" {
+				pollKey = st.Key
+			}
 		}
 		wait := 3 * time.Second
 		if ra, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && ra > 0 {

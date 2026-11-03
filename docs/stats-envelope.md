@@ -120,7 +120,9 @@ holds a row; the border weighting of `kg=` does not apply (every listed cell cou
 ≤ 1 M ids (8 MB raw), the usual rate limits. Ids are unique (duplicates are a client bug; peers
 may drop them). A peer that needs time for a large list may answer `202` with
 `{"status":"computing","retry_after_s":N}` and a `Retry-After` header; umfeld-at re-POSTs the same
-body after that delay for up to ~25 s, then reports `available=false` with
+body after that delay for up to ~25 s — or, when the 202 carries `unit.key`, polls
+`GET …?unit=cells&key=<unit.key>[&scale=][&year=]` instead (same 200/202 answers, no re-upload;
+a 400/404/405 on that form falls back to re-POSTing) — then reports `available=false` with
 "still computing … retry in Ns" (a later call picks up the finished answer). A peer that does not
 support cell lists answers 404/405/415 and umfeld-at reports `peers.<service>.available=false`
 with the reason — it never substitutes the whole-unit envelope for a filtered one.
