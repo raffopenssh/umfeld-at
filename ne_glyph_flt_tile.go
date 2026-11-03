@@ -52,7 +52,7 @@ func neFidxEdgeMap(b *neFidxBin) [6]int {
 	if len(hex) < 6 || len(a) < 6 {
 		return E
 	}
-	ax, ay := 1, 4
+	ax, ay := 4, 5 // y = a[3] + a[4] i + a[5] j (affine); a[6] + a[7] i + a[8] j (quadratic)
 	if len(a) >= 12 {
 		ax, ay = 7, 8
 	}

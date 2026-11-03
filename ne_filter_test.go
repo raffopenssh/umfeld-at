@@ -830,3 +830,31 @@ func publicNEHandlerForTest(t *testing.T) http.Handler {
 	mux.HandleFunc("/api/v1/ne/", handleNE)
 	return tierMiddleware(mux)
 }
+
+// TestNEFidxEdgeMap — the hexagon edge facing each IJ neighbour: the edge's midpoint must lie on the
+// neighbour's direction (a wrong row of the fit, as once shipped, strokes the shared edges of matching
+// neighbours and leaves the outer ones open — hairlines inside the clusters).
+func TestNEFidxEdgeMap(t *testing.T) {
+	for _, a := range [][]float64{
+		{7542.744123071, -0.05078342, -0.160998813, 223.43429675, -0.204368143, 0.153335831},
+		{7542.744123071, -0.05078342, -0.160998813, 0, 0, 0, 223.43429675, -0.204368143, 0.153335831, 0, 0, 0},
+	} {
+		b := &neFidxBin{Hdr: neFidxHdr{A: a, Hex: [][2]float64{{-0.08752, -0.08513}, {-0.12426, 0.0341}, {-0.03674, 0.11923}, {0.08752, 0.08513}, {0.12426, -0.0341}, {0.03674, -0.11923}}}}
+		E := neFidxEdgeMap(b)
+		for d := 0; d < 6; d++ {
+			var dx, dy float64
+			if len(a) >= 12 {
+				dx, dy = a[1]*float64(neFidxNbr[d][0])+a[2]*float64(neFidxNbr[d][1]), a[7]*float64(neFidxNbr[d][0])+a[8]*float64(neFidxNbr[d][1])
+			} else {
+				dx, dy = a[1]*float64(neFidxNbr[d][0])+a[2]*float64(neFidxNbr[d][1]), a[4]*float64(neFidxNbr[d][0])+a[5]*float64(neFidxNbr[d][1])
+			}
+			h := b.Hdr.Hex
+			v0, v1 := E[d], (E[d]+1)%6
+			mx, my := (h[v0][0]+h[v1][0])/2, (h[v0][1]+h[v1][1])/2
+			cos := (dx*mx + dy*my) / (math.Hypot(dx, dy) * math.Hypot(mx, my))
+			if cos < 0.98 {
+				t.Fatalf("len(a)=%d d=%d → edge %d: cos=%.3f", len(a), d, E[d], cos)
+			}
+		}
+	}
+}
