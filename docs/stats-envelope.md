@@ -25,7 +25,8 @@ URL logic** — whatever `#…` a user copies from the map is a valid `share=` a
 ?pt=15.1,47.12          the res-7 cell under a point
 ?share=%23kg%3D63330%3Bf%3Dforest   the map's hash verbatim (kg= h3= adm= pt= and f= are read, view tokens ignored)
 ?f=<expr>               the glyph filter (same grammar as /api/v1/ne/filter): figures cover the MATCHING cells,
-                        unit_cells_n / unit_area_ha keep the whole unit; peers are then not asked unless peers= says so
+                        unit_cells_n / unit_area_ha keep the whole unit; the peers are asked for the SAME matching
+                        cells (§6 cell list), so srtm.* / sub.* are filtered too
 ```
 Bezirk / Bundesland are too large for one row — pass `kg=` lists (≤ 50 per call) or Gemeinden.
 
@@ -89,7 +90,7 @@ minute); afterwards milliseconds. Answers carry standard `RateLimit-*` headers.
 
 ## 5. Peer envelopes
 
-Both peers answer the same keys (`h3= kg= bbox=`) with the same envelope, `format=json|flat|csv`,
+Both peers answer the same keys (`h3= kg= bbox=`, and a cell list, §6) with the same envelope, `format=json|flat|csv`,
 `keys=`, and an unknown unit → 200 with `coverage.complete=false`. The observed-layer peer
 ({OBS_NAME}) carries `source "{OBS_NAME}@<version>"`, `unit.res 12`, `unit.cells_n`, shared
 `cover_ha.<geb..sonst>`, `consistency_ha/_n.<verdict>`, terrain, heights and `als.*`. The subsidy
@@ -98,3 +99,24 @@ peer ({SUB_NAME}) carries `source "invekos@<release>"`, `epoch` = claim year, `c
 Gemeinde + `gemeinde.n` for units spanning several). umfeld-at calls them with a 5 s timeout,
 ≤ 2 req/s, memoised 10 min; a peer that is down shows as `peers.<service>.available=false` and the
 row keeps the other columns.
+
+## 6. Cell lists — a filtered unit at the peers
+
+With `f=` umfeld-at knows the matching cells and the peers do not (the grammar spans all three
+services' columns). So the peers are asked for an explicit cell set instead of a unit key:
+
+```
+POST {peer}/api/v1/stats/unit?format=json&unit=cells[&scale=49][&year=]
+Content-Type: application/octet-stream · Content-Encoding: gzip
+body (gzip'd):  "NEI1" · u32 n · n × u64 little-endian H3 res-12 cell ids, sorted ascending
+```
+The answer is the ordinary envelope over exactly those cells: `unit.kind="cells"`, `unit.key` =
+a short hash of the list, `unit.cells_n` = n × scale, `unit.area_ha` = Σ cell areas × scale, every
+`_ha`/`_n` figure summed over the listed cells (× `scale`), means and `_pct` unweighted by scale.
+`scale` is 49 when the list is the national 1-in-49 sample (one res-12 cell per res-10 cell —
+each listed cell stands for its 48 siblings; the peer may read the siblings' own rows instead of
+multiplying if it prefers). Unknown cells are counted in `coverage.cells_known` only when the peer
+holds a row; the border weighting of `kg=` does not apply (every listed cell counts 1). Limits:
+≤ 1 M ids (8 MB raw), the usual rate limits; a peer that does not support cell lists answers
+404/405/415 and umfeld-at reports `peers.<service>.available=false` with the reason — it never
+substitutes the whole-unit envelope for a filtered one.

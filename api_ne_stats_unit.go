@@ -26,6 +26,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -406,6 +408,8 @@ type neStatsAcc struct {
 	bcov                                            float64
 	kgHa                                            map[string]float64
 	states                                          []string
+	ids                                             []uint64 // the matching cells (filtered units: the peers get this list)
+	scale                                           int      // 1, or neSampK when ids are sampled cells
 }
 
 func (a *neStatsAcc) mean(v [2]float64, dec int) interface{} {
@@ -497,6 +501,9 @@ func neStatsCompute(u *neStatsUnit, expr *neFiltExpr) (*neStatsAcc, int) {
 				acc.match++
 				acc.area += wa
 				ids = append(ids, id)
+				if filt {
+					acc.ids = append(acc.ids, id)
+				}
 				mem[id] = memb{k, wa}
 				neStatsAddCols(acc, b, k, wa)
 			}
@@ -577,6 +584,10 @@ func neStatsSample(sp *neSamp, u *neStatsUnit, expr *neFiltExpr) (*neStatsAcc, i
 		}
 		acc.match += neSampK
 		acc.area += wa
+		if filt {
+			acc.ids = append(acc.ids, id)
+			acc.scale = neSampK
+		}
 		neStatsAddCols(acc, bin, k, wa)
 		if d != nil && d[k] != 255 && int(d[k]) < 9 {
 			acc.declared += neSampK
@@ -803,18 +814,26 @@ type neStatsEnvelope struct {
 }
 
 // neStatsOwn — our envelope for one unit, memoised 10 min under unit+filter.
-func neStatsOwn(u *neStatsUnit, expr *neFiltExpr) (*neStatsEnvelope, int) {
+// With a filter the matching cell list (the peers' unit, neStatsCellsBody)
+// comes back too, memoised beside the envelope.
+func neStatsOwn(u *neStatsUnit, expr *neFiltExpr) (*neStatsEnvelope, int, *neStatsCells) {
 	canon := ""
 	if expr != nil {
 		canon = expr.Canonical()
 	}
 	key := "own/" + u.kind + "/" + u.key + "/" + canon
+	filt := expr != nil && !expr.empty()
 	if b, ok := neStatsLRU.get(key); ok && len(b) > 8 {
 		if ts := int64(binary.LittleEndian.Uint64(b)); time.Since(time.Unix(ts, 0)) < neStatsTTL {
 			var e neStatsEnvelope
 			if json.Unmarshal(b[8:], &e) == nil {
 				e.AgeS = int(time.Since(time.Unix(ts, 0)).Seconds())
-				return &e, 0
+				if !filt {
+					return &e, 0, nil
+				}
+				if cb, ok := neStatsLRU.get("ids/" + key); ok && len(cb) > 5 {
+					return &e, 0, &neStatsCells{body: cb[5:], scale: int(cb[0]), n: int(binary.LittleEndian.Uint32(cb[1:]))}
+				}
 			}
 		}
 	}
@@ -828,10 +847,9 @@ func neStatsOwn(u *neStatsUnit, expr *neFiltExpr) (*neStatsEnvelope, int) {
 		}
 	}
 	if code != 0 {
-		return nil, code
+		return nil, code, nil
 	}
 	neStatsCount(0)
-	filt := expr != nil && !expr.empty()
 	now := time.Now().UTC()
 	e := &neStatsEnvelope{Schema: neStatsSchema, Service: neStatsService, License: "CC-BY-4.0", ComputedAt: now.Format(time.RFC3339),
 		Attribution: neFidxAttribution + " · aggregated by " + publicHost()}
@@ -871,17 +889,122 @@ func neStatsOwn(u *neStatsUnit, expr *neFiltExpr) (*neStatsEnvelope, int) {
 		e.Coverage["note"] = u.note + fmt.Sprintf("; estimated from the national 1-in-%d sample (one res-12 cell per res-10 cell, counts ×%d): the unit is too large for the cell-exact index; declared/observed ha use the best group of each sampled cell; k>= does not apply", neSampK, neSampK)
 	}
 	if filt {
-		e.Filter = map[string]interface{}{"f": canon, "words": expr.Words(), "ignored": expr.Ignored, "incomplete": expr.Incomplete, "note": "figures cover the matching cells; unit_cells_n / unit_area_ha are the whole unit; peers are not filtered"}
+		e.Filter = map[string]interface{}{"f": canon, "words": expr.Words(), "ignored": expr.Ignored, "incomplete": expr.Incomplete, "note": "figures cover the matching cells; unit_cells_n / unit_area_ha are the whole unit; peers are asked for the same matching cells (cell list)"}
 	}
 	e.Figures = neStatsFigures(u, acc, filt)
 	e.Link = neStatsLink(u, canon)
+	var cells *neStatsCells
+	if filt {
+		cells = &neStatsCells{body: neStatsCellsBody(acc.ids), scale: max(acc.scale, 1), n: len(acc.ids)}
+	}
 	if acc.partial == 0 {
 		b, _ := json.Marshal(e)
 		buf := make([]byte, 8, 8+len(b))
 		binary.LittleEndian.PutUint64(buf, uint64(now.Unix()))
 		neStatsLRU.put(key, append(buf, b...))
+		if cells != nil {
+			hdr := binary.LittleEndian.AppendUint32([]byte{byte(cells.scale)}, uint32(cells.n))
+			neStatsLRU.put("ids/"+key, append(hdr, cells.body...))
+		}
 	}
-	return e, 0
+	return e, 0, cells
+}
+
+// neStatsCells — a filtered unit as the peers see it: the matching res-12
+// cells, gzip'd `NEI1` (docs/stats-envelope.md §6), each standing for `scale` cells.
+type neStatsCells struct {
+	body  []byte
+	scale int
+	n     int
+}
+
+// neStatsCellsBody — "NEI1" · u32 n · n × u64 LE H3 res-12 ids, sorted, gzip'd.
+func neStatsCellsBody(ids []uint64) []byte {
+	ids = append([]uint64(nil), ids...)
+	sortU64(ids)
+	raw := make([]byte, 0, 8+8*len(ids))
+	raw = append(raw, "NEI1"...)
+	raw = binary.LittleEndian.AppendUint32(raw, uint32(len(ids)))
+	for _, id := range ids {
+		raw = binary.LittleEndian.AppendUint64(raw, id)
+	}
+	var buf bytes.Buffer
+	zw, _ := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
+	zw.Write(raw)
+	zw.Close()
+	return buf.Bytes()
+}
+
+// neStatsPeerFetchCells — the peer's envelope over an explicit cell list:
+// POST {peer}/api/v1/stats/unit?format=json[&scale=49][&year=] with the
+// NEI1 body. A peer that does not take cell lists yet answers 404/405/415 →
+// a plain "not available" with the reason, never a whole-unit figure
+// passed off as filtered.
+func neStatsPeerFetchCells(p neStatsPeer, c *neStatsCells, year string) (map[string]interface{}, string) {
+	if c == nil || c.n == 0 {
+		return nil, "no matching cells"
+	}
+	u := p.base + "?format=json&unit=cells"
+	if c.scale > 1 {
+		u += "&scale=" + strconv.Itoa(c.scale)
+	}
+	if year != "" && p.id == "sub" {
+		u += "&year=" + url.QueryEscape(year)
+	}
+	sum := sha256.Sum256(c.body)
+	key := "peer/" + u + "#" + hex.EncodeToString(sum[:8])
+	if b, ok := neStatsLRU.get(key); ok && len(b) > 8 {
+		if ts := int64(binary.LittleEndian.Uint64(b)); time.Since(time.Unix(ts, 0)) < neStatsTTL {
+			var m map[string]interface{}
+			if json.Unmarshal(b[8:], &m) == nil {
+				return m, ""
+			}
+		}
+	}
+	neStatsDownMu.Lock()
+	down := time.Since(neStatsDown[p.id]) < 30*time.Second
+	neStatsDownMu.Unlock()
+	if down {
+		return nil, "peer unavailable (backoff)"
+	}
+	neStatsCount(1)
+	req, _ := http.NewRequest("POST", u, bytes.NewReader(c.body))
+	req.Header.Set("User-Agent", "umfeld-at/stats-unit")
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("Content-Encoding", "gzip")
+	req.ContentLength = int64(len(c.body))
+	resp, err := neStatsClient.Do(req)
+	if err != nil {
+		neStatsCount(2)
+		neStatsDownMu.Lock()
+		neStatsDown[p.id] = time.Now()
+		neStatsDownMu.Unlock()
+		return nil, "peer unreachable"
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	switch resp.StatusCode {
+	case 200:
+	case 404, 405, 415, 501:
+		return nil, fmt.Sprintf("peer does not take cell lists yet (POST NEI1 → %d); its figures would cover the whole unit, so none are shown", resp.StatusCode)
+	default:
+		neStatsCount(2)
+		if resp.StatusCode >= 500 {
+			neStatsDownMu.Lock()
+			neStatsDown[p.id] = time.Now()
+			neStatsDownMu.Unlock()
+		}
+		return nil, fmt.Sprintf("peer answered %d", resp.StatusCode)
+	}
+	var m map[string]interface{}
+	if json.Unmarshal(body, &m) != nil {
+		neStatsCount(2)
+		return nil, "peer answer not JSON"
+	}
+	buf := make([]byte, 8, 8+len(body))
+	binary.LittleEndian.PutUint64(buf, uint64(time.Now().Unix()))
+	neStatsLRU.put(key, append(buf, body...))
+	return m, ""
 }
 
 func neStatsRoundBox(b [4]float64) []float64 {
@@ -1098,8 +1221,11 @@ func neStatsFlat(e *neStatsEnvelope, keys []string) (map[string]interface{}, []s
 	}
 	for _, p := range neStatsPeers() {
 		pe, _ := e.Peers[p.service].(map[string]interface{})
-		if pe == nil {
+		if av, _ := pe["available"].(bool); pe == nil || (!av && pe["error"] != nil) {
 			put(p.id+".available", false)
+			if pe != nil {
+				put(p.id+".error", pe["error"])
+			}
 			continue
 		}
 		put(p.id+".available", true)
@@ -1197,9 +1323,7 @@ func handleNEStatsUnit(w http.ResponseWriter, r *http.Request, gateID string) {
 	switch ps := q.Get("peers"); {
 	case ps == "none":
 	case ps == "":
-		if !filt { // a filtered unit has no peer equivalent — ask explicitly
-			wantPeer["srtm"], wantPeer["sub"] = true, true
-		}
+		wantPeer["srtm"], wantPeer["sub"] = true, true
 	default:
 		for _, p := range splitCSV(ps) {
 			wantPeer[p] = true
@@ -1218,10 +1342,7 @@ func handleNEStatsUnit(w http.ResponseWriter, r *http.Request, gateID string) {
 	peerOut := make(chan peerRes, len(units)*len(neStatsPeers()))
 	var wg sync.WaitGroup
 	npeer := 0
-	for ui, u := range units {
-		if u.peerQ == "" {
-			continue
-		}
+	askPeers := func(ui int, u *neStatsUnit, cells *neStatsCells) {
 		for _, p := range neStatsPeers() {
 			if !wantPeer[p.id] {
 				continue
@@ -1230,15 +1351,31 @@ func handleNEStatsUnit(w http.ResponseWriter, r *http.Request, gateID string) {
 			wg.Add(1)
 			go func(ui int, p neStatsPeer, pq string) {
 				defer wg.Done()
-				m, err := neStatsPeerFetch(p, pq, year)
+				var m map[string]interface{}
+				var err string
+				if filt { // a filtered unit = its matching cells: the peers get the list, never the whole unit
+					m, err = neStatsPeerFetchCells(p, cells, year)
+				} else {
+					m, err = neStatsPeerFetch(p, pq, year)
+				}
 				peerOut <- peerRes{p, ui, m, err}
 			}(ui, p, u.peerQ)
 		}
 	}
+	if !filt {
+		for ui, u := range units {
+			if u.peerQ != "" {
+				askPeers(ui, u, nil)
+			}
+		}
+	}
 	envs := make([]*neStatsEnvelope, 0, len(units))
 	partial := false
-	for _, u := range units {
-		e, code := neStatsOwn(u, expr)
+	for ui, u := range units {
+		e, code, cells := neStatsOwn(u, expr)
+		if code == 0 && filt && cells != nil {
+			askPeers(ui, u, cells)
+		}
 		if code == 413 {
 			apiError(w, fmt.Sprintf("unit spans more than %d bins (0.025°) — pass kg= lists, a smaller bbox or a finer h3", neStatsMaxBins), 413)
 			return
@@ -1269,13 +1406,6 @@ func handleNEStatsUnit(w http.ResponseWriter, r *http.Request, gateID string) {
 			pick = neStatsPeerSum(us, e.Unit["key"])
 		}
 		e.Peers[pr.peer.service] = pick
-	}
-	if filt && len(wantPeer) > 0 {
-		for _, e := range envs {
-			if e.Filter != nil {
-				e.Filter["note"] = "figures cover the matching cells; unit_cells_n / unit_area_ha are the whole unit; peers were asked for the WHOLE unit (they do not filter)"
-			}
-		}
 	}
 
 	var body []byte

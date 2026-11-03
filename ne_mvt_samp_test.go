@@ -375,4 +375,23 @@ func TestNESampFnat(t *testing.T) {
 	if hd, ok := h["d"].(map[string]interface{}); !ok || hd["known"].(int) != 21*neSampK {
 		t.Fatalf("hist d: %v", h["d"])
 	}
+	// a filtered res-9 tile (z 11) over the sample: n = matching ×49, n_all = samples ×49, approx; d=geb drops the fixture entirely
+	for _, z := range []int{9, 11} {
+		x0, y0, _, _ := mvtTilesInBox(z, 13.1, 47.3, 13.1, 47.3)
+		tw, ts, te, tn := mvtTileBox(z, x0, y0)
+		gz := neMVTRenderSample(s, z, x0, y0, tw, ts, te, tn, neMVTZoomRes(z), e)
+		l := mvtDecodeGz(t, gz)
+		if len(l.Features) == 0 {
+			t.Fatalf("z%d: no features from the sample", z)
+		}
+		for _, f := range l.Features {
+			n, nAll := int(f.Properties["n"].(float64)), int(f.Properties["n_all"].(float64))
+			if n%neSampK != 0 || nAll%neSampK != 0 || n <= 0 || n > nAll || f.Properties["approx"] != true || f.Properties["d"] != "wald" {
+				t.Fatalf("z%d %v: n %d n_all %d approx %v d %v", z, f.Properties["h3"], n, nAll, f.Properties["approx"], f.Properties["d"])
+			}
+		}
+		if gz := neMVTRenderSample(s, z, x0, y0, tw, ts, te, tn, neMVTZoomRes(z), neFiltParse("d=geb")); len(mvtDecodeGz(t, gz).Features) != 0 {
+			t.Fatalf("z%d: d=geb must drop every hexagon", z)
+		}
+	}
 }

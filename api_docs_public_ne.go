@@ -220,7 +220,9 @@ GET /api/v1/ne/stats/unit?kg=|h3=|bbox=|adm=|pt=|share=[&f=][&format=json|flat|c
                                             share link and export are one URL. A unit wider than 48 bins (a large Gemeinde, a
                                             Natura 2000 site, a Bezirk) is answered from the national 1-in-49 sample: counts and
                                             hectares ×49, coverage.approx=true, coverage.sample=49, kg.* empty. f= filters the cells (grammar above; unit_cells_n /
-                                            unit_area_ha keep the whole unit; peers are then skipped unless peers= asks). figures{} is
+                                            unit_area_ha keep the whole unit; the peers get the SAME matching cells as a cell list — POST NEI1,
+                                            stats-envelope.md §6 — so every column of the row is filtered; a peer without cell-list
+                                            support shows available=false with the reason, never whole-unit figures). figures{} is
                                             flat and scalar: cells_n area_ha declared_ha.<group> observed_ha.<group> diff_ha.<verdict>
                                             change_n/_ha.<none|candidate|confirmed> subsidy_ha.<class> subsidy.claimed_pct natura2000_ha
                                             terrain.* height.* canopy.* kg.dominant gemeinde.* … ; flat = one object with srtm.<key> and
@@ -257,7 +259,11 @@ GET /api/v1/ne/mvt/{z}/{x}/{y}.pbf          the cells as VECTOR TILES for QGIS /
                                             z 9–11 come from a national table (instant anywhere, no peer columns); z 12+ from the
                                             area's index: 202 + Retry-After + progress JSON while its bins are being built;
                                             /api/v1/ne/mvt/status?bbox=w,s,e,n[&prepare=1] tells readiness. Gzip on the wire.
-GET /api/v1/ne/pmtiles?bbox=|austria|kg=|h3=|adm=|share=[&minz=9&maxz=14]
+                                            &f=<filter> (grammar above, the map's ;f=) = the veil for QGIS: z ≥ 14 only matching cells;
+                                            z 12–13 hexagons with ≥ 1 match, aggregates over the matching cells + n_all, match_pct,
+                                            area_ha = the matching share; z 9–11 the same from the national 1-in-49 sample (approx=true,
+                                            sample=49; every term, k>= excepted). /api/v1/ne/mvt.json?f= = a TileJSON with the filter baked in.
+GET /api/v1/ne/pmtiles?bbox=|austria|kg=|h3=|adm=|share=[&minz=9&maxz=14][&f=]
                                             the same tiles for one area as a PMTiles v3 archive (offline QGIS); bbox=austria&maxz=11
                                             = the national overview (~30 MB). 202 + progress (HTML page for browsers, JSON for
                                             scripts) while building — the URL turns into the download; 413 above 1500 km² / 20 000 tiles at z ≥ 12,

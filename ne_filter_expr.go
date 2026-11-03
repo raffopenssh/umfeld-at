@@ -1001,16 +1001,12 @@ func neFiltTermFn(cols neFiltCols, t neFiltTerm) func(k int) bool {
 	}
 }
 
-// neFiltEval — the match mask of a bin (1 = matches). `k` is applied by the
-// caller (needs the lattice): neFidxBin.eval.
-func neFiltEval(cols neFiltCols, e *neFiltExpr) []uint8 {
-	n := cols.n()
-	out := make([]uint8, n)
+// neFiltMatcher — the predicate of one row (1 = matches); neFiltEval maps it
+// over every row, tile renderers over the rows they touch. `k` is applied by
+// the caller (needs the lattice): neFidxBin.eval.
+func neFiltMatcher(cols neFiltCols, e *neFiltExpr) func(int) bool {
 	if len(e.Groups) == 0 {
-		for k := range out {
-			out[k] = 1
-		}
-		return out
+		return func(int) bool { return true }
 	}
 	fns := make([][]func(int) bool, len(e.Groups))
 	for gi, g := range e.Groups {
@@ -1018,8 +1014,7 @@ func neFiltEval(cols neFiltCols, e *neFiltExpr) []uint8 {
 			fns[gi] = append(fns[gi], neFiltTermFn(cols, t))
 		}
 	}
-	for k := 0; k < n; k++ {
-		ok := true
+	return func(k int) bool {
 		for _, g := range fns {
 			any := false
 			for _, f := range g {
@@ -1029,11 +1024,20 @@ func neFiltEval(cols neFiltCols, e *neFiltExpr) []uint8 {
 				}
 			}
 			if !any {
-				ok = false
-				break
+				return false
 			}
 		}
-		if ok {
+		return true
+	}
+}
+
+// neFiltEval — the match mask of a bin (1 = matches).
+func neFiltEval(cols neFiltCols, e *neFiltExpr) []uint8 {
+	n := cols.n()
+	out := make([]uint8, n)
+	m := neFiltMatcher(cols, e)
+	for k := 0; k < n; k++ {
+		if m(k) {
 			out[k] = 1
 		}
 	}

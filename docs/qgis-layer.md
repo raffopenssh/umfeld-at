@@ -46,10 +46,28 @@ contribution counters, `het`, `edge`, `nutz`, `rd`/`rd_min` road distance,
 `sub_release`. Field meanings and units match the filter grammar in
 `/api/v1/docs/ne.md` and the unit-stats envelope (`/api/v1/docs/stats-envelope.md`).
 
-**aggregates (z 9–13)** — `n` cells, `area_ha`, `d` dominant declared group +
+**aggregates (z 9–13)** — `n` cells (`n_all`, `match_pct`, `approx`, `sample` with `f=`, see below), `area_ha`, `d` dominant declared group +
 `d_pct`, `d_known_pct`, one `d_<group>_pct` per group, `o` dominant observed +
 `o_pct`, `o_known_pct`, `diff_pct` (declared ≠ observed), `chg_conf`, `chg_cand`,
 `chg_pct`, `sub_pct`, and the same epochs.
+
+## Filtered layers — the map's veil in QGIS
+
+Append `f=<expr>` — the same expression as the map's filter chips, `/api/v1/ne/filter`
+and `/api/v1/ne/stats/unit` (`;f=` of a share link; the link ▾ menu writes it for
+you) — and the layer holds only what the map leaves un-veiled:
+
+| zoom | with `f=` |
+|---|---|
+| 14–15 (res 12) | exactly the matching cells; the rest is absent |
+| 12–13 (res 10–11) | hexagons with ≥ 1 matching cell; aggregates over the **matching** cells; `n` = matching, `n_all` = every cell, `match_pct`, `area_ha` = the matching share of the hexagon |
+| 9–11 (res 7–9) | the same, folded from the national 1-in-49 sample (one res-12 cell per res-10 cell): counts ×49, `approx=true`, `sample=49`; every term applies, `k>=` not |
+
+`/api/v1/ne/mvt.json?f=…` is a TileJSON with the filter in its tile URL (QGIS ≥ 3.32
+takes it as the connection URL); `/api/v1/ne/pmtiles?…&f=…` (or a `share=` whose hash
+carries `;f=`) builds the archive of the matching cells only — its metadata records
+the filter. Tiles of different filters are cached apart, so a filtered layer costs the
+same as the plain one once rendered.
 
 ## QGIS — live vector tiles
 

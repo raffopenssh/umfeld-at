@@ -39,6 +39,16 @@ the res-7 card gets a "filter n % of the cells" row, and the funnel button dims 
 bare `sl>=15`). Cached in `neGlyphTileLRU` under table state + canonical form, `max-age` 1 h, 503 without the
 table. Test `TestNEFnatEval`. Debug: `?dbgveil` + `window.__fv(lon,lat)` (`docs/ne-glyph.md` §Agent toolkit).
 
+(9) **The veil in QGIS and in the row** (2026-11-03): `f=` on `/ne/mvt/{z}/{x}/{y}.pbf`, `mvt.json`
+and `/ne/pmtiles` (or the `;f=` of a `share=`) renders only matching cells (res 12) / hexagons with ≥ 1
+match (aggregates over the matching cells, `n_all`, `match_pct`; res 7–9 from the sample, `approx`) —
+`neMVTRenderFromBlobs` takes the bin mask (`bin.eval`, so `k>=` applies), `neMVTRenderSample` the
+`neFiltMatcher` over the sample rows near the tile; cache keys carry the canonical form (+ sample state).
+`/ne/stats/unit?f=` now asks both peers with the matching **cell list** (`POST … NEI1`,
+`docs/stats-envelope.md` §6, `neStatsPeerFetchCells`; `scale=49` on sampled units) so `srtm.*`/`sub.*`
+columns are filtered like ours; the export menu puts `;f=` on the tile URL and the archive link
+(`xF()`). Tests `TestNEMVTFilter`, `TestNESampFnat` (sample tiles).
+
 Original design (kept as the rationale):
 
 Status at design time: **design, nothing built.** Scope: one filter component on the landing glyph that veils every

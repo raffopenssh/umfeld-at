@@ -49,6 +49,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -407,6 +408,7 @@ func neMVTEpochs(f *mvtFeature, b *neFidxBin) {
 // neMVTAgg — the aggregate of a parent cell's res-12 children.
 type neMVTAgg struct {
 	n           int
+	nAll        int     // every child (n = the matching ones under a filter)
 	d, o        [10]int // 9 = unknown
 	both, diff  int
 	chg         [3]int
@@ -529,6 +531,11 @@ func neMVTAggAttrs(f *mvtFeature, a *neMVTAgg, areaHa float64) {
 	f.i64("n", int64(a.n))
 	f.num("area_ha", neRound(areaHa, 2))
 	pct := func(x, tot int) float64 { return neRound(float64(x)*100/float64(max(tot, 1)), 1) }
+	if a.nAll > 0 { // under a filter: n = matching children, n_all = every child, area_ha = the matching share of the hexagon
+		f.i64("n_all", int64(a.nAll))
+		f.num("match_pct", pct(a.n, a.nAll))
+		f.num("area_ha", neRound(areaHa*float64(a.n)/float64(a.nAll), 2))
+	}
 	if g, k := neMVTMode(a.d[:], 9); g >= 0 {
 		f.str("d", neGlyphGroups[g])
 		f.num("d_pct", pct(k, a.n))
@@ -663,7 +670,7 @@ func neMVTGzip(raw []byte) []byte {
 
 // neMVTRenderNat — a res 7–9 tile from the national table (ne_mvt_nat.go):
 // same layer, same aggregate attributes, peer columns absent.
-func neMVTRenderNat(nat *neNat, z, x, y int, clip *[4]float64) []byte {
+func neMVTRenderNat(nat *neNat, z, x, y int, clip *[4]float64, expr *neFiltExpr) []byte {
 	t0 := time.Now()
 	w, s, e, n := mvtTileBox(z, x, y)
 	if clip != nil {
@@ -673,6 +680,9 @@ func neMVTRenderNat(nat *neNat, z, x, y int, clip *[4]float64) []byte {
 		}
 	}
 	res := neMVTZoomRes(z)
+	if expr != nil && !expr.empty() {
+		return neMVTRenderSample(neSampGet(), z, x, y, w, s, e, n, res, expr)
+	}
 	l := nat.level(res)
 	if l == nil {
 		return nil
@@ -693,6 +703,88 @@ func neMVTRenderNat(nat *neNat, z, x, y int, clip *[4]float64) []byte {
 		for _, b := range bd {
 			px, py := mvtProject(z, x, y, b.Lng, b.Lat)
 			pts = append(pts, [2]int32{int32(math.Round(px)), int32(math.Round(py))})
+		}
+		f.ring(pts, false)
+		f.done()
+	}
+	gz := neMVTGzip(mvtEncode(layer))
+	neMVTRendered.Add(1)
+	neMVTRenderMs.Add(time.Since(t0).Milliseconds())
+	return gz
+}
+
+// neMVTRenderSample — a res 7–9 tile under a filter: the national table holds
+// no joint rows, so the hexagons are folded from the national 1-in-49 sample
+// (docs/ne-filter.md §8) — every term evaluates (k>= excepted), counts ×49,
+// `approx=true`, `sample=49`; hexagons without a matching sample are dropped,
+// like the res-12 cells at z ≥ 14. Same attributes as the exact aggregates.
+func neMVTRenderSample(sp *neSamp, z, x, y int, w, s, e, n float64, res int, expr *neFiltExpr) []byte {
+	if sp == nil {
+		return nil
+	}
+	t0 := time.Now()
+	bin := sp.asBin()
+	match := neFiltMatcher(sp, expr)
+	px, py := neMVTResPadDeg(res)
+	aggs := map[uint64]*neMVTAgg{}
+	keep := map[uint64]bool{}
+	inTile := func(lon, lat float64) bool { return lon >= w && lon < e && lat >= s && lat < n }
+	for _, k := range sp.rowsNear(w-px, s-py, e+px, n+py) {
+		p := neH3ParentFast(sp.id(k), res)
+		ok, seen := keep[p]
+		if !seen {
+			lon, lat := neCellCentre(p)
+			ok = inTile(lon, lat)
+			keep[p] = ok
+		}
+		if !ok {
+			continue
+		}
+		a := aggs[p]
+		if a == nil {
+			a = &neMVTAgg{}
+			aggs[p] = a
+		}
+		a.nAll += neSampK
+		if !match(k) {
+			continue
+		}
+		neMVTAggAdd(a, bin, k)
+	}
+	layer := newMVTLayer(neMVTLayerName)
+	parents := make([]uint64, 0, len(aggs))
+	for p, a := range aggs {
+		if a.n > 0 {
+			parents = append(parents, p)
+		}
+	}
+	sortU64(parents)
+	for _, p := range parents {
+		a := aggs[p]
+		a.n *= neSampK
+		for i := range a.d {
+			a.d[i] *= neSampK
+			a.o[i] *= neSampK
+		}
+		a.both, a.diff, a.bn, a.loss = a.both*neSampK, a.diff*neSampK, a.bn*neSampK, a.loss*neSampK
+		for i := range a.chg {
+			a.chg[i] *= neSampK
+		}
+		f := layer.feature(p)
+		f.str("h3", neCellHex(p))
+		f.i64("res", int64(res))
+		area, _ := h3.CellAreaM2(h3.Cell(p))
+		neMVTAggAttrs(f, a, area/1e4)
+		f.flag("approx", true)
+		f.i64("sample", neSampK)
+		bd, err := h3.Cell(p).Boundary()
+		if err != nil || len(bd) < 3 {
+			continue
+		}
+		pts := make([][2]int32, 0, len(bd)+1)
+		for _, b := range bd {
+			qx, qy := mvtProject(z, x, y, b.Lng, b.Lat)
+			pts = append(pts, [2]int32{int32(math.Round(qx)), int32(math.Round(qy))})
 		}
 		f.ring(pts, false)
 		f.done()
@@ -732,8 +824,9 @@ func neMVTTileBins(z, x, y int, clip *[4]float64) [][2]int {
 }
 
 // neMVTRenderFromBlobs — the gzip'd tile from ready bins.
-func neMVTRenderFromBlobs(z, x, y int, bins [][2]int, blobs [][]byte, states []string, clip *[4]float64) ([]byte, int) {
+func neMVTRenderFromBlobs(z, x, y int, bins [][2]int, blobs [][]byte, states []string, clip *[4]float64, expr *neFiltExpr) ([]byte, int) {
 	t0 := time.Now()
+	filt := expr != nil && !expr.empty()
 	w, s, e, n := mvtTileBox(z, x, y)
 	if clip != nil { // archive: only what lies in the requested box
 		w, s, e, n = math.Max(w, clip[0]), math.Max(s, clip[1]), math.Min(e, clip[2]), math.Min(n, clip[3])
@@ -765,7 +858,14 @@ func neMVTRenderFromBlobs(z, x, y int, bins [][2]int, blobs [][]byte, states []s
 			}
 			b.Hdr.I, b.Hdr.J = bins[q][0], bins[q][1]
 			ids := neMVTBinIDs(b, states[q])
+			var mask []uint8
+			if filt {
+				mask = b.eval(expr)
+			}
 			for k := 0; k < b.N; k++ {
+				if mask != nil && mask[k] == 0 {
+					continue
+				}
 				lon, lat := neMVTBinLonLat(b, k)
 				if !inTile(lon, lat) || ids[k] == 0 {
 					continue
@@ -793,6 +893,10 @@ func neMVTRenderFromBlobs(z, x, y int, bins [][2]int, blobs [][]byte, states []s
 			}
 			b.Hdr.I, b.Hdr.J = bins[q][0], bins[q][1]
 			ids := neMVTBinIDs(b, states[q])
+			var mask []uint8
+			if filt {
+				mask = b.eval(expr)
+			}
 			for k := 0; k < b.N; k++ {
 				if ids[k] == 0 {
 					continue
@@ -812,12 +916,20 @@ func neMVTRenderFromBlobs(z, x, y int, bins [][2]int, blobs [][]byte, states []s
 					a = &neMVTAgg{}
 					aggs[p] = a
 				}
+				if filt {
+					a.nAll++
+					if mask[k] == 0 {
+						continue
+					}
+				}
 				neMVTAggAdd(a, b, k)
 			}
 		}
 		parents := make([]uint64, 0, len(aggs))
-		for p := range aggs {
-			parents = append(parents, p)
+		for p, a := range aggs {
+			if a.n > 0 { // under a filter a hexagon without a match is dropped, like a veiled cell
+				parents = append(parents, p)
+			}
 		}
 		sortU64(parents)
 		for _, p := range parents {
@@ -841,17 +953,28 @@ func neMVTRenderFromBlobs(z, x, y int, bins [][2]int, blobs [][]byte, states []s
 // neMVTTile — the gzip'd tile, or progress when bins are missing.
 // inline: build up to that many missing bins here (≤ neMVTWait for a live
 // request; -1 = all of them, the archive worker's choice); the rest is queued.
-func neMVTTile(z, x, y int, inline int, clip *[4]float64) (gz []byte, key string, p neMVTProgress, complete bool, err error) {
+func neMVTTile(z, x, y int, inline int, clip *[4]float64, expr *neFiltExpr) (gz []byte, key string, p neMVTProgress, complete bool, err error) {
+	canon := ""
+	if expr != nil && !expr.empty() {
+		canon = expr.Canonical()
+	}
 	if neMVTZoomRes(z) <= neNatRes {
 		if nat := neNatGet(); nat != nil { // low zooms: the national table, never a bin
 			key = fmt.Sprintf("nat/%s/%d/%d/%d", nat.State, z, x, y)
 			if clip != nil {
 				key += fmt.Sprintf("/clip%.5f,%.5f,%.5f,%.5f", clip[0], clip[1], clip[2], clip[3])
 			}
+			if canon != "" {
+				st := ""
+				if sp := neSampGet(); sp != nil {
+					st = sp.Hdr.State
+				}
+				key += "/f=" + canon + "/" + st
+			}
 			if b, ok := neMVTLRU.get(key); ok {
 				return b, key, neMVTProgress{}, true, nil
 			}
-			gz = neMVTRenderNat(nat, z, x, y, clip)
+			gz = neMVTRenderNat(nat, z, x, y, clip, expr)
 			if gz == nil {
 				gz = []byte{}
 			}
@@ -880,10 +1003,14 @@ func neMVTTile(z, x, y int, inline int, clip *[4]float64) (gz []byte, key string
 	if len(missing) > 0 {
 		return nil, "", prog, false, nil
 	}
-	key = neMVTTileKey(z, x, y, states)
+	extra := append([]string{}, states...)
 	if clip != nil {
-		key = neMVTTileKey(z, x, y, append(states, fmt.Sprintf("clip%.5f,%.5f,%.5f,%.5f", clip[0], clip[1], clip[2], clip[3])))
+		extra = append(extra, fmt.Sprintf("clip%.5f,%.5f,%.5f,%.5f", clip[0], clip[1], clip[2], clip[3]))
 	}
+	if canon != "" {
+		extra = append(extra, "f="+canon)
+	}
+	key = neMVTTileKey(z, x, y, extra)
 	if b, ok := neMVTLRU.get(key); ok {
 		return b, key, prog, true, nil
 	}
@@ -899,7 +1026,7 @@ func neMVTTile(z, x, y int, inline int, clip *[4]float64) (gz []byte, key string
 	if err := neGlyphLoadFrame(); err != nil {
 		return nil, key, prog, true, err
 	}
-	gz, _ = neMVTRenderFromBlobs(z, x, y, bins, blobs, states, clip)
+	gz, _ = neMVTRenderFromBlobs(z, x, y, bins, blobs, states, clip, expr)
 	if gz == nil {
 		gz = []byte{}
 	}
@@ -944,7 +1071,11 @@ func handleNEMVT(w http.ResponseWriter, r *http.Request, rest string) {
 	if !ok {
 		return
 	}
-	gz, key, prog, complete, err := neMVTTile(z, x, y, neMVTWaitBins, nil)
+	var expr *neFiltExpr
+	if f := r.URL.Query().Get("f"); f != "" {
+		expr = neFiltParse(f)
+	}
+	gz, key, prog, complete, err := neMVTTile(z, x, y, neMVTWaitBins, nil, expr)
 	if err == errBusy {
 		w.Header().Set("Retry-After", "3")
 		w.Header().Set("Cache-Control", "no-store")
@@ -1078,6 +1209,17 @@ func handleNEMVTStatus(w http.ResponseWriter, r *http.Request) {
 func handleNEMVTJSON(w http.ResponseWriter, r *http.Request) {
 	base := publicBaseURL(r)
 	fields := map[string]string{"h3": "String", "res": "Number", "n": "Number", "area_ha": "Number", "srtm_epoch": "String", "sub_year": "Number", "sub_release": "String"}
+	tileURL, name := base+"/api/v1/ne/mvt/{z}/{x}/{y}.pbf", "umfeld-at cells"
+	var filter map[string]interface{}
+	if f := r.URL.Query().Get("f"); f != "" {
+		if e := neFiltParse(f); !e.empty() {
+			canon := e.Canonical()
+			tileURL += "?f=" + url.QueryEscape(canon)
+			name += " · " + e.Words()
+			fields["n_all"], fields["match_pct"], fields["approx"], fields["sample"] = "Number", "Number", "Boolean", "Number"
+			filter = map[string]interface{}{"f": canon, "words": e.Words(), "ignored": e.Ignored, "note": neMVTFilterNote}
+		}
+	}
 	for _, f := range neFiltFields {
 		t := "Number"
 		switch f.Kind {
@@ -1091,9 +1233,10 @@ func handleNEMVTJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	writeJSON(w, 200, map[string]interface{}{
-		"tilejson": "3.0.0", "name": "umfeld-at cells", "scheme": "xyz", "format": "pbf",
-		"description": "H3 cells of the declared/observed land-use product with change, subsidy and LiDAR statistics; res 7 at z 9 to res 12 at z 14+ (aggregates below res 12)",
-		"tiles":       []string{base + "/api/v1/ne/mvt/{z}/{x}/{y}.pbf"},
+		"tilejson": "3.0.0", "name": name, "scheme": "xyz", "format": "pbf",
+		"description": "H3 cells of the declared/observed land-use product with change, subsidy and LiDAR statistics; res 7 at z 9 to res 12 at z 14+ (aggregates below res 12); ?f=<filter> keeps only matching cells",
+		"tiles":       []string{tileURL},
+		"filter":      filter,
 		"minzoom":     neMVTMinZ, "maxzoom": neMVTMaxZ, "bounds": neMVTAustria,
 		"attribution":   BEVNotice() + " · " + peers().ObsName + " · " + peers().SubName + " · © OpenStreetMap contributors · EEA Natura 2000",
 		"vector_layers": []map[string]interface{}{{"id": neMVTLayerName, "minzoom": neMVTMinZ, "maxzoom": neMVTMaxZ, "fields": fields}},
@@ -1102,8 +1245,15 @@ func handleNEMVTJSON(w http.ResponseWriter, r *http.Request) {
 }
 
 // neMVTVectorLayersMeta — the PMTiles metadata JSON (same field table).
-func neMVTVectorLayersMeta(box [4]float64, minZ, maxZ int) []byte {
+func neMVTVectorLayersMeta(box [4]float64, minZ, maxZ int, expr *neFiltExpr) []byte {
 	fields := map[string]string{"h3": "String", "res": "Number", "n": "Number", "area_ha": "Number", "srtm_epoch": "String", "sub_year": "Number", "sub_release": "String"}
+	desc := fmt.Sprintf("umfeld-at H3 cell layer, bbox %.4f,%.4f,%.4f,%.4f, z %d–%d, built %s", box[0], box[1], box[2], box[3], minZ, maxZ, time.Now().UTC().Format(time.RFC3339))
+	var filter map[string]interface{}
+	if expr != nil && !expr.empty() {
+		fields["n_all"], fields["match_pct"], fields["approx"], fields["sample"] = "Number", "Number", "Boolean", "Number"
+		filter = map[string]interface{}{"f": expr.Canonical(), "words": expr.Words(), "ignored": expr.Ignored, "note": neMVTFilterNote}
+		desc += "; filter " + expr.Canonical() + " (" + expr.Words() + ")"
+	}
 	for _, f := range neFiltFields {
 		t := "Number"
 		switch f.Kind {
@@ -1121,10 +1271,14 @@ func neMVTVectorLayersMeta(box [4]float64, minZ, maxZ int) []byte {
 	sort.Strings(keys)
 	b, _ := json.Marshal(map[string]interface{}{
 		"name": "umfeld-at cells", "format": "pbf", "type": "overlay", "version": "1",
-		"description":   fmt.Sprintf("umfeld-at H3 cell layer, bbox %.4f,%.4f,%.4f,%.4f, z %d–%d, built %s", box[0], box[1], box[2], box[3], minZ, maxZ, time.Now().UTC().Format(time.RFC3339)),
+		"description":   desc,
 		"attribution":   BEVNotice() + " · " + peers().ObsName + " · " + peers().SubName + " · © OpenStreetMap contributors · EEA Natura 2000",
 		"vector_layers": []map[string]interface{}{{"id": neMVTLayerName, "minzoom": minZ, "maxzoom": maxZ, "fields": fields}},
 		"bounds":        fmt.Sprintf("%.5f,%.5f,%.5f,%.5f", box[0], box[1], box[2], box[3]),
+		"filter":        filter,
 	})
 	return b
 }
+
+// neMVTFilterNote — what `f=` does to a tile (TileJSON / archive metadata).
+const neMVTFilterNote = "only cells matching the filter (same grammar as /api/v1/ne/filter and the map's chips); z ≥ 14: the matching cells; z 12–13: hexagons with ≥ 1 matching cell, aggregates over the matching cells, n_all = every cell, match_pct; z 9–11: the same from the national 1-in-49 sample (approx=true, sample=49, k>= not applied)"

@@ -53,7 +53,8 @@ type nePMTJob struct {
 	Box       [4]float64 `json:"bbox"`
 	MinZ      int        `json:"minz"`
 	MaxZ      int        `json:"maxz"`
-	Status    string     `json:"status"` // queued | building | done | error
+	F         string     `json:"f,omitempty"` // canonical filter: only matching cells / hexagons in the archive
+	Status    string     `json:"status"`      // queued | building | done | error
 	BinsTotal int        `json:"bins_total"`
 	BinsDone  int        `json:"bins_done"`
 	Tiles     int        `json:"tiles_total"`
@@ -191,9 +192,16 @@ func nePMTBinTiles(box [4]float64, minZ, maxZ int) int {
 }
 
 // nePMTJobID — hash of box + zooms + the states of the bins under the box (+ the national table's).
-func nePMTJobID(box [4]float64, minZ, maxZ int) string {
+func nePMTJobID(box [4]float64, minZ, maxZ int, canon string) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "pmt1;%.5f,%.5f,%.5f,%.5f;%d-%d;%s;", box[0], box[1], box[2], box[3], minZ, maxZ, neNatTileState())
+	if canon != "" {
+		st := ""
+		if sp := neSampGet(); sp != nil {
+			st = sp.Hdr.State
+		}
+		fmt.Fprintf(h, "f=%s;%s;", canon, st)
+	}
 	for _, k := range nePMTBins(box, minZ, maxZ) {
 		h.Write([]byte(neMVTBinState(k[0], k[1])))
 		h.Write([]byte{';'})
@@ -202,20 +210,20 @@ func nePMTJobID(box [4]float64, minZ, maxZ int) string {
 }
 
 // nePMTSubmit — find or create the job for (box, zooms). Returns job, created.
-func nePMTSubmit(box [4]float64, minZ, maxZ int, ident string) (*nePMTJob, bool, string) {
+func nePMTSubmit(box [4]float64, minZ, maxZ int, ident, canon string) (*nePMTJob, bool, string) {
 	nePMTOnce.Do(func() {
 		nePMTWake = make(chan struct{}, 1)
 		os.MkdirAll(nePMTDir, 0o755)
 		go nePMTWorker()
 	})
-	id := nePMTJobID(box, minZ, maxZ)
+	id := nePMTJobID(box, minZ, maxZ, canon)
 	path := filepath.Join(nePMTDir, id+".pmtiles")
 	nePMTMu.Lock()
 	defer nePMTMu.Unlock()
 	if j := nePMTJobs[id]; j != nil {
 		return j, false, ""
 	}
-	j := &nePMTJob{ID: id, Box: box, MinZ: minZ, MaxZ: maxZ, Created: time.Now(), ident: ident, path: path,
+	j := &nePMTJob{ID: id, Box: box, MinZ: minZ, MaxZ: maxZ, F: canon, Created: time.Now(), ident: ident, path: path,
 		Tiles: nePMTTileCount(box, minZ, maxZ)}
 	if fi, err := os.Stat(path); err == nil { // built earlier (restart): serve it
 		j.Status, j.Bytes, j.Finished = "done", fi.Size(), fi.ModTime()
@@ -283,13 +291,17 @@ func nePMTBuild(j *nePMTJob) error {
 		j.BinsDone = q + 1
 		nePMTMu.Unlock()
 	}
-	pw := newPMTWriter(j.MinZ, j.MaxZ, j.Box, neMVTVectorLayersMeta(j.Box, j.MinZ, j.MaxZ))
+	var expr *neFiltExpr
+	if j.F != "" {
+		expr = neFiltParse(j.F)
+	}
+	pw := newPMTWriter(j.MinZ, j.MaxZ, j.Box, neMVTVectorLayersMeta(j.Box, j.MinZ, j.MaxZ, expr))
 	done := 0
 	for z := j.MinZ; z <= j.MaxZ; z++ {
 		x0, y0, x1, y1 := mvtTilesInBox(z, j.Box[0], j.Box[1], j.Box[2], j.Box[3])
 		for x := x0; x <= x1; x++ {
 			for y := y0; y <= y1; y++ {
-				gz, _, prog, complete, err := neMVTTileRetry(z, x, y, &j.Box)
+				gz, _, prog, complete, err := neMVTTileRetry(z, x, y, &j.Box, expr)
 				if err == nil && complete {
 					pw.add(z, x, y, gz)
 				} else {
@@ -329,9 +341,9 @@ func nePMTBuild(j *nePMTJob) error {
 
 // neMVTTileRetry — a tile for the archive: bins are built by now; a busy
 // semaphore is waited out rather than skipped.
-func neMVTTileRetry(z, x, y int, clip *[4]float64) ([]byte, string, neMVTProgress, bool, error) {
+func neMVTTileRetry(z, x, y int, clip *[4]float64, expr *neFiltExpr) ([]byte, string, neMVTProgress, bool, error) {
 	for a := 0; ; a++ {
-		gz, key, p, complete, err := neMVTTile(z, x, y, -1, clip)
+		gz, key, p, complete, err := neMVTTile(z, x, y, -1, clip, expr)
 		if err != errBusy || a >= 30 {
 			return gz, key, p, complete, err
 		}
@@ -339,19 +351,28 @@ func neMVTTileRetry(z, x, y int, clip *[4]float64) ([]byte, string, neMVTProgres
 	}
 }
 
-// nePMTBox — the box of the request: bbox= or the unit keys of the stats export.
-func nePMTBox(r *http.Request) ([4]float64, string, string, int) {
+// nePMTBox — the box of the request: bbox= or the unit keys of the stats
+// export; the filter (`f=`, or the `;f=` of a share hash) as its canonical form.
+func nePMTBox(r *http.Request) ([4]float64, string, string, string, int) {
 	q := r.URL.Query()
+	canon := func() string {
+		if f := q.Get("f"); f != "" {
+			if e := neFiltParse(f); !e.empty() {
+				return e.Canonical()
+			}
+		}
+		return ""
+	}
 	if s := q.Get("bbox"); s != "" && q.Get("share") == "" {
 		if s == "austria" || s == "at" {
-			return neMVTAustria, "austria", "", 0
+			return neMVTAustria, "austria", canon(), "", 0
 		}
 		b, msg := neMVTParseBox(s)
-		return b, "bbox", msg, 400
+		return b, "bbox", canon(), msg, 400
 	}
 	units, msg, code := neStatsUnits(q)
 	if msg != "" {
-		return [4]float64{}, "", msg, code
+		return [4]float64{}, "", "", msg, code
 	}
 	u := units[0]
 	b := u.bbox
@@ -363,7 +384,7 @@ func nePMTBox(r *http.Request) ([4]float64, string, string, int) {
 	if len(units) > 1 {
 		name += fmt.Sprintf("+%d", len(units)-1)
 	}
-	return b, name, "", 0
+	return b, name, canon(), "", 0
 }
 
 // handleNEPMTiles — see file header.
@@ -383,10 +404,13 @@ func handleNEPMTiles(w http.ResponseWriter, r *http.Request, rest string) {
 		return
 	}
 	q := r.URL.Query()
-	box, name, msg, code := nePMTBox(r)
+	box, name, canon, msg, code := nePMTBox(r)
 	if msg != "" {
 		apiError(w, msg, code)
 		return
+	}
+	if canon != "" {
+		name += "-filtered"
 	}
 	minZ, maxZ := neMVTMinZ, 14
 	if v, err := strconv.Atoi(q.Get("minz")); err == nil {
@@ -412,12 +436,12 @@ func handleNEPMTiles(w http.ResponseWriter, r *http.Request, rest string) {
 		return
 	}
 	// an existing archive costs nothing; a new job is charged once
-	id := nePMTJobID(box, minZ, maxZ)
+	id := nePMTJobID(box, minZ, maxZ, canon)
 	nePMTMu.Lock()
 	j := nePMTJobs[id]
 	if j == nil { // the same box already queued/building under an earlier state: that one will do
 		for _, o := range nePMTJobs {
-			if o.Box == box && o.MinZ == minZ && o.MaxZ == maxZ && (o.Status == "queued" || o.Status == "building") {
+			if o.Box == box && o.MinZ == minZ && o.MaxZ == maxZ && o.F == canon && (o.Status == "queued" || o.Status == "building") {
 				j, id = o, o.ID
 				break
 			}
@@ -432,7 +456,7 @@ func handleNEPMTiles(w http.ResponseWriter, r *http.Request, rest string) {
 		}
 	}
 	if j == nil {
-		j, _, msg = nePMTSubmit(box, minZ, maxZ, gateID)
+		j, _, msg = nePMTSubmit(box, minZ, maxZ, gateID, canon)
 	}
 	if msg != "" {
 		w.Header().Set("Retry-After", "60")
