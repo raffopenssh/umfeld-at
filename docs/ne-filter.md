@@ -215,11 +215,19 @@ and the words in the legend; the hash always carries the numeric form.
 ;f=hb>=12,sub=none,k>=3        →  tall structures on unclaimed land, clusters of ≥ 3 cells
 ```
 
-`,` AND between groups · `|` OR inside a group · `..` ranges · `+` sets · flags bare · a bare numeric
-field (`ht`) = *known*, a value is present (any tree), so operator-less old links still apply. All characters
+`,` AND between groups · `|` OR inside a group · `..` ranges · `+` sets · flags bare. All characters
 hash- and query-safe, no `%` encoding. **`;f=` absent = no filter.** Unknown field names / malformed
 terms are ignored one by one (`dbg: filter term ignored`) and the rest applies — the "reserved
-token" posture. `curHash` writes the **canonical form** (fields sorted inside a group, groups in
+token" posture. **Incomplete terms** — a real field without a usable value (`ht`, `trees`, `d=`,
+`sl>=`, `d=nope`) — are never a filter of their own: Go (`neFiltIncompleteOf`) and the Worker
+(`incompleteOf`) list them as `incomplete[{term,field,start,example,values}]` next to `ignored`.
+The page completes them with the field's natural term (`neFiltExample`/`fltExample`: the lowest
+named word that covers the field — `ht` → `ht>=20` *tall-trees*, `d` → `d=acker+gruen`
+*farmland* — else a third of the range / the first member), applies it at once, writes the complete
+link and marks the chip `.gf-c.asm` (dashed, 8 s) with a fading `.gf-note` *assumed from ht ·
+tap to change*. The landing page carries a collapsed **filter reference** (`api_docs_filter_ref.go`,
+`<details id="filter-fields">`, generated from the catalogue: every field, its values, aliases,
+words, presets); the suggestion list's last row *all fields ↓* (`fltRefGo`) opens it. `curHash` writes the **canonical form** (fields sorted inside a group, groups in
 creation order, numbers minimal) so equal filters give equal links and equal Worker cache keys.
 
 Key `f` toggles the row; `;f=` present ⇒ row open on load. `neGlyph.state().filter = {expr, groups,
