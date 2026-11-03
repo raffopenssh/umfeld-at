@@ -87,9 +87,9 @@ func TestNEFiltParseCanonical(t *testing.T) {
 		ext              bool
 	}{
 		{"", "", "", 0, false},
-		{"d=geb+bau,sl>=3", "d=bau+geb,sl>=3", "declared use building land / buildings · slope ≥ 3°", 0, false},
+		{"d=geb+bau,sl>=3", "d=bau+geb,sl>=3", "declared use building land / buildings · slope ≥ 3° (5 %)", 0, false},
 		{"d=geb+bau+geb", "d=bau+geb", "declared use building land / buildings", 0, false},
-		{" steep , forest ", "sl>=20,d=wald", "slope ≥ 20° · declared use forest", 0, false},
+		{" steep , forest ", "sl>=20,d=wald", "slope ≥ 20° (36 %) · declared use forest", 0, false},
 		{"hb=12..30", "hb=12..30", "tallest structure 12–30 m", 0, false},
 		{"hb<=5|ht>=25", "hb<=5|ht>=25", "(tallest structure ≤ 5 m or tallest tree ≥ 25 m)", 0, false},
 		{"n2k", "n2k", "Natura 2000", 0, false},
@@ -98,25 +98,37 @@ func TestNEFiltParseCanonical(t *testing.T) {
 		{"chg=confirmed", "chg=conf", "change in the register confirmed", 0, false},
 		{"CHG=Conf", "chg=conf", "change in the register confirmed", 0, false},
 		{"D=GEB", "d=geb", "declared use buildings", 0, false},
-		{"as=south+north-west", "as=nw+s", "aspect north-west / south", 0, false},
+		{"as=south+north-west", "as=nw+s", "aspect south / north-west", 0, false},
 		{"sub=vineyard", "sub=wein", "subsidy class vineyard", 0, false},
 		{"d=geb,k>=20", "d=geb,k>=20", "declared use buildings · clusters ≥ 20 cells", 0, false},
 		{"k>=3", "k>=3", "clusters ≥ 3 cells", 0, false},
 		{"bogus", "", "", 1, false},
 		{"d=nope", "", "", 1, false},
-		{"d=geb,bogus,sl>=3", "d=geb,sl>=3", "declared use buildings · slope ≥ 3°", 1, false},
+		{"d=geb,bogus,sl>=3", "d=geb,sl>=3", "declared use buildings · slope ≥ 3° (5 %)", 1, false},
 		{"sl=abc", "", "", 1, false},
 		{"rd<=50", "rd<=50", "distance to a road < 100 m", 0, true},
 		{"stor>=4,d=geb", "stor>=4,d=geb", "storeys of the tallest structure ≥ 4 · declared use buildings", 0, true},
 		{"el=1500..2000", "el=1500..2000", "elevation 1500–2000 m", 0, false},
 		{"cont>=10", "cont>=10", "patch size (same declared group) ≥ 10 cells", 0, false},
 		{"d=geb;sl>=3", "", "", 1, false}, // ';' is the hash separator, never part of f
-		{"sl>=3,sl>=3", "sl>=3,sl>=3", "slope ≥ 3° · slope ≥ 3°", 0, false},
+		{"sl>=3,sl>=3", "sl>=3,sl>=3", "slope ≥ 3° (5 %) · slope ≥ 3° (5 %)", 0, false},
 		{"hb>=-1", "hb>=-1", "tallest structure ≥ -1 m", 0, false},
 		{"ht", "", "", 1, false}, // bare numeric field: incomplete, not "any tree"
 		{"trees", "", "", 1, false},
 		{"d=", "", "", 1, false},
 		{"ht,d=wald", "d=wald", "declared use forest", 1, false},
+		{"ht between 10 and 20", "ht=10..20", "tallest tree 10–20 m", 0, false},
+		{"trees 10 to 20 m", "ht=10..20", "tallest tree 10–20 m", 0, false},
+		{"slope at least 15 %", "sl>=8.5", "slope ≥ 8.5° (15 %)", 0, false},
+		{"sl=5..15", "sl=5..15", "slope 5–15° (9–27 %)", 0, false},
+		{"sl>15", "sl>=15", "slope ≥ 15° (27 %)", 0, false},
+		{"as northwest to northeast", "as=n+ne+nw", "aspect north-west to north-east", 0, false},
+		{"as=300..60", "as=n+ne+nw", "aspect north-west to north-east", 0, false},
+		{"aspect north east", "as=ne", "aspect north-east", 0, false},
+		{"facing süd", "as=s", "aspect south", 0, false},
+		{"as=flat+n", "as=flat+n", "aspect north / flat", 0, false},
+		{"ht>=20 %", "", "", 1, false}, // the wrong unit is not guessed at
+		{"as nowhere to somewhere", "", "", 1, false},
 	}
 	for _, c := range cases {
 		e := neFiltParse(c.in)
@@ -325,6 +337,11 @@ var neFiltTestExprs = []string{
 	"d=wald|o=wald,ht>=15", "osh>=80,d=acker", "bcov>=30,bn>=2", "phen=crop", "roof=flat", "hmax>=40", "sl90>=30", "scov>=50,sub=acker",
 	"h=unk,d=geb", "bogus,d=geb", "k>=3", "hb>=0", "el<=100",
 	"ht", "trees", "d=", "sl>=", "ht<=", "bogus", "ht,d=wald", "k", // incomplete: a field without a value is a nudge, never a filter
+	// human phrasing (neFiltNorm / norm): between, units, slope in percent, compass words and arcs
+	"ht between 10 and 20", "trees 10 to 20 m", "ht 10-20", "ht \u2265 20 m", "slope at least 15 %", "slope under 5\u00b0", "sl=5..15%", "sl between 10% and 20%", "sl>15", "el over 1500",
+	"as northwest to northeast", "as=nw..ne", "as=ne..nw", "aspect north east", "as north and south", "as=300..60", "facing s\u00fcd", "orientation=ost", "as=flat+n", "as=n+ne+e+se+s+sw+w+nw",
+	"d wald or wasser", "ht is unknown", "bio=yes", "ht 20", "ht between", "as nowhere to somewhere", "ht>=20 %", "sl90=10..20",
+	"as=nan..inf", "as=1e400..n", "as=-0..360", "as=..", "as=n..", "as=n..n", "as=n+n..e", "sl between 1e9% and 20%", "ht between 1 and 2 and 3", "ht 10 - 20 m", "as north west to south east", "as flat..n",
 }
 
 func TestNEFiltEvalAgainstReference(t *testing.T) {

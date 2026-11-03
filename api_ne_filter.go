@@ -43,6 +43,7 @@ func handleNEFilterFields(w http.ResponseWriter, r *http.Request) {
 		"grammar": neFilterGrammar,
 		"fields":  neFiltFields,
 		"words":   neFiltWords,
+		"alias":   neFiltAlias,
 		"presets": presets,
 		"bin_deg": neFidxBinDeg,
 		"index":   "/api/v1/ne/glyph/fidx?i=&j=&p=core|ext|all  (w = i·0.025, s = j·0.025; application/vnd.ne-fidx, see docs/ne-filter.md §3b)",

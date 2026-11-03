@@ -39,6 +39,7 @@ func neFilterRefHTML() string {
 	b.WriteString(`<p>A filter is <code>field</code> <code>operator</code> <code>value</code>, joined by <code>,</code> (and) and <code>|</code> (or): <code>d=wald,sl>=20|el>=1500</code>. ` +
 		`Ranges read <code>>=a</code>, <code><=b</code>, <code>a..b</code>; sets <code>=m1+m2</code>; a flag stands bare (<code>n2k</code>); ` +
 		`<code>field=unk</code> keeps the cells without a value; <code>k>=n</code> keeps only match clusters of at least n cells. ` +
+		`Plain phrasing works too: <code>trees between 10 and 20 m</code>, <code>slope at least 15 %</code> (percent becomes degrees), <code>elevation under 900</code>, <code>facing northwest to northeast</code> (a clockwise arc), <code>aspect north and south</code>. ` +
 		`A field named without a value (<code>ht</code>, <code>d=</code>) takes its natural term (<code>ht>=20</code>), marked on the chip so it can be changed. Type a word in place of a term; the link always carries the numeric form.</p>`)
 	// one line per field, grouped, flowing in columns: `d declared use · declared · use  geb bau acker … · forest = d=wald`
 	b.WriteString(`<div class="fref-cols">`)

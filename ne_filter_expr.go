@@ -15,6 +15,7 @@ package main
 
 import (
 	"math"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -148,6 +149,119 @@ var neFiltAlias = map[string]string{
 	"tree": "ht", "trees": "ht", "treeheight": "ht", "height": "h", "slope": "sl", "elevation": "el",
 	"building": "hb", "buildings": "hb", "structure": "hb", "structures": "hb", "canopycover": "canopy", "crown": "canopy",
 	"use": "d", "declared": "d", "observed": "o", "subsidy": "sub", "claim": "sub", "natura": "n2k", "road": "rd", "water": "wat", "remoteness": "rem", "giant": "ht",
+	"aspect": "as", "orientation": "as", "facing": "as", "exposure": "as", "exposition": "as",
+}
+
+// neFiltAspectAlias — what a reader may write for a compass sector besides the
+// member id and its label (spaces and hyphens are ignored: `north east`,
+// `north-east`, `northeast` all fit). Mirrored in ne_glyph_filter.js (ASPECT).
+var neFiltAspectAlias = map[string]string{
+	"nord": "n", "ost": "e", "o": "e", "sued": "s", "süd": "s", "nordost": "ne", "no": "ne", "suedost": "se", "südost": "se", "so": "se",
+	"suedwest": "sw", "südwest": "sw", "nordwest": "nw", "eben": "flat", "flach": "flat", "level": "flat",
+}
+
+// neFiltUnits — unit suffixes a value may carry (`20 m`, `15°`, `15 %`), mapped to the catalogue's unit strings.
+var neFiltUnits = map[string]string{"m": "m", "meter": "m", "meters": "m", "metres": "m", "°": "°", "deg": "°", "degree": "°", "degrees": "°", "%": "%", "percent": "%", "pct": "%", "cell": "cells", "cells": "cells", "year": "year", "years": "year", "yr": "year"}
+
+const neFiltValRe = `(-?\d+(?:\.\d+)?)\s*((?:m|meters?|metres?|deg|degrees?|percent|pct|cells?|years?|yr)\b|°|%)?`
+
+var (
+	neFiltReHead    = regexp.MustCompile(`^([a-z][a-z0-9]*)(.*)$`)
+	neFiltReBetween = regexp.MustCompile(`^(?:=\s*|is\s+)?(?:between\s+|from\s+)?` + neFiltValRe + `\s*(?:and|to|\.\.|-)\s*` + neFiltValRe + `$`)
+	neFiltReLower   = regexp.MustCompile(`^(?:>=|>|≥|at least|min(?:imum)?|over|above|more than|from|not less than)\s*` + neFiltValRe + `$`)
+	neFiltReUpper   = regexp.MustCompile(`^(?:<=|<|≤|at most|max(?:imum)?|under|below|up to|less than|not more than|to)\s*` + neFiltValRe + `$`)
+	neFiltReExact   = regexp.MustCompile(`^(?:=|==|:|is|of)?\s*` + neFiltValRe + `$`)
+	neFiltReSetTo   = regexp.MustCompile(`^(?:=|:|is)?\s*(?:between\s+|from\s+)?([a-zäöü][a-zäöü -]*?|\d+)\s+to\s+([a-zäöü][a-zäöü -]*|\d+)$`)
+)
+
+// neFiltNorm — human phrasing → the core grammar, one term at a time
+// (mirrored by norm() in ne_glyph_filter.js). Runs after the word table, before
+// neFiltParseTerm, so the hash and the API still carry only the core form:
+//
+//	ht between 10 and 20 · trees 10 to 20 m · ht 10-20 · ht ≥ 20 m · slope at least 15 % · slope under 5° · el over 1500
+//	as northwest to northeast · as=nw..ne · aspect north east · as north and south
+//
+// A value may carry the field's unit (`20 m`, `15°`, `50 %`); slope in percent
+// is converted to degrees (atan, one decimal). Anything else is left as typed and
+// fails in neFiltParseTerm like before (→ ignored / incomplete).
+func neFiltNorm(t string) string {
+	t = strings.Join(strings.Fields(t), " ")
+	m := neFiltReHead.FindStringSubmatch(t)
+	if m == nil {
+		return t
+	}
+	f, rest := m[1], strings.TrimSpace(m[2])
+	if a, ok := neFiltAlias[f]; ok {
+		f = a
+	}
+	fd := neFiltByID[f]
+	if fd == nil || f == "k" || rest == "" {
+		return t
+	}
+	if rest == "unk" || rest == "=unk" || rest == "unknown" || rest == "is unknown" || rest == "= unknown" {
+		return f + "=unk"
+	}
+	if neFiltRangeOK(fd) {
+		val := func(num, unit string) (string, bool) {
+			if unit == "" {
+				return num, true
+			}
+			u := neFiltUnits[unit]
+			if u == "%" && fd.Unit == "°" {
+				p, err := strconv.ParseFloat(num, 64)
+				if err != nil {
+					return "", false
+				}
+				return neFiltNum(math.Round(math.Atan(p/100)*180/math.Pi*10) / 10), true
+			}
+			return num, u != "" && u == fd.Unit
+		}
+		if x := neFiltReBetween.FindStringSubmatch(rest); x != nil {
+			a, oka := val(x[1], x[2])
+			b, okb := val(x[3], x[4])
+			if oka && okb {
+				return f + "=" + a + ".." + b
+			}
+			return t
+		}
+		for _, r := range []struct {
+			re *regexp.Regexp
+			op string
+		}{{neFiltReLower, ">="}, {neFiltReUpper, "<="}, {neFiltReExact, "="}} {
+			if x := r.re.FindStringSubmatch(rest); x != nil {
+				if a, ok := val(x[1], x[2]); ok {
+					return f + r.op + a
+				}
+				return t
+			}
+		}
+		return t
+	}
+	// sets, flags, sites: `as north east`, `as north to east`, `d wald or wasser`, `as=nw..ne`
+	if f == "as" {
+		if x := neFiltReSetTo.FindStringSubmatch(rest); x != nil {
+			return f + "=" + strings.TrimSpace(x[1]) + ".." + strings.TrimSpace(x[2])
+		}
+	}
+	v := ""
+	switch {
+	case strings.HasPrefix(rest, "="), strings.HasPrefix(rest, ":"):
+		v = strings.TrimSpace(rest[1:])
+	case strings.HasPrefix(rest, "is "):
+		v = strings.TrimSpace(rest[3:])
+	case strings.HasPrefix(m[2], " "): // `as north east`, `d wald or wasser`: a space after the field
+		v = rest
+	default:
+		return t
+	}
+	if v == "" {
+		return f + "="
+	}
+	if fd.Kind == nfFlag && (v == "yes" || v == "1" || v == "true") {
+		return f
+	}
+	v = strings.NewReplacer(" and ", "+", " or ", "+", " + ", "+", ", ", "+", "/", "+").Replace(v)
+	return f + "=" + v
 }
 
 var neFiltWords = map[string]string{
@@ -338,6 +452,8 @@ func neFiltParse(s string) *neFiltExpr {
 			}
 			if w, ok := neFiltWords[strings.ToLower(t)]; ok {
 				t = w
+			} else {
+				t = neFiltNorm(t)
 			}
 			if term, ok := neFiltParseTerm(t); ok {
 				if term.F == "k" {
@@ -464,6 +580,9 @@ func neFiltParseTerm(t string) (neFiltTerm, bool) {
 			return term, true
 		}
 		// set / bits / sites / flag
+		if fd.ID == "as" {
+			v = neFiltAspectExpand(v)
+		}
 		seen := map[string]bool{}
 		for _, m := range strings.Split(v, "+") {
 			m = strings.ToLower(strings.TrimSpace(m))
@@ -505,6 +624,13 @@ func neFiltParseTerm(t string) (neFiltTerm, bool) {
 func neFiltRangeOK(fd *neFiltField) bool { return fd.Kind == nfNum || fd.Kind == nfBucket }
 
 func neFiltMember(fd *neFiltField, m string) int {
+	m = strings.ToLower(strings.TrimSpace(m))
+	if fd.ID == "as" {
+		m = strings.NewReplacer(" ", "", "-", "").Replace(m)
+		if a, ok := neFiltAspectAlias[m]; ok {
+			m = a
+		}
+	}
 	for i, x := range fd.Members {
 		if x != "" && strings.EqualFold(x, m) {
 			return i
@@ -515,8 +641,95 @@ func neFiltMember(fd *neFiltField, m string) int {
 		if x != "" && i < len(fd.Members) && strings.EqualFold(strings.ReplaceAll(x, " ", "-"), strings.ReplaceAll(m, " ", "-")) {
 			return i
 		}
+		if fd.ID == "as" && x != "" && i < len(fd.Members) && strings.NewReplacer(" ", "", "-", "").Replace(strings.ToLower(x)) == m {
+			return i
+		}
 	}
 	return -1
+}
+
+// neFiltAspectExpand — `nw..ne` (or `300..60` in degrees) → the clockwise arc
+// of sectors `nw+n+ne`; other members pass through. Mirrored in the Worker.
+func neFiltAspectExpand(v string) string {
+	fd := neFiltByID["as"]
+	var out []string
+	for _, p := range strings.Split(v, "+") {
+		q := strings.Index(p, "..")
+		if q < 0 {
+			out = append(out, p)
+			continue
+		}
+		a, b := neFiltAspectSector(fd, p[:q]), neFiltAspectSector(fd, p[q+2:])
+		if a < 0 || b < 0 {
+			out = append(out, p) // fails in the member loop → ignored
+			continue
+		}
+		for i := a; ; i = (i + 1) % 8 {
+			out = append(out, fd.Members[i])
+			if i == b {
+				break
+			}
+		}
+	}
+	return strings.Join(out, "+")
+}
+
+// neFiltAspectSector — a sector name or a bearing in degrees → 0..7 (N…NW), −1 if neither (flat is not on the ring).
+func neFiltAspectSector(fd *neFiltField, s string) int {
+	s = strings.TrimSpace(s)
+	if d, err := strconv.ParseFloat(s, 64); err == nil {
+		if math.IsNaN(d) || math.IsInf(d, 0) || d < 0 || d > 360 { // ParseFloat accepts "nan"/"inf" without error
+			return -1
+		}
+		return int(math.Round(d/45)) % 8
+	}
+	if i := neFiltMember(fd, s); i >= 0 && i < 8 {
+		return i
+	}
+	return -1
+}
+
+// neFiltAspectWords — a set of sectors in compass order; a clockwise arc of
+// three or more reads `north-west to north-east`. Mirrored in the Worker.
+func neFiltAspectWords(fd *neFiltField, set []string) string {
+	in := [9]bool{}
+	for _, m := range set {
+		if i := neFiltMember(fd, m); i >= 0 {
+			in[i] = true
+		}
+	}
+	n, start := 0, -1
+	for i := 0; i < 8; i++ {
+		if in[i] {
+			n++
+			if !in[(i+7)%8] {
+				if start >= 0 {
+					start = -2 // more than one arc
+				} else {
+					start = i
+				}
+			}
+		}
+	}
+	var ws []string
+	if n >= 3 && n < 8 && start >= 0 {
+		ws = append(ws, fd.Labels[start]+" to "+fd.Labels[(start+n-1)%8])
+	} else {
+		for i := 0; i < 8; i++ {
+			if in[i] {
+				ws = append(ws, fd.Labels[i])
+			}
+		}
+	}
+	if in[8] {
+		ws = append(ws, fd.Labels[8])
+	}
+	return strings.Join(ws, " / ")
+}
+
+// neFiltPct — a slope in degrees as percent (`15° (27 %)` in words).
+func neFiltPct(deg float64) string {
+	return neFiltNum(math.Round(math.Tan(deg*math.Pi/180) * 100))
 }
 
 // neFiltNum — minimal decimal form.
@@ -604,6 +817,9 @@ func (t neFiltTerm) Words() string {
 		if fd.Kind == nfSites {
 			return "site " + strings.Join(t.Set, " / ")
 		}
+		if fd.ID == "as" {
+			return fd.Label + " " + neFiltAspectWords(fd, t.Set)
+		}
 		ws := make([]string, 0, len(t.Set))
 		for _, m := range t.Set {
 			if i := neFiltMember(fd, m); i >= 0 && i < len(fd.Labels) && fd.Labels[i] != "" {
@@ -626,15 +842,26 @@ func (t neFiltTerm) Words() string {
 		return fd.Label + " ≥ " + strconv.Itoa(fd.Edges[neFiltBucketOf(fd.Edges, t.Lo)]) + u
 	case !math.IsNaN(t.Lo) && !math.IsNaN(t.Hi):
 		if t.Lo == t.Hi {
-			return fd.Label + " = " + neFiltNum(t.Lo) + u
+			return fd.Label + " = " + neFiltNum(t.Lo) + u + neFiltSlopePct(fd, t.Lo, math.NaN())
 		}
-		return fd.Label + " " + neFiltNum(t.Lo) + "–" + neFiltNum(t.Hi) + u
+		return fd.Label + " " + neFiltNum(t.Lo) + "–" + neFiltNum(t.Hi) + u + neFiltSlopePct(fd, t.Lo, t.Hi)
 	case !math.IsNaN(t.Lo):
-		return fd.Label + " ≥ " + neFiltNum(t.Lo) + u
+		return fd.Label + " ≥ " + neFiltNum(t.Lo) + u + neFiltSlopePct(fd, t.Lo, math.NaN())
 	case !math.IsNaN(t.Hi):
-		return fd.Label + " ≤ " + neFiltNum(t.Hi) + u
+		return fd.Label + " ≤ " + neFiltNum(t.Hi) + u + neFiltSlopePct(fd, t.Hi, math.NaN())
 	}
 	return fd.Label
+}
+
+// neFiltSlopePct — slopes read in both units: ` (27 %)` / ` (9–27 %)` after the degrees.
+func neFiltSlopePct(fd *neFiltField, a, b float64) string {
+	if fd.ID != "sl" && fd.ID != "sl90" {
+		return ""
+	}
+	if math.IsNaN(b) {
+		return " (" + neFiltPct(a) + " %)"
+	}
+	return " (" + neFiltPct(a) + "–" + neFiltPct(b) + " %)"
 }
 
 // ── evaluation over a bin ────────────────────────────────────────────────────
