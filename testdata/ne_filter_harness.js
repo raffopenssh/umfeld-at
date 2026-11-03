@@ -23,7 +23,7 @@ if (job.bin) {
 }
 for (const f of job.exprs) {
   const e = h.parse(f);
-  out.exprs.push({ canon: h.canonical(e), words: h.words(e), ignored: e.ignored, ext: h.needsExt(e) });
+  out.exprs.push({ canon: h.canonical(e), words: h.words(e), ignored: e.ignored, incomplete: e.incomplete, ext: h.needsExt(e) });
   if (bin) out.masks.push(Buffer.from(h.evaluate(bin, e)).toString('base64'));
 }
 process.stdout.write(JSON.stringify(out));

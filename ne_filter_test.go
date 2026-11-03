@@ -113,6 +113,10 @@ func TestNEFiltParseCanonical(t *testing.T) {
 		{"d=geb;sl>=3", "", "", 1, false}, // ';' is the hash separator, never part of f
 		{"sl>=3,sl>=3", "sl>=3,sl>=3", "slope ≥ 3° · slope ≥ 3°", 0, false},
 		{"hb>=-1", "hb>=-1", "tallest structure ≥ -1 m", 0, false},
+		{"ht", "", "", 1, false}, // bare numeric field: incomplete, not "any tree"
+		{"trees", "", "", 1, false},
+		{"d=", "", "", 1, false},
+		{"ht,d=wald", "d=wald", "declared use forest", 1, false},
 	}
 	for _, c := range cases {
 		e := neFiltParse(c.in)
@@ -127,6 +131,11 @@ func TestNEFiltParseCanonical(t *testing.T) {
 		}
 		if got := neFiltNeedsExt(e); got != c.ext {
 			t.Errorf("%q ext = %v, want %v", c.in, got, c.ext)
+		}
+		for _, inc := range e.Incomplete {
+			if neFiltByID[inc.Field] == nil || inc.Start == "" || inc.Example == "" || inc.Label == "" {
+				t.Errorf("%q incomplete %+v", c.in, inc)
+			}
 		}
 		// canonical is a fixed point
 		if e2 := neFiltParse(e.Canonical()); e2.Canonical() != e.Canonical() {
@@ -171,6 +180,46 @@ func TestNEFiltParseCanonical(t *testing.T) {
 	}
 	if e := neFiltParse("k>=99999999"); e.K > 4096 {
 		t.Errorf("k not capped: %d", e.K)
+	}
+}
+
+func TestNEFiltIncomplete(t *testing.T) {
+	cases := []struct{ in, field, start, example string }{
+		{"ht", "ht", "ht>=", "ht>=20"}, {"trees", "ht", "ht>=", "ht>=20"}, {"ht<=", "ht", "ht<=", "ht>=20"}, {"sl>=", "sl", "sl>=", "sl<=3"},
+		{"d=", "d", "d=", "d=acker+gruen"}, {"declared", "d", "d=", "d=acker+gruen"}, {"n2ks=", "n2ks", "n2ks=", "n2ks"}, {"rd", "rd", "rd>=", "rd<=50"},
+		{"el", "el", "el>=", "el<=400"}, {"d=nope", "d", "d=", "d=acker+gruen"}, {"sl=abc", "sl", "sl>=", "sl<=3"}, {"stor", "stor", "stor>=", "stor>=7"}, {"ndvi", "ndvi", "ndvi>=", "ndvi>=1"}, {"als", "als", "als=", "als=2020"},
+	}
+	for _, c := range cases {
+		e := neFiltParse(c.in)
+		if len(e.Ignored) != 1 || len(e.Incomplete) != 1 {
+			t.Errorf("%q: ignored %v incomplete %+v", c.in, e.Ignored, e.Incomplete)
+			continue
+		}
+		inc := e.Incomplete[0]
+		if inc.Term != c.in || inc.Field != c.field || inc.Start != c.start || inc.Example != c.example || inc.Label != neFiltByID[c.field].Label {
+			t.Errorf("%q: got %+v", c.in, inc)
+		}
+		if e2 := neFiltParse(inc.Example); len(e2.Ignored) != 0 || e2.empty() {
+			t.Errorf("%q: example %q does not parse", c.in, inc.Example)
+		}
+	}
+	for _, in := range []string{"bogus", "k", "k>=1", "n2k", "bogus=3"} {
+		if e := neFiltParse(in); len(e.Incomplete) != 0 {
+			t.Errorf("%q: unexpected incomplete %+v", in, e.Incomplete)
+		}
+	}
+	// every field has a usable example and a value line (the landing-page reference)
+	for i := range neFiltFields {
+		fd := &neFiltFields[i]
+		if e := neFiltParse(neFiltExample(fd)); len(e.Ignored) != 0 || e.empty() {
+			t.Errorf("%s: example %q does not parse", fd.ID, neFiltExample(fd))
+		}
+		if neFiltValues(fd) == "" {
+			t.Errorf("%s: no values line", fd.ID)
+		}
+	}
+	if h := neFilterRefHTML(); !strings.Contains(h, `id="filter-fields"`) || !strings.Contains(h, "tallest tree") || !strings.Contains(h, "tall-trees = ht&gt;=20") {
+		t.Errorf("reference block incomplete")
 	}
 }
 
@@ -275,6 +324,7 @@ var neFiltTestExprs = []string{
 	"trees>=20", "giants", "rem>=60,d=wald", "remote,forest", "central", "tree=10..20,slope<=5", "tall-trees|treeless", "height>=8,buildings>=12", "dh>=2", "dh<=-2", "tpi>=10", "tri<=3", "ver=unk", "d=geb,k>=4", "sl>=10,k>=2", "steep,forest", "settlement", "protected,farmland",
 	"d=wald|o=wald,ht>=15", "osh>=80,d=acker", "bcov>=30,bn>=2", "phen=crop", "roof=flat", "hmax>=40", "sl90>=30", "scov>=50,sub=acker",
 	"h=unk,d=geb", "bogus,d=geb", "k>=3", "hb>=0", "el<=100",
+	"ht", "trees", "d=", "sl>=", "ht<=", "bogus", "ht,d=wald", "k", // incomplete: a field without a value is a nudge, never a filter
 }
 
 func TestNEFiltEvalAgainstReference(t *testing.T) {
@@ -478,6 +528,9 @@ func TestNEFilterJSParity(t *testing.T) {
 			Words   string   `json:"words"`
 			Ignored []string `json:"ignored"`
 			Ext     bool     `json:"ext"`
+			Inc     []struct {
+				T, F, Start string
+			} `json:"incomplete"`
 		} `json:"exprs"`
 		Masks []string `json:"masks"`
 	}
@@ -501,6 +554,15 @@ func TestNEFilterJSParity(t *testing.T) {
 		}
 		if js.Ext != neFiltNeedsExt(e) {
 			t.Errorf("%q: JS ext %v ≠ Go %v", f, js.Ext, neFiltNeedsExt(e))
+		}
+		if len(js.Inc) != len(e.Incomplete) {
+			t.Errorf("%q: JS incomplete %v ≠ Go %v", f, js.Inc, e.Incomplete)
+		} else {
+			for k, inc := range e.Incomplete {
+				if js.Inc[k].T != inc.Term || js.Inc[k].F != inc.Field || js.Inc[k].Start != inc.Start {
+					t.Errorf("%q: JS incomplete %+v ≠ Go %+v", f, js.Inc[k], inc)
+				}
+			}
 		}
 		want := b.eval(e)
 		got, _ := base64.StdEncoding.DecodeString(res.Masks[i])

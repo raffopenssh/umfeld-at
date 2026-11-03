@@ -6,7 +6,7 @@
 //	GET /api/v1/ne/filter?kg=63330&f=…             the KG's bbox as the bulk key
 //	GET /api/v1/ne/filter/fields                   the catalogue: fields, named words, presets, grammar
 //
-// count   {cells, match, ha, by_d[9], bins, partial_bins, expr, words, ignored, link}
+// count   {cells, match, ha, by_d[9], bins, partial_bins, expr, words, ignored, incomplete, link}
 // cells   + "cells":[hex ids] (≤ 65 536, else 413 → split the box)
 // h3      + "h3":[compacted ids]
 // geojson FeatureCollection of cell hexagons (≤ 4 096)
@@ -27,7 +27,7 @@ import (
 	"github.com/uber/h3-go/v4"
 )
 
-const neFilterGrammar = "f=<group>(,<group>)*  group=<term>(|<term>)*  term=<field><op><value> · `,` AND between groups · `|` OR inside a group · ranges a..b / a.. / ..b (or >=a, <=b) · sets m1+m2 · flags bare · field=unk matches cells without a value · k>=n keeps match clusters of ≥ n cells · unknown fields and malformed terms are ignored one by one"
+const neFilterGrammar = "f=<group>(,<group>)*  group=<term>(|<term>)*  term=<field><op><value> · `,` AND between groups · `|` OR inside a group · ranges a..b / a.. / ..b (or >=a, <=b) · sets m1+m2 · flags bare · field=unk matches cells without a value · k>=n keeps match clusters of ≥ n cells · unknown fields and malformed terms are ignored one by one · a field named without a usable value (`ht`, `d=`) is not a filter: it is listed in incomplete[] with what to type"
 
 // handleNEFilterFields — GET /api/v1/ne/filter/fields
 func handleNEFilterFields(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +197,7 @@ func handleNEFilter(w http.ResponseWriter, r *http.Request) {
 		link += ";f=" + c
 	}
 	out := map[string]interface{}{
-		"bbox": []float64{bw, bs, be, bn}, "expr": expr.Canonical(), "words": expr.Words(), "ignored": expr.Ignored,
+		"bbox": []float64{bw, bs, be, bn}, "expr": expr.Canonical(), "words": expr.Words(), "ignored": expr.Ignored, "incomplete": expr.Incomplete,
 		"cells": cells, "match": match, "ha": math.Round(ha*10) / 10, "by_d": neFilterByD(byD),
 		"bins": len(bins), "partial_bins": partial, "link": link, "notice": NENotice(), "attribution": neFidxAttribution,
 	}

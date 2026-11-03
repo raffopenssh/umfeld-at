@@ -802,7 +802,7 @@ func neStatsOwn(u *neStatsUnit, expr *neFiltExpr) (*neStatsEnvelope, int) {
 		e.Coverage["note"] = u.note + "; no cells held for this unit yet"
 	}
 	if filt {
-		e.Filter = map[string]interface{}{"f": canon, "words": expr.Words(), "ignored": expr.Ignored, "note": "figures cover the matching cells; unit_cells_n / unit_area_ha are the whole unit; peers are not filtered"}
+		e.Filter = map[string]interface{}{"f": canon, "words": expr.Words(), "ignored": expr.Ignored, "incomplete": expr.Incomplete, "note": "figures cover the matching cells; unit_cells_n / unit_area_ha are the whole unit; peers are not filtered"}
 	}
 	e.Figures = neStatsFigures(u, acc, filt)
 	e.Link = neStatsLink(u, canon)

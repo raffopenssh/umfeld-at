@@ -381,6 +381,7 @@ endpoint, so a client can draw all of it itself (keys in brackets; paths under <
 <tr><td>filter (f)</td><td>chips over the cells, e.g. <code>h>=8,sl=15..30,n2k</code> · cells that fail are veiled, the readout counts the rest</td><td><code>filter?bbox=&amp;f=</code> · <code>filter/fields</code></td></tr>
 <tr><td>card</td><td>the cell or place under the pointer: use split, structures, change, diff, subsidy, trees</td><td><code>glyph/cell?lon=&amp;lat=</code> · <code>cell/{h3}</code></td></tr>
 <tr><td>link ▾</td><td>the view as a link, with everything in it (profile, overlays, time window, filter, selection) · export of the selection: JSON, CSV, flat, a Sheets formula · for QGIS: vector tiles or a PMTiles archive</td><td><code>stats/unit?share=&amp;format=</code> · <code>mvt/{z}/{x}/{y}.pbf</code> · <code>pmtiles?bbox=</code></td></tr></table>
+{FILTER_REF}
 <h2>Around a point</h2>
 <pre>GET /api/v1/context?lon=15.0857&amp;lat=47.0665
 GET /api/v1/context?lon=15.0857&amp;lat=47.0665&amp;area_sqm=812&amp;building_count=1
@@ -417,7 +418,7 @@ BEV, AMA, BML, EEA, UNEP-WCMC, OpenStreetMap, basemap.at or the Bundeskanzleramt
 // publicDocsHTMLText — the landing page with the NE block spliced in
 // (publicNEHTMLSection lives in the ban-checked api_docs_public_ne.go).
 func publicDocsHTMLText() string {
-	r := strings.NewReplacer("{NE}", publicNEHTMLSection, "{SEO}", seoHeadMeta, "{CSS}", monoDocsCSS+neGlyphCSS, "{STAGE_NOTE}", serviceStageNote, "{STAGE}", serviceStage)
+	r := strings.NewReplacer("{NE}", publicNEHTMLSection, "{SEO}", seoHeadMeta, "{CSS}", monoDocsCSS+neGlyphCSS+neFilterRefCSS, "{FILTER_REF}", neFilterRefHTML(), "{STAGE_NOTE}", serviceStageNote, "{STAGE}", serviceStage)
 	return neSpliceCoverage(r.Replace(publicDocsHTMLTemplate))
 }
 

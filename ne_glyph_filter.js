@@ -6,7 +6,7 @@
    (OffscreenCanvas → PNG blob). The page only places <image>s.
 
    in : {t:'init', base, veil:[r,g,b], acc:[r,g,b]}
-        {t:'expr', f}                        → {t:'expr', canon, words, ignored, ext, empty}
+        {t:'expr', f}                        → {t:'expr', canon, words, ignored, incomplete:[{t,f,start}], ext, empty}
         {t:'want', tiles:[{k,b,bi,bj,x,y,w,h}], px} → one {t:'tile', k, b, url|null, err} per tile as it lands / repaints, plus
                                              {t:'bin', b, n, match, state} per bin (counts) — b = bin key 'i/j' (0.025°), tiles are the view's
                                              LOD-0/1 tiles painted at px screen pixels per frame unit (crisp at any zoom, bounded canvas)
@@ -28,7 +28,7 @@ var ALIAS={tree:'ht',trees:'ht',treeheight:'ht',height:'h',slope:'sl',elevation:
 function parseTerm(t){var m=/^([a-z][a-z0-9]*)(.*)$/.exec(t);if(!m)return null;var f=ALIAS[m[1]]||m[1],rest=m[2],term={f:f,lo:NaN,hi:NaN,set:[],unk:false,flag:false};
  if(f==='k'){var r=rest.indexOf('>=')===0?rest.slice(2):rest.indexOf('=')===0?rest.slice(1):null;if(r==null)return null;var v=+r;if(!isFinite(v))return null;term.lo=v;return term}
  var fd=FIELDS[f];if(!fd)return null;
- if(rest===''){if(fd.kind==='flag'||fd.kind==='sites'){term.flag=true;return term}if(f==='chg'){term.set=['cand','conf'];return term}if(rangeOK(fd)){term.flag=true;return term}/* bare numeric field = known (a value is present): `ht` = any tree */return null}
+ if(rest===''){if(fd.kind==='flag'||fd.kind==='sites'){term.flag=true;return term}if(f==='chg'){term.set=['cand','conf'];return term}return null/* a bare numeric/set field is incomplete (parse → e.incomplete): the page asks for a value */}
  var num=function(s){var v=+s;return s!==''&&isFinite(v)?v:null};
  if(rest.indexOf('>=')===0){if(!rangeOK(fd))return null;var a=num(rest.slice(2));if(a==null)return null;term.lo=a;return term}
  if(rest.indexOf('<=')===0){if(!rangeOK(fd))return null;var b=num(rest.slice(2));if(b==null)return null;term.hi=b;return term}
@@ -36,11 +36,13 @@ function parseTerm(t){var m=/^([a-z][a-z0-9]*)(.*)$/.exec(t);if(!m)return null;v
  if(rangeOK(fd)){var p=v.indexOf('..');if(p>=0){var a2=v.slice(0,p),b2=v.slice(p+2);if(a2===''&&b2==='')return null;if(a2!==''){var x=num(a2);if(x==null)return null;term.lo=x}if(b2!==''){var y=num(b2);if(y==null)return null;term.hi=y}if(!isNaN(term.lo)&&!isNaN(term.hi)&&term.lo>term.hi){var tmp=term.lo;term.lo=term.hi;term.hi=tmp}return term}var x2=num(v);if(x2==null)return null;term.lo=term.hi=x2;return term}
  var seen={};var parts=v.split('+');for(var i=0;i<parts.length;i++){var mm=parts[i].trim().toLowerCase();if(!mm||seen[mm])continue;if(fd.kind==='set'||fd.kind==='bits'){var mi=member(fd,mm);if(mi<0)return null;mm=fd.members[mi]}else if(fd.kind==='sites'){mm=mm.toUpperCase();if(mm.length!==9||mm.indexOf('AT')!==0)return null}else if(fd.kind==='flag'){if(mm==='1'||mm==='true'||mm==='yes'){term.flag=true;return term}return null}seen[mm]=true;term.set.push(mm)}term.set.sort()
  if(!term.set.length)return null;return term}
-function parse(s){var e={groups:[],k:0,ignored:[]};s=(s||'').trim().toLowerCase();if(!s)return e;if(s.length>2048)s=s.slice(0,2048);s.split(',').forEach(function(g){g=g.trim();if(!g)return;if(e.groups.length>=64){e.ignored.push(g);return}var terms=[];g.split('|').forEach(function(t){t=t.trim();if(!t)return;var w=WORDS[t.toLowerCase()];if(w)t=w;var term=parseTerm(t);if(term){if(term.f==='k'){if(!isNaN(term.lo)&&term.lo>=2)e.k=Math.min(4096,Math.floor(term.lo));else e.ignored.push(t);return}terms.push(term)}else e.ignored.push(t)});if(terms.length)e.groups.push(terms)});return e}
+function parse(s){var e={groups:[],k:0,ignored:[],incomplete:[]};s=(s||'').trim().toLowerCase();if(!s)return e;if(s.length>2048)s=s.slice(0,2048);s.split(',').forEach(function(g){g=g.trim();if(!g)return;if(e.groups.length>=64){e.ignored.push(g);return}var terms=[];g.split('|').forEach(function(t){t=t.trim();if(!t)return;var w=WORDS[t.toLowerCase()];if(w)t=w;var term=parseTerm(t);if(term){if(term.f==='k'){if(!isNaN(term.lo)&&term.lo>=2)e.k=Math.min(4096,Math.floor(term.lo));else e.ignored.push(t);return}terms.push(term)}else{e.ignored.push(t);var inc=incompleteOf(t);if(inc)e.incomplete.push(inc)}});if(terms.length)e.groups.push(terms)});return e}
+/* an ignored term whose field exists (`ht`, `trees`, `d=`, `sl>=`) is not a filter but a nudge: {t, f, start} — the page puts `start` in the input and asks for a value (mirrors neFiltIncompleteOf) */
+function incompleteOf(t){var m=/^([a-z][a-z0-9]*)(.*)$/.exec(t);if(!m)return null;var f=ALIAS[m[1]]||m[1],rest=m[2],fd=FIELDS[f];if(!fd||f==='k')return null;var op=rangeOK(fd)?'>=':'=';return{t:t,f:f,start:f+(rest==='>='||rest==='<='||rest==='='?rest:op)}}
 function fnum(v){return Math.abs(v-Math.round(v))<1e-9?String(Math.round(v)):String(+v.toFixed(3))}
 function termStr(t){if(t.f==='k')return'k>='+fnum(t.lo);if(t.unk)return t.f+'=unk';if(t.flag)return t.f;if(t.set.length)return t.f+'='+t.set.join('+');if(!isNaN(t.lo)&&!isNaN(t.hi))return t.lo===t.hi?t.f+'='+fnum(t.lo):t.f+'='+fnum(t.lo)+'..'+fnum(t.hi);if(!isNaN(t.lo))return t.f+'>='+fnum(t.lo);return t.f+'<='+fnum(t.hi)}
 function canonical(e){var p=e.groups.map(function(g){return g.map(termStr).sort().join('|')});if(e.k>1)p.push('k>='+e.k);return p.join(',')}
-function termWords(t){var fd=FIELDS[t.f];if(!fd)return t.f;var L=fd.label,u=fd.unit||'';if(u&&u!=='%'&&u!=='°')u='\u202f'+u;if(t.f==='k')return'clusters ≥ '+t.lo+' cells';if(t.unk)return L+' unknown';if(t.flag)return rangeOK(fd)?L+' known':L;if(t.set.length){if(fd.kind==='sites')return'site '+t.set.join(' / ');return L+' '+t.set.map(function(m){var i=member(fd,m);return fd.labels&&fd.labels[i]!=null?fd.labels[i]:(m===''?'none':m)}).join(' / ')}
+function termWords(t){var fd=FIELDS[t.f];if(!fd)return t.f;var L=fd.label,u=fd.unit||'';if(u&&u!=='%'&&u!=='°')u='\u202f'+u;if(t.f==='k')return'clusters ≥ '+t.lo+' cells';if(t.unk)return L+' unknown';if(t.flag)return L;if(t.set.length){if(fd.kind==='sites')return'site '+t.set.join(' / ');return L+' '+t.set.map(function(m){var i=member(fd,m);return fd.labels&&fd.labels[i]!=null?fd.labels[i]:(m===''?'none':m)}).join(' / ')}
  if(fd.kind==='bucket'){var E=fd.edges;if(!isNaN(t.hi)&&isNaN(t.lo))return L+' < '+E[Math.min(bucketOf(E,t.hi)+1,E.length-1)]+u;if(!isNaN(t.lo)&&isNaN(t.hi))return L+' ≥ '+E[bucketOf(E,t.lo)]+u}
  if(!isNaN(t.lo)&&!isNaN(t.hi))return t.lo===t.hi?L+' = '+fnum(t.lo)+u:L+' '+fnum(t.lo)+'–'+fnum(t.hi)+u;if(!isNaN(t.lo))return L+' ≥ '+fnum(t.lo)+u;return L+' ≤ '+fnum(t.hi)+u}
 function words(e){var p=e.groups.map(function(g){var w=g.map(termWords);return w.length>1?'('+w.join(' or ')+')':w[0]});if(e.k>1)p.push('clusters ≥ '+e.k+' cells');return p.join(' · ')}
@@ -54,9 +56,8 @@ function termFn(bin,t){var fd=FIELDS[t.f];if(!fd)return function(){return false}
  if(fd.kind==='set'){var mask=0;t.set.forEach(function(m){var i=member(fd,m);if(i>=0&&i<31)mask|=1<<i});return function(k){var v=raw(k);return v!==nd&&v>=0&&v<31&&(mask&(1<<v))!==0}}
  if(fd.kind==='bits'){var bm=0;t.set.forEach(function(m){var i=member(fd,m);if(i>=0)bm|=1<<i});return function(k){var v=raw(k);return v!==nd&&(v&bm)!==0}}
  if(fd.kind==='sites'){if(t.flag)return function(k){return raw(k)!==nd};var sm=0;(bin.hdr.n2k||[]).forEach(function(code,i){if(t.set.indexOf(code)>=0&&i<31)sm|=1<<i});if(!sm)return function(){return false};return function(k){var v=raw(k);return v!==nd&&v<31&&(sm&(1<<v))!==0}}
- var zn=fd.id==='loss'||fd.id==='snar'||fd.id==='snar2';if(t.flag)return function(k){var v=raw(k);return v!==nd&&!(zn&&v===0)};
  var b=bounds(fd,t),lo=b[0],hi=b[1];if(fd.halo)return function(k){var v=raw(k);if(v===nd)return false;if(v&128)return hi===2147483647&&lo<=64;return v>=lo&&v<=hi};
- return function(k){var v=raw(k);if(v===nd||(zn&&v===0))return false;return v>=lo&&v<=hi}}
+ var zn=fd.id==='loss'||fd.id==='snar'||fd.id==='snar2';return function(k){var v=raw(k);if(v===nd||(zn&&v===0))return false;return v>=lo&&v<=hi}}
 function evaluate(bin,e){var n=bin.n,out=new Uint8Array(n),k;if(!e.groups.length){out.fill(1)}else{var fns=e.groups.map(function(g){return g.map(function(t){return termFn(bin,t)})});for(k=0;k<n;k++){var ok=true;for(var gi=0;gi<fns.length&&ok;gi++){var any=false,g=fns[gi];for(var ti=0;ti<g.length;ti++)if(g[ti](k)){any=true;break}if(!any)ok=false}out[k]=ok?1:0}}
  if(e.k>1)clusterFilter(bin,out,e.k);return out}
 function lattice(bin){if(bin.lat)return bin.lat;var m=new Map();for(var k=0;k<bin.n;k++)m.set(key(bin.ij[2*k],bin.ij[2*k+1]),k);return bin.lat=m}
@@ -125,7 +126,7 @@ self.onmessage=function(ev){var m=ev.data;
  if(m.t==='init'){BASE=m.base||'';if(m.veil)VEIL=m.veil;if(m.acc)ACC=m.acc;DBG=!!m.dbg;catalogue().then(function(c){post({t:'cat',cat:c})},function(e){post({t:'err',err:'fields: '+(e&&e.message||e)})});return}
  if(m.t==='theme'){if(m.veil)VEIL=m.veil;if(m.acc)ACC=m.acc;for(var t in TILES)TILES[t].dirty=true;repaintAll();return}
  catalogue().then(function(){
-  if(m.t==='expr'){EXPR=parse(m.f);EXPR.empty=!EXPR.groups.length&&!EXPR.k;EXT=needsExt(EXPR);ESEQ++;post({t:'expr',f:m.f,canon:canonical(EXPR),words:words(EXPR),groups:EXPR.groups.map(function(g){return{canon:g.map(termStr).join('|'),words:g.map(termWords).join(' or ')}}).concat(EXPR.k>1?[{canon:'k>='+EXPR.k,words:'clusters \u2265 '+EXPR.k+' cells'}]:[]),ignored:EXPR.ignored,ext:EXT,empty:EXPR.empty});repaintAll();ptsTouch(null);return}
+  if(m.t==='expr'){EXPR=parse(m.f);EXPR.empty=!EXPR.groups.length&&!EXPR.k;EXT=needsExt(EXPR);ESEQ++;post({t:'expr',f:m.f,canon:canonical(EXPR),words:words(EXPR),incomplete:EXPR.incomplete,groups:EXPR.groups.map(function(g){return{canon:g.map(termStr).join('|'),words:g.map(termWords).join(' or ')}}).concat(EXPR.k>1?[{canon:'k>='+EXPR.k,words:'clusters \u2265 '+EXPR.k+' cells'}]:[]),ignored:EXPR.ignored,ext:EXT,empty:EXPR.empty});repaintAll();ptsTouch(null);return}
   if(m.t==='want'){WANT={};if(m.px)PX=m.px;m.tiles.forEach(function(w){WANT[w.k]=w;var T=TILES[w.k];if(T&&T.bins.join()!==w.bins.join()){T.bins=w.bins;T.dirty=true}});evict();repaintAll();return}
   if(m.t==='at'){post({t:'at',id:m.id,hit:EXPR?at(m.x,m.y):null});return}
   if(m.t==='pts'){if(m.drop){delete PTS[m.k];return}var P=PTS[m.k]={k:m.k,xs:m.xs,ys:m.ys,bk:m.bk,bi:m.bi,dirty:true};P.bk.forEach(function(b){ensure(b)});if(!PTSR)PTSR=setTimeout(ptsFlush,0);return}

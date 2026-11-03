@@ -181,9 +181,120 @@ type neFiltTerm struct {
 }
 
 type neFiltExpr struct {
-	Groups  [][]neFiltTerm // conjunction of disjunctions
-	K       int            // post-filter: keep match clusters ≥ K cells (0 = off)
-	Ignored []string
+	Groups     [][]neFiltTerm // conjunction of disjunctions
+	K          int            // post-filter: keep match clusters ≥ K cells (0 = off)
+	Ignored    []string
+	Incomplete []neFiltIncomplete // the subset of Ignored that names a real field without a usable value
+}
+
+// neFiltIncomplete — an ignored term whose field exists (`ht`, `trees`, `d=`,
+// `sl>=`, `d=nope`): not a new filter, a nudge. The page puts Start in the input and
+// asks for a value; the API answers it next to `ignored`.
+type neFiltIncomplete struct {
+	Term    string `json:"term"`
+	Field   string `json:"field"`
+	Label   string `json:"label"`
+	Start   string `json:"start"`   // what to type first: `ht>=` · `d=`
+	Example string `json:"example"` // a complete term: `ht>=20` · `d=wald`
+	Values  string `json:"values"`  // what fits after the operator
+}
+
+// neFiltIncompleteOf — classifies an ignored term; nil when its field is unknown.
+func neFiltIncompleteOf(t string) *neFiltIncomplete {
+	i := 0
+	for i < len(t) && (t[i] >= 'a' && t[i] <= 'z' || t[i] >= '0' && t[i] <= '9' && i > 0) {
+		i++
+	}
+	f, rest := t[:i], t[i:]
+	if a, ok := neFiltAlias[f]; ok {
+		f = a
+	}
+	fd := neFiltByID[f]
+	if fd == nil || f == "k" {
+		return nil
+	}
+	op := ">="
+	if !neFiltRangeOK(fd) {
+		op = "="
+	}
+	start := f + op
+	if rest == ">=" || rest == "<=" || rest == "=" {
+		start = f + rest
+	}
+	return &neFiltIncomplete{Term: t, Field: f, Label: fd.Label, Start: start, Example: neFiltExample(fd), Values: neFiltValues(fd)}
+}
+
+// neFiltExample — one complete term for a field: a named word if one covers
+// it (`tall-trees` → `ht>=20`), else a third of the range, the first member.
+func neFiltExample(fd *neFiltField) string {
+	best := ""
+	for _, w := range neFiltWords {
+		if strings.HasPrefix(w, fd.ID+">=") || strings.HasPrefix(w, fd.ID+"<=") || (strings.HasPrefix(w, fd.ID+"=") && !strings.HasSuffix(w, "=unk")) {
+			if best == "" || w < best {
+				best = w
+			}
+		}
+	}
+	if best != "" {
+		return best
+	}
+	switch fd.Kind {
+	case nfNum:
+		v := fd.Max / 3
+		if fd.Min < 0 || fd.Max <= 1 {
+			v = fd.Max / 2
+		}
+		return fd.ID + ">=" + neFiltNum(math.Round(v))
+	case nfBucket:
+		return fd.ID + "<=" + neFiltNum(float64(fd.Edges[2]))
+	case nfSites:
+		return fd.ID
+	default:
+		for _, m := range fd.Members {
+			if m != "" && m != "none" && m != "unknown" {
+				return fd.ID + "=" + m
+			}
+		}
+	}
+	return fd.ID
+}
+
+// neFiltValues — the value space of a field in one line (the nudge, the reference table).
+func neFiltValues(fd *neFiltField) string {
+	switch fd.Kind {
+	case nfNum:
+		r := ""
+		if fd.Max > 0 || fd.Min != 0 {
+			r = " · " + neFiltNum(fd.Min) + "–" + neFiltNum(fd.Max)
+			if fd.Unit != "" {
+				r += " " + fd.Unit
+			}
+		}
+		return "≥a · ≤b · a..b" + r
+	case nfBucket:
+		p := make([]string, len(fd.Edges))
+		for i, e := range fd.Edges {
+			p[i] = strconv.Itoa(e)
+		}
+		return "≥a · ≤b · classes " + strings.Join(p, " · ") + " " + fd.Unit
+	case nfFlag:
+		return "bare (" + fd.ID + ")"
+	case nfSites:
+		return "bare = any site · =<site code>"
+	default:
+		p := make([]string, 0, len(fd.Members))
+		for i, m := range fd.Members {
+			if m == "" {
+				continue
+			}
+			if fd.Labels != nil && i < len(fd.Labels) && fd.Labels[i] != "" && fd.Labels[i] != m {
+				p = append(p, m+" ("+fd.Labels[i]+")")
+			} else {
+				p = append(p, m)
+			}
+		}
+		return "=m1+m2 · " + strings.Join(p, " · ")
+	}
 }
 
 func (e *neFiltExpr) empty() bool { return len(e.Groups) == 0 && e.K == 0 }
@@ -240,6 +351,9 @@ func neFiltParse(s string) *neFiltExpr {
 				terms = append(terms, term)
 			} else {
 				e.Ignored = append(e.Ignored, t)
+				if inc := neFiltIncompleteOf(t); inc != nil {
+					e.Incomplete = append(e.Incomplete, *inc)
+				}
 			}
 		}
 		if len(terms) > 0 {
@@ -292,12 +406,7 @@ func neFiltParseTerm(t string) (neFiltTerm, bool) {
 			term.Set = []string{"cand", "conf"}
 			return term, true
 		}
-		if neFiltRangeOK(fd) {
-			// bare numeric field = known (a value is present): `ht` = any tree
-			term.Flag = true
-			return term, true
-		}
-		return term, false
+		return term, false // a bare numeric field is incomplete (neFiltIncomplete): the reader is asked for a value
 	}
 	num := func(s string) (float64, bool) {
 		v, err := strconv.ParseFloat(s, 64)
@@ -490,9 +599,6 @@ func (t neFiltTerm) Words() string {
 	case t.Unk:
 		return fd.Label + " unknown"
 	case t.Flag:
-		if neFiltRangeOK(fd) {
-			return fd.Label + " known"
-		}
 		return fd.Label
 	case len(t.Set) > 0:
 		if fd.Kind == nfSites {
@@ -644,10 +750,6 @@ func neFiltTermFn(cols neFiltCols, t neFiltTerm) func(k int) bool {
 		}
 		return func(k int) bool { v := neFiltRaw(fd, c, k); return v != nd && v < 64 && mask&(1<<uint(v)) != 0 }
 	}
-	zeroNone := fd.ID == "loss" || fd.ID == "snar" || fd.ID == "snar2" // 0 = none: never a value
-	if t.Flag {
-		return func(k int) bool { v := neFiltRaw(fd, c, k); return v != nd && !(zeroNone && v == 0) }
-	}
 	lo, hi := neFiltBounds(fd, t)
 	if fd.Halo {
 		// cont: bit 7 = the patch leaves the bin: ≥ 64 for a lower bound, unknown for an upper bound
@@ -662,6 +764,7 @@ func neFiltTermFn(cols neFiltCols, t neFiltTerm) func(k int) bool {
 			return v >= lo && v <= hi
 		}
 	}
+	zeroNone := fd.ID == "loss" || fd.ID == "snar" || fd.ID == "snar2" // 0 = none: never a value
 	return func(k int) bool {
 		v := neFiltRaw(fd, c, k)
 		if v == nd || (zeroNone && v == 0) {
