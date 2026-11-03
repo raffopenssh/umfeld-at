@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/binary"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -64,6 +66,9 @@ func TestNESampBuild(t *testing.T) {
 		rows = append(rows, row...)
 	}
 	dir := t.TempDir()
+	old := nePMTDir
+	nePMTDir = dir // no peer sample files of the deployment
+	defer func() { nePMTDir = old }()
 	b := neSampBegin()
 	if b.failed != nil {
 		t.Fatal(b.failed)
@@ -124,5 +129,147 @@ func TestNESampBuild(t *testing.T) {
 	}
 	if cls := neSampQLon(neSampLon(neSampQLon(13.1))); cls != neSampQLon(13.1) {
 		t.Fatalf("lon quantisation")
+	}
+}
+
+// TestNESampSubParse — the subsidy peer's IVS1 sample body on a fixture.
+func TestNESampSubParse(t *testing.T) {
+	c9, _ := h3.LatLngToCell(h3.LatLng{Lat: 47.3, Lng: 13.1}, 9)
+	kids, _ := c9.Children(10)
+	ids := make([]uint64, len(kids))
+	for i, k := range kids {
+		ids[i] = uint64(k)
+	}
+	sortU64(ids)
+	n := len(ids)
+	b := []byte("IVS1")
+	b = append(b, 10, 12)
+	b = binary.LittleEndian.AppendUint32(b, uint32(n))
+	prev := uint64(0)
+	for _, id := range ids {
+		b = binary.AppendUvarint(b, id-prev)
+		prev = id
+	}
+	cols := "cls,cov,bio,rel,chg,dcov,snar,snar2,oepul,nutz"
+	for k, name := range []string{"cls", "cov", "bio", "rel", "chg", "dcov", "snar", "snar2", "oepul", "nutz"} {
+		sz := 1
+		if name == "snar" || name == "snar2" {
+			sz = 2
+		}
+		for r := 0; r < n; r++ {
+			if sz == 1 {
+				b = append(b, byte(k*10+r))
+			} else {
+				b = binary.LittleEndian.AppendUint16(b, uint16(k*100+r))
+			}
+		}
+	}
+	bin := neSampSubParse(b, cols)
+	if bin == nil || bin.N != n {
+		t.Fatal("parse")
+	}
+	for r := 0; r < n; r++ {
+		if (bin.Cells[r]>>52)&0xF != 12 || !neSampIsCentre(bin.Cells[r]) || neH3ParentFast(bin.Cells[r], 10) != ids[r] {
+			t.Fatalf("row %d id %x not the centre child of %x", r, bin.Cells[r], ids[r])
+		}
+		if bin.Cls[r] != byte(r) || bin.Cov[r] != byte(10+r) || bin.Snar[r] != uint16(600+r) || bin.Nutz[r] != byte(90+r) {
+			t.Fatalf("row %d columns", r)
+		}
+	}
+}
+
+// TestNESubNoidToIDs — the subsidy peer's id-less bin body ↔ the id form (docs/ne-filter.md §8.1).
+func TestNESubNoidToIDs(t *testing.T) {
+	I, J := 130, 473 // block 13.0/47.3
+	i, j := I*4, J*4
+	w, s := float64(i)*neSubBinDeg, float64(j)*neSubBinDeg
+	enum := neBBoxCells(w, s, w+neSubBinDeg, s+neSubBinDeg)
+	nu := len(enum)
+	var xu, xp uint64
+	bm := make([]byte, (nu+7)/8)
+	np := 0
+	for q, id := range enum {
+		xu ^= id
+		if q%3 == 0 {
+			bm[q>>3] |= 1 << uint(q&7)
+			xp ^= id
+			np++
+		}
+	}
+	body := binary.LittleEndian.AppendUint32(nil, uint32(nu))
+	body = binary.LittleEndian.AppendUint32(body, uint32(np))
+	body = binary.LittleEndian.AppendUint64(body, xu)
+	body = binary.LittleEndian.AppendUint64(body, xp)
+	body = append(body, bm...)
+	for c := 0; c < 12; c++ { // 6 u8 + snar/snar2 as 4 bytes + oepul nutz = 12 B/row in column order
+		for r := 0; r < np; r++ {
+			body = append(body, byte(c))
+		}
+	}
+	raws := make([]*neSubRaw, 16)
+	for k := range raws {
+		raws[k] = &neSubRaw{Body: []byte{0, 0, 0, 0}}
+	}
+	raws[0] = &neSubRaw{Body: body}
+	if !neSubLooksNoid(body) {
+		t.Fatal("sniff")
+	}
+	if err := neSubBlockNoidToIDs(raws, I, J); err != nil {
+		t.Fatal(err)
+	}
+	bin, err := neSubParse(raws[0].Body)
+	if err != nil || bin.N != np || bin.Cells[0] != enum[0] || bin.Cells[1] != enum[3] || bin.Nutz == nil || bin.Nutz[0] != 11 {
+		t.Fatalf("converted: %v n=%d", err, bin.N)
+	}
+	// a flipped bit → checksum mismatch → rejected
+	body[24] ^= 2
+	raws[0] = &neSubRaw{Body: body}
+	if err := neSubBlockNoidToIDs(raws, I, J); err == nil {
+		t.Fatal("corrupt bitmap accepted")
+	}
+}
+
+// TestNEFidxBlockParseV2 — the observed-layer peer's id-less NEXB v2 block on a fixture.
+func TestNEFidxBlockParseV2(t *testing.T) {
+	bi, bj := 130, 473
+	i, j := bi*4+1, bj*4+2
+	w, s := float64(i)*neFidxBinDeg, float64(j)*neFidxBinDeg
+	enum := neBBoxCells(w, s, w+neFidxBinDeg, s+neFidxBinDeg)
+	nu := len(enum)
+	bm := make([]byte, (nu+7)/8)
+	var xp uint64
+	np := 0
+	for q, id := range enum {
+		if q%2 == 0 {
+			bm[q>>3] |= 1 << uint(q&7)
+			xp ^= id
+			np++
+		}
+	}
+	hdr := map[string]interface{}{"v": 2, "ids": "bitmap", "present_bytes": len(bm),
+		"columns": []map[string]interface{}{{"name": "bld_h_max", "dtype": "u8", "bytes": np}, {"name": "elev_mean", "dtype": "u16", "bytes": 2 * np}},
+		"bins":    []map[string]interface{}{{"i": i, "j": j, "n": np, "row0": 0, "ids_xor": fmt.Sprintf("%016x", xp)}}}
+	hj, _ := json.Marshal(hdr)
+	body := []byte("NEXB")
+	body = binary.LittleEndian.AppendUint32(body, uint32(len(hj)))
+	body = append(body, hj...)
+	body = append(body, bm...)
+	for r := 0; r < np; r++ {
+		body = append(body, 7)
+	}
+	for r := 0; r < np; r++ {
+		body = binary.LittleEndian.AppendUint16(body, 1234)
+	}
+	bins, ver, ok := neFidxBlockParse(body, "2026-10", bi, bj)
+	if !ok || ver != 2 || len(bins) != 1 {
+		t.Fatalf("ok=%v ver=%d bins=%d", ok, ver, len(bins))
+	}
+	v := bins[fmt.Sprintf("%d/%d", i, j)]
+	if v == nil || len(v.ids) != np || v.ids[1] != enum[2] || v.cols["bld_h_max"][3] != 7 || binary.LittleEndian.Uint16(v.cols["elev_mean"][2:]) != 1234 {
+		t.Fatal("rows")
+	}
+	body[8+len(hj)] ^= 1 // flip a present bit → checksum mismatch
+	if _, ver, ok := neFidxBlockParse(body, "2026-10", bi, bj); ok || ver != 2 {
+		t.Fatal("corrupt bitmap accepted")
 	}
 }

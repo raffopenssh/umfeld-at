@@ -38,8 +38,9 @@ import (
 	"time"
 )
 
+var nePMTDir = "data/ne_mvt" // tests redirect it
+
 const (
-	nePMTDir      = "data/ne_mvt"
 	nePMTDiskCap  = 2 << 30
 	nePMTMaxKm2   = 1500.0
 	nePMTMaxTiles = 20000

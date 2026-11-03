@@ -1373,12 +1373,13 @@ func neFidxSrtmFetch(w, s, e, n float64) *neFidxSrtm {
 // parsed), 15 min TTL so a new peer generation is picked up; size on the
 // inflight page under ne_fidx.srtm_blk.
 var (
-	neFidxSrtmBlk        = newNeFidxSrtmBlkLRU(256, 15*time.Minute)
-	neFidxSrtmBlkHits    atomic.Int64
-	neFidxSrtmBlkFetches atomic.Int64
-	neFidxSrtmBlkMu      sync.Mutex
-	neFidxSrtmBlkFlight  = map[string]*sync.WaitGroup{}
-	neFidxSrtmNoBlock    atomicTime // peer answered 400/404/405 to &block=1 → single bins for 10 min
+	neFidxSrtmBlk         = newNeFidxSrtmBlkLRU(256, 15*time.Minute)
+	neFidxSrtmBlkHits     atomic.Int64
+	neFidxSrtmBlkFetches  atomic.Int64
+	neFidxSrtmBlkFallback atomic.Int64 // v2 bodies that failed their id checksum (re-asked with ids=1)
+	neFidxSrtmBlkMu       sync.Mutex
+	neFidxSrtmBlkFlight   = map[string]*sync.WaitGroup{}
+	neFidxSrtmNoBlock     atomicTime // peer answered 400/404/405 to &block=1 → single bins for 10 min
 )
 
 type neFidxSrtmBlkEnt struct {
@@ -1436,7 +1437,7 @@ func (l *neFidxSrtmBlkLRU) stats() map[string]interface{} {
 	}
 	l.mu.Unlock()
 	return map[string]interface{}{"bins": n, "cap": l.cap, "bytes": bytes,
-		"hits": neFidxSrtmBlkHits.Load(), "block_fetches": neFidxSrtmBlkFetches.Load()}
+		"hits": neFidxSrtmBlkHits.Load(), "block_fetches": neFidxSrtmBlkFetches.Load(), "block_id_fallback": neFidxSrtmBlkFallback.Load()}
 }
 
 // neFidxSrtmBlockFetch — GET the 0.1° block holding bin (i,j) with &block=1
@@ -1467,92 +1468,205 @@ func neFidxSrtmBlockFetch(i, j int) bool {
 	}()
 	w, s := float64(bi)*0.1, float64(bj)*0.1
 	url := fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&block=1&fields=%s", peers().ObsAPI+"/api/v1/cells", w, s, w+0.1, s+0.1, neFidxSrtmFlds)
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("User-Agent", "umfeld-at/fidx (+"+publicURL()+")")
 	t0 := time.Now()
-	resp, err := neFidxClient.Do(req)
-	if err != nil {
-		neFidxSrtmDown.set(time.Now())
-		return false
-	}
-	defer resp.Body.Close()
-	neFidxSrtmBlkFetches.Add(1)
-	ep := resp.Header.Get("X-Cells-Epoch")
-	empty := func() bool {
-		neFidxSrtmEpochStore(ep)
-		for a := 0; a < 4; a++ {
-			for b := 0; b < 4; b++ {
-				neFidxSrtmBlk.put(fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+b), &neFidxSrtm{epoch: ep, cols: map[string][]byte{}})
-			}
+	for attempt := 0; attempt < 2; attempt++ {
+		if attempt == 1 {
+			url += "&ids=1" // the v2 body failed its id checksum → the peer's v1 frames with ids
+			neFidxSrtmBlkFallback.Add(1)
 		}
-		return true
-	}
-	switch resp.StatusCode {
-	case 200:
-	case 404:
-		// no cells in the whole block — or no block mode; the body tells
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		if strings.Contains(strings.ToLower(string(body)), "block") {
+		req, _ := http.NewRequest("GET", url, nil)
+		req.Header.Set("User-Agent", "umfeld-at/fidx (+"+publicURL()+")")
+		resp, err := neFidxClient.Do(req)
+		if err != nil {
+			neFidxSrtmDown.set(time.Now())
+			return false
+		}
+		neFidxSrtmBlkFetches.Add(1)
+		ep := resp.Header.Get("X-Cells-Epoch")
+		empty := func() bool {
+			neFidxSrtmEpochStore(ep)
+			for a := 0; a < 4; a++ {
+				for b := 0; b < 4; b++ {
+					neFidxSrtmBlk.put(fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+b), &neFidxSrtm{epoch: ep, cols: map[string][]byte{}})
+				}
+			}
+			return true
+		}
+		switch resp.StatusCode {
+		case 200:
+		case 404:
+			// no cells in the whole block — or no block mode; the body tells
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+			resp.Body.Close()
+			if strings.Contains(strings.ToLower(string(body)), "block") {
+				neFidxSrtmNoBlock.set(time.Now())
+				return false
+			}
+			return empty()
+		case 400, 405:
+			resp.Body.Close()
+			neFidxSrtmNoBlock.set(time.Now())
+			return false
+		default:
+			resp.Body.Close()
+			neFidxSrtmDown.set(time.Now())
+			return false
+		}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+		resp.Body.Close()
+		if err != nil || len(body) < 8 || string(body[:4]) != "NEXB" {
 			neFidxSrtmNoBlock.set(time.Now())
 			return false
 		}
-		return empty()
-	case 400, 405:
-		neFidxSrtmNoBlock.set(time.Now())
-		return false
-	default:
-		neFidxSrtmDown.set(time.Now())
-		return false
+		bins, ver, ok := neFidxBlockParse(body, ep, bi, bj)
+		if !ok {
+			if ver == 2 && attempt == 0 {
+				log.Printf("fidx srtm block %d/%d: v2 id checksum mismatch → ids=1", bi, bj)
+				continue
+			}
+			return false
+		}
+		seen := map[string]bool{}
+		for k, v := range bins {
+			seen[k] = true
+			neFidxSrtmBlk.put(k, v)
+		}
+		// bins the header does not list hold no cells
+		for a := 0; a < 4; a++ {
+			for b := 0; b < 4; b++ {
+				if k := fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+b); !seen[k] {
+					neFidxSrtmBlk.put(k, &neFidxSrtm{epoch: ep, cols: map[string][]byte{}})
+				}
+			}
+		}
+		neFidxSrtmEpochStore(ep)
+		log.Printf("fidx srtm block %d/%d: v%d %d bins %d KB %.0f ms", bi, bj, ver, len(bins), len(body)>>10, float64(time.Since(t0).Milliseconds()))
+		return true
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
-	if err != nil || len(body) < 8 || string(body[:4]) != "NEXB" {
-		neFidxSrtmNoBlock.set(time.Now())
-		return false
-	}
+	return false
+}
+
+// neFidxBlockParse — one NEXB body → bins (key "i/j"). Two forms (docs/ne-filter.md §8.1):
+//
+//	v1: header {bins:[{i,j,off,len}]} and one NEX1 frame (with ids) per bin;
+//	v2: header {v:2, ids:"bitmap", present_bytes, columns[], bins:[{i,j,n,row0,ids_xor}]},
+//	    then a present bitmap over the SHARED ENUMERATION (all res-12 cells whose centre
+//	    lies in the half-open bin, ascending H3, bins concatenated in header order) and the
+//	    planar columns of the present rows. We rebuild the ids from the enumeration and
+//	    verify each bin's XOR checksum; ok=false on any mismatch (the caller re-asks with ids=1).
+func neFidxBlockParse(body []byte, ep string, bi, bj int) (map[string]*neFidxSrtm, int, bool) {
 	hl := int(binary.LittleEndian.Uint32(body[4:]))
 	if 8+hl > len(body) {
-		return false
+		return nil, 0, false
 	}
 	var hdr struct {
+		V            int    `json:"v"`
+		IDs          string `json:"ids"`
+		PresentBytes int    `json:"present_bytes"`
+		Columns      []struct {
+			Name  string `json:"name"`
+			Dtype string `json:"dtype"`
+			Bytes int    `json:"bytes"`
+		} `json:"columns"`
 		Bins []struct {
-			I, J int
-			Off  int `json:"off"`
-			Len  int `json:"len"`
+			I, J   int
+			Off    int    `json:"off"`
+			Len    int    `json:"len"`
+			N      int    `json:"n"`
+			Row0   int    `json:"row0"`
+			IDsXor string `json:"ids_xor"`
 		} `json:"bins"`
 	}
 	if json.Unmarshal(body[8:8+hl], &hdr) != nil || len(hdr.Bins) == 0 {
-		return false
+		return nil, 0, false
 	}
 	base := 8 + hl
-	seen := map[string]bool{}
-	for _, b := range hdr.Bins {
-		o, e := base+b.Off, base+b.Off+b.Len
-		if b.Off < 0 || b.Len < 0 || e > len(body) {
-			continue
-		}
-		k := fmt.Sprintf("%d/%d", b.I, b.J)
-		seen[k] = true
-		if b.Len == 0 {
-			neFidxSrtmBlk.put(k, &neFidxSrtm{epoch: ep, cols: map[string][]byte{}})
-			continue
-		}
-		if v := neFidxSrtmParse(body[o:e], ep); v != nil {
-			neFidxSrtmBlk.put(k, v)
-		} else {
-			neFidxSrtmBlk.put(k, &neFidxSrtm{epoch: ep, cols: map[string][]byte{}})
-		}
-	}
-	// bins the header does not list hold no cells
-	for a := 0; a < 4; a++ {
-		for b := 0; b < 4; b++ {
-			if k := fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+b); !seen[k] {
-				neFidxSrtmBlk.put(k, &neFidxSrtm{epoch: ep, cols: map[string][]byte{}})
+	out := map[string]*neFidxSrtm{}
+	if hdr.V < 2 || hdr.IDs != "bitmap" {
+		for _, b := range hdr.Bins {
+			o, e := base+b.Off, base+b.Off+b.Len
+			if b.Off < 0 || b.Len < 0 || e > len(body) {
+				continue
+			}
+			k := fmt.Sprintf("%d/%d", b.I, b.J)
+			if b.Len == 0 {
+				out[k] = &neFidxSrtm{epoch: ep, cols: map[string][]byte{}}
+				continue
+			}
+			if v := neFidxSrtmParse(body[o:e], ep); v != nil {
+				out[k] = v
+			} else {
+				out[k] = &neFidxSrtm{epoch: ep, cols: map[string][]byte{}}
 			}
 		}
+		return out, 1, true
 	}
-	neFidxSrtmEpochStore(ep)
-	log.Printf("fidx srtm block %d/%d: %d bins %d KB %.0f ms", bi, bj, len(hdr.Bins), len(body)>>10, float64(time.Since(t0).Milliseconds()))
-	return true
+	// v2
+	if hdr.PresentBytes < 0 || base+hdr.PresentBytes > len(body) {
+		return nil, 2, false
+	}
+	bitmap := body[base : base+hdr.PresentBytes]
+	o := base + hdr.PresentBytes
+	cols := map[string][]byte{}
+	rowsTotal := 0
+	for _, c := range hdr.Columns {
+		if c.Bytes < 0 || o+c.Bytes > len(body) {
+			return nil, 2, false
+		}
+		cols[c.Name] = body[o : o+c.Bytes]
+		o += c.Bytes
+		if c.Name == "id" {
+			continue
+		}
+		sz := 1
+		if c.Dtype == "u16" || c.Dtype == "i16" {
+			sz = 2
+		}
+		if r := c.Bytes / sz; rowsTotal == 0 || r < rowsTotal {
+			rowsTotal = r
+		}
+	}
+	bit, row := 0, 0
+	for _, b := range hdr.Bins {
+		k := fmt.Sprintf("%d/%d", b.I, b.J)
+		w, s := float64(b.I)*neFidxBinDeg, float64(b.J)*neFidxBinDeg
+		enum := neBBoxCells(w, s, w+neFidxBinDeg, s+neFidxBinDeg)
+		if b.N != len(enum) {
+			// n = present rows of a sparse bin? only the all-present form is defined; anything else → ids
+			if b.N > len(enum) || (bit+len(enum)+7)/8 > len(bitmap) {
+				return nil, 2, false
+			}
+		}
+		if (bit+len(enum)+7)/8 > len(bitmap) {
+			return nil, 2, false
+		}
+		v := &neFidxSrtm{epoch: ep, cols: map[string][]byte{}}
+		var xor uint64
+		r0 := row
+		for q, id := range enum {
+			if bitmap[(bit+q)>>3]&(1<<uint((bit+q)&7)) != 0 {
+				v.ids = append(v.ids, id)
+				xor ^= id
+				row++
+			}
+		}
+		bit += len(enum)
+		if row > rowsTotal || len(v.ids) != b.N || fmt.Sprintf("%016x", xor) != strings.ToLower(b.IDsXor) {
+			return nil, 2, false
+		}
+		for _, c := range hdr.Columns {
+			if c.Name == "id" {
+				continue
+			}
+			sz := 1
+			if c.Dtype == "u16" || c.Dtype == "i16" {
+				sz = 2
+			}
+			v.cols[c.Name] = cols[c.Name][r0*sz : row*sz]
+		}
+		out[k] = v
+	}
+	return out, 2, true
 }
 
 // neFidxSrtmParse — one NEX1 body (header JSON with columns[], ids as u64
@@ -1591,11 +1705,25 @@ func neFidxSrtmParse(body []byte, ep string) *neFidxSrtm {
 		seg := body[o : o+c.Bytes]
 		o += c.Bytes
 		if c.Name == "id" {
+			out.ids = make([]uint64, hdr.N)
+			var acc uint64
+			if strings.Contains(hdr.IDs, "varint") {
+				// delta-coded LEB128 (the national sample)
+				p := 0
+				for k := 0; k < hdr.N; k++ {
+					v, w := binary.Uvarint(seg[p:])
+					if w <= 0 {
+						return nil
+					}
+					p += w
+					acc += v
+					out.ids[k] = acc
+				}
+				continue
+			}
 			if c.Bytes != 8*hdr.N {
 				return nil
 			}
-			out.ids = make([]uint64, hdr.N)
-			var acc uint64
 			for k := 0; k < hdr.N; k++ {
 				v := binary.LittleEndian.Uint64(seg[8*k:])
 				if k == 0 || hdr.IDs != "delta_u64" {

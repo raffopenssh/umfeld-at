@@ -25,6 +25,7 @@ import (
 	"image"
 	"image/color"
 	"io"
+	"log"
 	"math"
 	"net"
 	"net/http"
@@ -497,6 +498,9 @@ func neSubBlockFetch(poly bool, I, J int) error {
 	if all != nil {
 		req.Header.Set("If-None-Match", etag)
 	}
+	if neSubNoidBad.Load() > 0 && time.Since(neSubNoidBadAt.get()) < time.Hour {
+		req.URL.RawQuery += "&ids=1" // an id-less block failed its checksum recently: ask for ids for an hour
+	}
 	resp, err := neSubClient.Do(req)
 	if err != nil {
 		if ne, ok := err.(net.Error); !ok || !ne.Timeout() {
@@ -544,7 +548,20 @@ func neSubBlockFetch(poly bool, I, J int) error {
 	if p := resp.Header.Get("X-Invekos-Prev-Year"); p != "" {
 		prev, _ = strconv.Atoi(p)
 	}
+	noid := !poly && strings.EqualFold(resp.Header.Get("X-Invekos-Block-Format"), "noid")
 	raws, err := neSubBlockSplit(poly, body)
+	if err == nil && noid {
+		err = neSubBlockNoidToIDs(raws, I, J)
+		if err != nil {
+			// the shared enumeration disagrees with the peer's: fall back to ids for an hour (docs/ne-filter.md §8.1)
+			neSubNoidBad.Add(1)
+			neSubNoidBadAt.set(time.Now())
+			log.Printf("subsidy block %d/%d: id-less form rejected (%v) → ids=1", I, J, err)
+			<-neSubSem
+			defer func() { neSubSem <- struct{}{} }()
+			return neSubBlockFetch(poly, I, J)
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("block: %w", err)
 	}
@@ -557,6 +574,78 @@ func neSubBlockFetch(poly bool, I, J int) error {
 		neSubStore(neSubBinKey(poly, I*4+k/4, J*4+k%4), raw, ttl)
 	}
 	neSubDown.set(time.Time{})
+	return nil
+}
+
+var (
+	neSubNoidBad   atomic.Int64 // id-less bin bodies whose checksum did not match (docs/ne-filter.md §8.1)
+	neSubNoidBadAt atomicTime
+)
+
+// neSubBlockNoidToIDs — the peer's id-less bin bodies (per bin: u32 n_univ,
+// u32 n_present, u64 xor_univ, u64 xor_present, present bitmap over the
+// shared enumeration, columns of the present cells) → the id form neSubParse
+// reads (u32 n, ids u64×n, columns). The enumeration is ours (all res-12
+// cells whose centre lies in the half-open bin, ascending); both checksums
+// must agree or the block is rejected.
+func neSubBlockNoidToIDs(raws []*neSubRaw, I, J int) error {
+	for k, raw := range raws {
+		i, j := I*4+k/4, J*4+k%4
+		b := raw.Body
+		if len(b) < 4 {
+			return errors.New("short")
+		}
+		nu := int(binary.LittleEndian.Uint32(b))
+		if nu == 0 {
+			raw.Body = []byte{0, 0, 0, 0}
+			continue
+		}
+		if len(b) < 24 {
+			return errors.New("short noid header")
+		}
+		np := int(binary.LittleEndian.Uint32(b[4:]))
+		xu, xp := binary.LittleEndian.Uint64(b[8:]), binary.LittleEndian.Uint64(b[16:])
+		bm := (nu + 7) / 8
+		if len(b) < 24+bm || np > nu {
+			return errors.New("short bitmap")
+		}
+		w, s := float64(i)*neSubBinDeg, float64(j)*neSubBinDeg
+		enum := neBBoxCells(w, s, w+neSubBinDeg, s+neSubBinDeg)
+		if len(enum) != nu {
+			return fmt.Errorf("bin %d/%d: universe %d, peer %d", i, j, len(enum), nu)
+		}
+		bitmap := b[24 : 24+bm]
+		var gu, gp uint64
+		ids := make([]uint64, 0, np)
+		for q, id := range enum {
+			gu ^= id
+			if bitmap[q>>3]&(1<<uint(q&7)) != 0 {
+				ids = append(ids, id)
+				gp ^= id
+			}
+		}
+		if gu != xu || gp != xp || len(ids) != np {
+			return fmt.Errorf("bin %d/%d: checksum", i, j)
+		}
+		cols := b[24+bm:]
+		if np == 0 {
+			raw.Body = []byte{0, 0, 0, 0}
+			continue
+		}
+		if len(cols)%np != 0 {
+			return fmt.Errorf("bin %d/%d: column bytes %d for %d rows", i, j, len(cols), np)
+		}
+		out := make([]byte, 0, 4+8*np+len(cols))
+		out = binary.LittleEndian.AppendUint32(out, uint32(np))
+		for _, id := range ids {
+			out = binary.LittleEndian.AppendUint64(out, id)
+		}
+		out = append(out, cols...)
+		if _, err := neSubParse(out); err != nil {
+			return err
+		}
+		raw.Body = out
+	}
 	return nil
 }
 
@@ -583,7 +672,7 @@ func neSubBlockSplit(poly bool, b []byte) ([]*neSubRaw, error) {
 			if _, err := neSubPolyParse(raw); err != nil {
 				return nil, err
 			}
-		} else if _, err := neSubParse(raw.Body); err != nil {
+		} else if _, err := neSubParse(raw.Body); err != nil && !neSubLooksNoid(raw.Body) {
 			return nil, err
 		}
 		out = append(out, raw)
@@ -592,6 +681,15 @@ func neSubBlockSplit(poly bool, b []byte) ([]*neSubRaw, error) {
 		return nil, errors.New("trailing bytes")
 	}
 	return out, nil
+}
+
+// neSubLooksNoid — an id-less bin body (validated by neSubBlockNoidToIDs, not here).
+func neSubLooksNoid(b []byte) bool {
+	if len(b) < 24 {
+		return false
+	}
+	nu, np := int(binary.LittleEndian.Uint32(b)), int(binary.LittleEndian.Uint32(b[4:]))
+	return nu > 0 && np <= nu && len(b) >= 24+(nu+7)/8
 }
 
 // neSubOverview — the national res-7 file (cls/cov/bio/dcov per cell).

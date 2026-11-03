@@ -31,8 +31,8 @@ package main
 import (
 	"bufio"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,6 +43,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -191,8 +192,8 @@ func (s *neSamp) inBox9(w, so, e, n float64) []int {
 // ── live store ───────────────────────────────────────────────────────────────
 
 var (
-	neSampMu     sync.RWMutex
-	neSampCur    *neSamp
+	neSampMu      sync.RWMutex
+	neSampCur     *neSamp
 	neSampQueries atomic.Int64
 	neSampEvalMs  atomic.Int64
 	neSampOnce    sync.Once
@@ -842,7 +843,7 @@ func (b *neSampBuilder) finish(natState string) (*neSamp, error) {
 			for j < len(subS.Cells) && subS.Cells[j] < id {
 				j++
 			}
-			if j < len(subS.Cells) && subS.Cells[j] == id {
+			if j < len(subS.Cells) && subS.Cells[j] == id && subS.Cov[j] != 0 {
 				x := j
 				cols["sub"][k] = subS.Cls[x] & 7
 				cols["scov"][k] = subS.Cov[x]
@@ -1006,6 +1007,7 @@ func neSampPeerFetch(name, url string) bool {
 		return false
 	}
 	req.Header.Set("User-Agent", "umfeld-at/sample (+"+publicURL()+")")
+	req.Header.Set("Accept-Encoding", "zstd")
 	if etag != "" {
 		if _, err := os.Stat(src); err == nil {
 			req.Header.Set("If-None-Match", etag)
@@ -1052,11 +1054,17 @@ func neSampPeerFetch(name, url string) bool {
 	}
 	os.Rename(src+".tmp", src)
 	newTag := resp.Header.Get("ETag")
-	for _, h := range []string{"X-Cells-Epoch", "X-Invekos-Release"} {
-		if v := resp.Header.Get(h); v != "" && newTag == "" {
-			newTag = v
+	meta := map[string]string{}
+	for _, h := range []string{"X-Cells-Epoch", "X-Cells-Gen", "X-Invekos-Release", "X-Invekos-Prev-Release", "X-Invekos-Version", "X-Invekos-Cols", "X-Invekos-Year", "X-Invekos-Gone"} {
+		if v := resp.Header.Get(h); v != "" {
+			meta[h] = v
+			if newTag == "" {
+				newTag = v
+			}
 		}
 	}
+	mj, _ := json.Marshal(meta)
+	os.WriteFile(src[:len(src)-4]+".meta", mj, 0o644)
 	os.WriteFile(etagP, []byte(newTag+"\n"), 0o644)
 	note(fmt.Sprintf("200 %d bytes, etag %s", nb, newTag))
 	return newTag != etag
@@ -1079,6 +1087,14 @@ func neSampPeerRead(name string) []byte {
 	return b
 }
 
+func neSampPeerMeta(name string) map[string]string {
+	m := map[string]string{}
+	if b, err := os.ReadFile(filepath.Join(nePMTDir, "samp_"+name+".meta")); err == nil {
+		json.Unmarshal(b, &m)
+	}
+	return m
+}
+
 func neSampPeerTag(name string) string {
 	b, _ := os.ReadFile(filepath.Join(nePMTDir, "samp_"+name+".etag"))
 	return strings.TrimSpace(string(b))
@@ -1086,7 +1102,7 @@ func neSampPeerTag(name string) string {
 
 func neSampObsURL() string {
 	if p := peers().ObsAPI; p != "" {
-		return p + "/api/v1/cells/sample?res=10&format=bin&fields=" + neFidxSrtmFlds
+		return p + "/api/v1/cells/sample?res=10&format=bin&fields=" + neFidxSrtmFlds // = the peer's "glyph" set
 	}
 	return ""
 }
@@ -1119,36 +1135,85 @@ func neSampPeerObs() (*neFidxSrtm, interface{}) {
 	return s, map[string]interface{}{"epoch": s.epoch, "rows": len(s.ids)}
 }
 
-// neSampPeerSub — the subsidy peer's sample (same bin layout as /invekos/h3 res 12).
+// neSampPeerSub — the subsidy peer's sample: "IVS1" u8 res u8 child_res u32 n,
+// n LEB128 delta-coded res-10 ids (ascending), then one contiguous column per
+// name of X-Invekos-Cols (cls cov bio rel chg dcov snar snar2 oepul nutz; u8
+// except dcov i8 and snar/snar2 u16). Rows with cov 0 are gone claims.
 func neSampPeerSub() (*neSubBin, interface{}) {
 	body := neSampPeerRead("sub")
 	if body == nil {
 		return nil, nil
 	}
-	bin, err := neSubParse(body)
-	if err != nil || bin.N == 0 {
+	meta := neSampPeerMeta("sub")
+	bin := neSampSubParse(body, meta["X-Invekos-Cols"])
+	if bin == nil || bin.N == 0 {
 		return nil, nil
 	}
-	cols := map[string][]byte{"cls": bin.Cls, "cov": bin.Cov, "bio": bin.Bio, "rel": bin.Rel, "chg": bin.Chg}
-	if bin.Snar != nil {
-		cols["oepul"], cols["nutz"] = bin.Oepul, bin.Nutz
+	if y, err := strconv.Atoi(meta["X-Invekos-Year"]); err == nil {
+		bin.Year = y
 	}
-	perm := neSampNormIDs(bin.Cells, cols)
-	if perm != nil {
-		dc := make([]int8, len(perm))
-		for k, p := range perm {
-			dc[k] = bin.Dcov[p]
+	return bin, map[string]interface{}{"release": neSampPeerTag("sub"), "rel": meta["X-Invekos-Release"], "rows": bin.N}
+}
+
+func neSampSubParse(b []byte, colsHdr string) *neSubBin {
+	if len(b) < 10 || string(b[:4]) != "IVS1" {
+		return nil
+	}
+	res, child := int(b[4]), int(b[5])
+	n := int(binary.LittleEndian.Uint32(b[6:]))
+	if res != 10 || child != 12 || n <= 0 || n > 50_000_000 {
+		return nil
+	}
+	o := 10
+	ids := make([]uint64, n)
+	var acc uint64
+	for k := 0; k < n; k++ {
+		v, w := binary.Uvarint(b[o:])
+		if w <= 0 {
+			return nil
 		}
-		bin.Dcov = dc
-		if bin.Snar != nil {
-			s1, s2 := make([]uint16, len(perm)), make([]uint16, len(perm))
-			for k, p := range perm {
-				s1[k], s2[k] = bin.Snar[p], bin.Snar2[p]
-			}
-			bin.Snar, bin.Snar2 = s1, s2
+		o += w
+		acc += v
+		ids[k] = acc
+	}
+	names := strings.Split(strings.ReplaceAll(colsHdr, " ", ""), ",")
+	if colsHdr == "" {
+		names = []string{"cls", "cov", "bio", "rel", "chg", "dcov", "snar", "snar2", "oepul", "nutz"}
+	}
+	cols := map[string][]byte{}
+	for _, name := range names {
+		sz := 1
+		if name == "snar" || name == "snar2" {
+			sz = 2
+		}
+		if o+n*sz > len(b) {
+			return nil
+		}
+		cols[name] = b[o : o+n*sz]
+		o += n * sz
+	}
+	for _, need := range []string{"cls", "cov", "bio", "rel", "chg"} {
+		if cols[need] == nil {
+			return nil
 		}
 	}
-	return bin, map[string]interface{}{"release": neSampPeerTag("sub"), "year": bin.Year, "rows": bin.N}
+	perm := neSampNormIDs(ids, cols)
+	_ = perm // columns were permuted in place with the ids
+	bin := &neSubBin{N: n, Cells: ids, Cls: cols["cls"], Cov: cols["cov"], Bio: cols["bio"], Rel: cols["rel"], Chg: cols["chg"], Dcov: make([]int8, n)}
+	if dc := cols["dcov"]; dc != nil {
+		for k, v := range dc {
+			bin.Dcov[k] = int8(v)
+		}
+	}
+	if s1, s2 := cols["snar"], cols["snar2"]; s1 != nil && s2 != nil && cols["oepul"] != nil && cols["nutz"] != nil {
+		bin.Snar, bin.Snar2 = make([]uint16, n), make([]uint16, n)
+		for k := 0; k < n; k++ {
+			bin.Snar[k] = binary.LittleEndian.Uint16(s1[2*k:])
+			bin.Snar2[k] = binary.LittleEndian.Uint16(s2[2*k:])
+		}
+		bin.Oepul, bin.Nutz = cols["oepul"], cols["nutz"]
+	}
+	return bin
 }
 
 // neSampNormIDs — a peer may list the res-10 cell instead of its centre child:
