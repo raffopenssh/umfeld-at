@@ -106,7 +106,7 @@ func TestNESampBuild(t *testing.T) {
 		}
 	}
 	// a filter over the store
-	e := neFiltParse("d=4")
+	e := neFiltParse("d=forest")
 	m := s.eval(e)
 	f9 := s.fold9(e)
 	n4 := 0
@@ -271,5 +271,108 @@ func TestNEFidxBlockParseV2(t *testing.T) {
 	body[8+len(hj)] ^= 1 // flip a present bit → checksum mismatch
 	if _, ver, ok := neFidxBlockParse(body, "2026-10", bi, bj); ok || ver != 2 {
 		t.Fatal("corrupt bitmap accepted")
+	}
+}
+
+// TestNESampFnat — the sample's res-7 fold (what fnat?f= serves) against a
+// brute-force count over the rows, on a fixture of three res-9 cells in two
+// res-7 hexagons; plus the national count helpers.
+func TestNESampFnat(t *testing.T) {
+	if err := neGlyphLoadFrame(); err != nil {
+		t.Skip("frame:", err)
+	}
+	dir := t.TempDir()
+	old := nePMTDir
+	nePMTDir = dir
+	defer func() { nePMTDir = old }()
+	b := neSampBegin()
+	b.out = filepath.Join(dir, "samp.bin")
+	var kg int
+	for _, ll := range []h3.LatLng{{Lat: 47.3, Lng: 13.1}, {Lat: 47.3, Lng: 13.108}, {Lat: 48.2, Lng: 16.4}} {
+		c9, _ := h3.LatLngToCell(ll, 9)
+		cells, _ := c9.Children(12)
+		ids := make([]uint64, len(cells))
+		for i, c := range cells {
+			ids[i] = uint64(c)
+		}
+		sortU64(ids)
+		rows := make([]byte, 0, len(ids)*neLURowBytes)
+		for i, id := range ids {
+			row := make([]byte, neLURowBytes)
+			binary.LittleEndian.PutUint64(row, id)
+			row[8] = 255
+			g := 2
+			if i%2 == 0 {
+				g = 4
+			}
+			row[12+g] = 240
+			rows = append(rows, row...)
+		}
+		kg++
+		b.kg(fmt.Sprintf("%05d", kg), rows, nil, nil, nil)
+	}
+	s, err := b.finish("fnatfixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Hdr.N9 != 3 || s.Hdr.N != 21 {
+		t.Fatalf("n9=%d n=%d", s.Hdr.N9, s.Hdr.N)
+	}
+	e := neFiltParse("d=forest")
+	res := neFnatSample(e, s)
+	if res.Sample != neSampK || res.Exact || len(res.Share) != len(neGlyphFrame.cells) {
+		t.Fatalf("result shape: sample=%d exact=%v share=%d frame=%d groups=%d", res.Sample, res.Exact, len(res.Share), len(neGlyphFrame.cells), len(e.Groups))
+	}
+	// brute force per frame hexagon
+	mask := s.eval(e)
+	want := map[uint64][2]int{}
+	for k := 0; k < s.n(); k++ {
+		p := neH3ParentFast(s.id(k), 7)
+		v := want[p]
+		v[1]++
+		if mask[k] != 0 {
+			v[0]++
+		}
+		want[p] = v
+	}
+	if len(want) < 2 {
+		t.Fatalf("fixture spans %d res-7 hexagons, want ≥ 2", len(want))
+	}
+	rows := 0
+	for i, c := range neGlyphFrame.cells {
+		v, ok := want[c.id]
+		if !ok {
+			if res.Share[i] != 255 || res.N[i] != 0 {
+				t.Fatalf("hex %x: share %d n %d without rows", c.id, res.Share[i], res.N[i])
+			}
+			continue
+		}
+		rows++
+		if res.N[i] != v[1]*neSampK {
+			t.Fatalf("hex %x: n %d want %d", c.id, res.N[i], v[1]*neSampK)
+		}
+		if exp := int(254*float64(v[0])/float64(v[1]) + .5); res.Share[i] != exp {
+			t.Fatalf("hex %x: share %d want %d", c.id, res.Share[i], exp)
+		}
+	}
+	if rows != len(want) || res.Rows != len(want) || res.Cells != 21*neSampK {
+		t.Fatalf("rows %d/%d cells %d", rows, res.Rows, res.Cells)
+	}
+	// k>= alone: nothing folds, listed as skipped
+	if r := neFnatSample(neFiltParse("k>=5"), s); r.Share != nil || len(r.Skipped) != 1 {
+		t.Fatalf("k>= alone: share=%v skipped=%v", r.Share != nil, r.Skipped)
+	}
+	// the res-9 binary and the national counts
+	bin := neFnat9(e, s, 13.0, 47.2, 13.2, 47.4)
+	if string(bin[:4]) != "NSF9" || binary.LittleEndian.Uint32(bin[4:]) != 2 {
+		t.Fatalf("fnat9: %q n=%d", bin[:4], binary.LittleEndian.Uint32(bin[4:]))
+	}
+	cells, match, _, byD := neSampCountIn(s, e, 13.0, 47.2, 13.2, 47.4, nil)
+	if cells != 14*neSampK || match != 8*neSampK || byD[4] != 8*neSampK {
+		t.Fatalf("count in box: cells %d match %d byD %v", cells, match, byD)
+	}
+	h := neSampHist(s)
+	if hd, ok := h["d"].(map[string]interface{}); !ok || hd["known"].(int) != 21*neSampK {
+		t.Fatalf("hist d: %v", h["d"])
 	}
 }

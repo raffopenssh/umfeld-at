@@ -544,6 +544,62 @@ func neStatsCompute(u *neStatsUnit, expr *neFiltExpr) (*neStatsAcc, int) {
 	return acc, 0
 }
 
+// neStatsSample — the unit over the national 1-in-49 sample: every sampled
+// cell inside the unit stands for 49 (docs/ne-filter.md §8). Same columns as
+// the bins (asBin), declared/observed from the best group + share only.
+func neStatsSample(sp *neSamp, u *neStatsUnit, expr *neFiltExpr) (*neStatsAcc, int) {
+	acc := &neStatsAcc{kgHa: map[string]float64{}}
+	bb := u.scan
+	if bb == [4]float64{} {
+		bb = u.bbox
+	}
+	filt := expr != nil && !expr.empty()
+	var mask []uint8
+	if filt {
+		mask = sp.eval(expr)
+	}
+	bin := sp.asBin()
+	d, dsh, o, osh := sp.col("d"), sp.col("dsh"), sp.col("o"), sp.col("osh")
+	acc.states = []string{sp.Hdr.State}
+	for _, k := range sp.rowsNear(bb[0], bb[1], bb[2], bb[3]) {
+		id := sp.id(k)
+		lon, lat := neCellCentre(id)
+		w := u.member(id, lon, lat)
+		if w <= 0 {
+			continue
+		}
+		area, _ := h3.CellAreaM2(h3.Cell(id))
+		wa := w * area * neSampK / 1e4
+		acc.cells += neSampK
+		acc.unitArea += wa
+		if mask != nil && mask[k] == 0 {
+			continue
+		}
+		acc.match += neSampK
+		acc.area += wa
+		neStatsAddCols(acc, bin, k, wa)
+		if d != nil && d[k] != 255 && int(d[k]) < 9 {
+			acc.declared += neSampK
+			sh := 1.0
+			if dsh != nil && dsh[k] != 255 {
+				sh = float64(dsh[k]) / 254
+			}
+			acc.dec[d[k]] += wa * sh
+			acc.dec[9] += wa * (1 - sh)
+		}
+		if o != nil && o[k] != 255 && int(o[k]) < 9 {
+			acc.observed += neSampK
+			sh := 1.0
+			if osh != nil && osh[k] != 255 {
+				sh = float64(osh[k]) / 254
+			}
+			acc.obs[o[k]] += wa * sh
+			acc.obs[9] += wa * (1 - sh)
+		}
+	}
+	return acc, 0 // (kgHa stays empty: the sample carries no KG shares; the unit's own list stands)
+}
+
 // neStatsAddCols — the fidx columns of one cell, area-weighted.
 func neStatsAddCols(acc *neStatsAcc, b *neFidxBin, k int, wa float64) {
 	u8 := func(id string) (int, bool) {
@@ -763,6 +819,14 @@ func neStatsOwn(u *neStatsUnit, expr *neFiltExpr) (*neStatsEnvelope, int) {
 		}
 	}
 	acc, code := neStatsCompute(u, expr)
+	approx := false
+	if code == 413 {
+		// too large for the bins: the national 1-in-49 sample answers, ×49 (docs/ne-filter.md §8)
+		if sp := neSampGet(); sp != nil {
+			acc, code = neStatsSample(sp, u, expr)
+			approx = code == 0
+		}
+	}
 	if code != 0 {
 		return nil, code
 	}
@@ -800,6 +864,11 @@ func neStatsOwn(u *neStatsUnit, expr *neFiltExpr) (*neStatsEnvelope, int) {
 	}
 	if acc.cells == 0 && acc.partial == 0 {
 		e.Coverage["note"] = u.note + "; no cells held for this unit yet"
+	}
+	if approx {
+		e.Coverage["approx"] = true
+		e.Coverage["sample"] = neSampK
+		e.Coverage["note"] = u.note + fmt.Sprintf("; estimated from the national 1-in-%d sample (one res-12 cell per res-10 cell, counts ×%d): the unit is too large for the cell-exact index; declared/observed ha use the best group of each sampled cell; k>= does not apply", neSampK, neSampK)
 	}
 	if filt {
 		e.Filter = map[string]interface{}{"f": canon, "words": expr.Words(), "ignored": expr.Ignored, "incomplete": expr.Incomplete, "note": "figures cover the matching cells; unit_cells_n / unit_area_ha are the whole unit; peers are not filtered"}

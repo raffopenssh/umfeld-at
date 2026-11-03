@@ -171,6 +171,13 @@ export async function run(o) {
         want(P + 'filter labels + ignored', F.f === 'chg=conf' && F.ignored.length === 1 && document.querySelector('.gf-in').value.indexOf('bogus') >= 0, { f: F.f, ignored: F.ignored, input: document.querySelector('.gf-in').value });
         s = await go(`#kg=${kg};full;z=20;f=steep`); F = await fw(); layers(P + 'filter/20 (coarse: token kept, veil off)', s, { view: '', lod: 2 });
         want(P + 'filter coarse readout', F.f === 'sl>=20' && /zoom in/.test(F.readout) && F.bins === 0, { f: F.f, readout: F.readout, bins: F.bins });
+        /* §8 national sample: at z=1 every term folds (sample:49), the funnel stays lit, the readout says sample; k>= alone dims it */
+        s = await go(`#z=1;f=d=forest,hb>=10`); await settle(); { const until = Date.now() + 8000; while (Date.now() < until && !(window.__fv && __fv(13.5, 47.5).d && __fv(13.5, 47.5).d.sample)) await sleep(150); }
+        if (window.__fv) { const v = __fv(13.5, 47.5); want(P + 'filter national sample at z=1', !!(v.d && v.d.sample === 49 && v.far && v.veil && !/zoom in/.test(G.filter().readout) && /1-in-49/.test(G.filter().readout) && !document.querySelector('.gt-flt.off')), { d: v.d, readout: G.filter().readout, veil: v.veil });
+          s = await go(`#z=1;f=k>=5`); await settle(); await sleep(600); want(P + 'filter k>= alone dims at z=1', /zoom in/.test(G.filter().readout), { readout: G.filter().readout });
+          s = await go(`#z=12;pt=13.5,47.5;f=d=forest,hb>=10`); await settle(); { const until = Date.now() + 8000; while (Date.now() < until && !(__fv(13.5, 47.5).r9 && __fv(13.5, 47.5).r9.painted)) await sleep(150); }
+          const r9 = __fv(13.5, 47.5).r9; want(P + 'filter res-9 veil in the mid band', !!(r9 && r9.cells > 0 && r9.painted > 0) && /res-9 cells in view/.test(G.filter().readout), { r9, readout: G.filter().readout }); }
+        else want(P + 'filter national sample at z=1 (needs ?dbgveil)', true, null);
         G.filter(''); await settle(); await sleep(400); F = G.filter(); want(P + 'filter cleared', !F.f && F.bins === 0 && !/;f=/.test(location.hash) && !document.querySelector('svg.glyph').classList.contains('v-flt'), { f: F.f, hash: location.hash });
       }
       /* change (+ relief) at lod 0 on either profile; legacy v=chg reads as declared + change */

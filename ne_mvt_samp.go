@@ -1330,3 +1330,162 @@ func (s *neSamp) rowsNear(w, so, e, n float64) []int {
 func (s *neSamp) asBin() *neFidxBin {
 	return &neFidxBin{N: s.Hdr.N, Cols: s.cols, Hdr: neFidxHdr{N2K: s.Hdr.N2K}}
 }
+
+// ── national figures from the sample (docs/ne-filter.md §8 step 4) ─────────
+
+// neSampHist — the national histogram of every field over the sample: per
+// field `known` (sampled cells with a value ×49), `unknown`, and `bins`: for
+// set/bits/flag/bucket fields one count per member (bits: cells with the bit),
+// for numbers 16 equal-width bins over [min,max] in raw units (`edges` raw).
+// Cached per store state in neSampFoldLRU.
+func neSampHist(sp *neSamp) map[string]interface{} {
+	key := "hist/" + sp.Hdr.State
+	if b, ok := neSampFoldLRU.get(key); ok {
+		var m map[string]interface{}
+		if json.Unmarshal(b, &m) == nil {
+			return m
+		}
+	}
+	out := map[string]interface{}{}
+	n := sp.n()
+	for _, f := range neFiltFields {
+		c := sp.col(f.ID)
+		if c == nil {
+			continue
+		}
+		f := f
+		sz := neFidxColSize(f.Dtype)
+		h := map[string]interface{}{}
+		known := 0
+		switch f.Kind {
+		case nfSet, nfBucket, nfFlag, nfSites:
+			cnt := make([]int, len(f.Members)+1)
+			if f.Kind == nfFlag || f.Kind == nfSites {
+				cnt = make([]int, 2)
+			}
+			for k := 0; k < n; k++ {
+				v := neFiltRaw(&f, c, k)
+				if v == f.Nodata {
+					continue
+				}
+				known++
+				if f.Kind == nfFlag || f.Kind == nfSites {
+					if v != 0 {
+						cnt[1]++
+					} else {
+						cnt[0]++
+					}
+				} else if v < len(cnt) {
+					cnt[v]++
+				}
+			}
+			for i := range cnt {
+				cnt[i] *= neSampK
+			}
+			h["bins"] = cnt
+		case nfBits:
+			cnt := make([]int, len(f.Members))
+			for k := 0; k < n; k++ {
+				v := int(c[k])
+				if v == f.Nodata {
+					continue
+				}
+				known++
+				for b := range cnt {
+					if v&(1<<uint(b)) != 0 {
+						cnt[b]++
+					}
+				}
+			}
+			for i := range cnt {
+				cnt[i] *= neSampK
+			}
+			h["bins"] = cnt
+		default: // nfNum: raw min/max of the column, 16 bins
+			lo, hi := math.MaxInt32, math.MinInt32
+			for k := 0; k < n; k++ {
+				if v := neFiltRaw(&f, c, k); v != f.Nodata {
+					if v < lo {
+						lo = v
+					}
+					if v > hi {
+						hi = v
+					}
+				}
+			}
+			if lo > hi {
+				lo, hi = 0, 0
+			}
+			const nb = 16
+			cnt := make([]int, nb)
+			edges := make([]float64, nb+1)
+			sc := f.Scale
+			if sc == 0 {
+				sc = 1
+			}
+			for i := range edges {
+				edges[i] = (float64(lo)+float64(hi-lo)*float64(i)/nb)*sc + f.Off
+			}
+			for k := 0; k < n; k++ {
+				v := neFiltRaw(&f, c, k)
+				if v == f.Nodata {
+					continue
+				}
+				known++
+				i := 0
+				if hi > lo {
+					i = (v - lo) * nb / (hi - lo)
+				}
+				if i < 0 {
+					i = 0
+				}
+				if i >= nb {
+					i = nb - 1
+				}
+				cnt[i]++
+			}
+			for i := range cnt {
+				cnt[i] *= neSampK
+			}
+			h["bins"], h["edges"] = cnt, edges // edges in the field's unit
+		}
+		_ = sz
+		h["known"], h["unknown"] = known*neSampK, (n-known)*neSampK
+		out[f.ID] = h
+	}
+	b, _ := json.Marshal(out)
+	neSampFoldLRU.put(key, b)
+	return out
+}
+
+// neSampCountIn — the sample's cells (×49) inside a membership function, with
+// the match of e and the declared-group split of the match.
+func neSampCountIn(sp *neSamp, e *neFiltExpr, w, s, ee, n float64, member func(id uint64, lon, lat float64) float64) (cells, match int, ha float64, byD [9]int) {
+	var mask []uint8
+	if e != nil && !e.empty() {
+		mask = sp.eval(e)
+	}
+	d := sp.col("d")
+	for _, k := range sp.rowsNear(w, s, ee, n) {
+		id := sp.id(k)
+		lon, lat := neCellCentre(id)
+		if member != nil && member(id, lon, lat) <= 0 {
+			continue
+		}
+		if member == nil && (lon < w || lon >= ee || lat < s || lat >= n) {
+			continue
+		}
+		cells += neSampK
+		if mask != nil && mask[k] == 0 {
+			continue
+		}
+		match += neSampK
+		if a, err := h3.CellAreaM2(h3.Cell(id)); err == nil {
+			ha += a * neSampK / 1e4
+		}
+		if d != nil && d[k] < 9 {
+			byD[d[k]] += neSampK
+		}
+	}
+	return
+}

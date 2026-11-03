@@ -191,9 +191,12 @@ GET /api/v1/ne/glyph/cell?lon=&lat=|cell=[&t=] the res-12 cell under a point: pu
                                             release, schlag?} from the subsidy layer (sub:null + sub_unavailable:true while the peer
                                             is down); schlag = the outline under the cell centre {area_ha, class, bio, reliable,
                                             vs_prev, d_area_ha? (vs best-linked predecessor), prev_area_ha? (gone), clipped?}.
-GET /api/v1/ne/filter?bbox=w,s,e,n|kg=&f=[&format=count|cells|h3|geojson]
-                                            FILTER cells by their numbers (docs/ne-filter.md). bbox span ≤ 0.1° (16 bins) → 413
-                                            above. f = ",“-separated AND groups of "|"-separated OR terms: field=member[+member]
+GET /api/v1/ne/filter?bbox=w,s,e,n|kg=|adm=&f=[&format=count|cells|h3|geojson]
+                                            FILTER cells by their numbers (docs/ne-filter.md). bbox span ≤ 0.1° (16 bins) is
+                                            cell-exact; format=count also takes a box up to 2.5° or adm= (Gemeinde 5 digits /
+                                            Natura 2000 site) — answered from the national 1-in-49 sample (one res-12 cell per
+                                            res-10 cell, counts ×49: approx:true, sample:49, no cell list, k>= not applied);
+                                            wider boxes with a cell list → 413. f = ",“-separated AND groups of "|"-separated OR terms: field=member[+member]
                                             (sets), field>=n · field<=n · field=lo..hi (numbers, physical units), bare field
                                             (flags), field=unk (no value), k>=n (keep only match clusters ≥ n cells); named words
                                             (steep, forest, settlement, protected, changed, …) expand to terms; unknown terms are
@@ -203,14 +206,20 @@ GET /api/v1/ne/filter?bbox=w,s,e,n|kg=&f=[&format=count|cells|h3|geojson]
                                             of hexagons (≤ 4 096). 5 min cache; no-store while a bin is still building.
 GET /api/v1/ne/filter/fields                the field catalogue: {fields[]: {id, label, kind (num|set|bits|flag|bucket|sites),
                                             unit, plane (core|ext), dtype, scale, nodata, members[], labels[], edges[], min, max,
-                                            source, group}, words{}, presets[], grammar, bin_deg}. 1 h cache.
+                                            source, group}, words{}, presets[], grammar, bin_deg, histogram{field: {known,
+                                            unknown, bins[], edges[]?}} (national cell counts per field from the 1-in-49 sample,
+                                            ×49; numbers: 16 bins with edges in the field's unit; sets/buckets: one count per
+                                            member; bits: cells holding the bit; flags: [off, on]; hist=0 omits), sample{k,
+                                            state, rows, built}}. 1 h cache.
 GET /api/v1/ne/stats/unit?kg=|h3=|bbox=|adm=|pt=|share=[&f=][&format=json|flat|csv][&keys=][&peers=srtm,sub|none][&year=]
                                             ONE ROW PER UNIT (docs: /api/v1/docs/stats-envelope.md): declared/observed/diff/change/
                                             subsidy/protection aggregates of the cell set + the same unit's envelopes from {OBS_NAME}
                                             and {SUB_NAME} ("peers"). Units: kg (≤ 50, one envelope each), h3 res 5–12
                                             (exact descendants), bbox ≤ 0.1°, adm = Gemeinde (5 digits) or Natura 2000 site, pt = the
                                             res-7 cell under a point, share = the landing page's #hash verbatim (kg= h3= adm= pt= f=) —
-                                            share link and export are one URL. f= filters the cells (grammar above; unit_cells_n /
+                                            share link and export are one URL. A unit wider than 48 bins (a large Gemeinde, a
+                                            Natura 2000 site, a Bezirk) is answered from the national 1-in-49 sample: counts and
+                                            hectares ×49, coverage.approx=true, coverage.sample=49, kg.* empty. f= filters the cells (grammar above; unit_cells_n /
                                             unit_area_ha keep the whole unit; peers are then skipped unless peers= asks). figures{} is
                                             flat and scalar: cells_n area_ha declared_ha.<group> observed_ha.<group> diff_ha.<verdict>
                                             change_n/_ha.<none|candidate|confirmed> subsidy_ha.<class> subsidy.claimed_pct natura2000_ha
@@ -218,13 +227,19 @@ GET /api/v1/ne/stats/unit?kg=|h3=|bbox=|adm=|pt=|share=[&f=][&format=json|flat|c
                                             sub.<key> merged in; csv = header + one row per unit (=IMPORTDATA / Power Query); keys= prefix
                                             filter. Same cells as /ne/filter (exact centres and areas); kg= and h3= agree with srtm cell
                                             for cell. ETag, 10 min cache; first call on a cold area builds the bins (seconds).
-GET /api/v1/ne/glyph/fnat?f=<expr>          the filter at the Austria view: the d / o / chg terms of <expr> folded over the
-                                            national res-7 table → {f, canon, words, exact, coarse[] (fields folded), skipped[]
-                                            (terms that apply at full resolution only), ignored[], cells, match, rows, state,
-                                            share[] (0..254 per cells[] entry of /ne/glyph, 255 = no digest; null when nothing
-                                            folds), n[] (digested cells per hexagon; Σ share/254·n = match), units}. Member
-                                            counts add inside an OR group, AND groups take the minimum (an upper bound,
-                                            exact=false); an OR group with an unfoldable member is skipped whole. 1 h cache.
+GET /api/v1/ne/glyph/fnat?f=<expr>[&res=9&bbox=w,s,e,n]
+                                            the filter away from full resolution → {f, canon, words, exact, sample?, coarse[]
+                                            (fields folded), skipped[] (terms with no answer here), ignored[], cells, match,
+                                            rows, state, share[] (0..254 per cells[] entry of /ne/glyph, 255 = no row; null when
+                                            nothing folds), n[] (cells per hexagon; Σ share/254·n = match), units}. An
+                                            expression of d / o / chg terms only (one AND group) folds EXACTLY over the national
+                                            res-7 table (exact=true). Every other expression evaluates every term over the
+                                            national 1-in-49 sample (one res-12 cell per res-10 cell, every column of
+                                            /filter/fields): exact=false, sample=49, counts ×49; only k>= is skipped (clusters
+                                            are a full-resolution notion). res=9&bbox= (≤ 2.5°) returns the res-9 fold of the
+                                            sample as binary NSF9: 'NSF9' u32 n, u16 lon[n] (9+q/65535·9 °E), u16 lat[n]
+                                            (46+q/65535·4 °N), u8 match[n], u8 n[n] (sample rows, ×49 for cells); header
+                                            X-NE-Sample: 49. 1 h cache; 503 + Retry-After until the first national pass.
 GET /api/v1/ne/glyph/fidx?i=&j=&p=core|ext|all
                                             the per-bin index the page filters on (bin = 0.025° cell, w = i·0.025, s = j·0.025;
                                             same grid as LOD-0 tiles): application/vnd.ne-fidx, NFX1 — "NFX1" u8 ver u16 ncol
@@ -304,9 +319,11 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     under the status line — each chip one AND group, the input adds a condition (type words, fields, members:
     suggestions list presets → words → fields → members; click a chip to edit it, × removes, Escape in the row
     clears). Cells that do NOT meet the expression are veiled (page colour .55, .7 under the photo) over the data
-    overlays and under relief/trees, matching clusters get a hairline, at the near tiles (≥110×); farther out the
-    overview preview veils each res-7 hexagon by the share of its cells that match (d / o / chg terms,
-    /ne/glyph/fnat) and the readout says "… · overview · <terms> at full resolution". Readout "m of n cells · ha", legend row "filter <words> · m of n · ha"
+    overlays and under relief/trees, matching clusters get a hairline, at the near tiles (≥110×); farther out
+    EVERY term still works: the res-7 hexagons (overview) and the res-9 cells (full resolution, wider than the
+    cell-exact window) are veiled by the share of their cells that match, from the national 1-in-49 sample
+    (/ne/glyph/fnat; the readout says "≈ m of n cells · … · 1-in-49 sample", exact for d / o / chg-only
+    expressions); only a bare k>= says "zoom in". Readout "m of n cells · ha", legend row "filter <words> · m of n · ha"
     (+ "all passes" when a time window is set and the filter uses chg: the filter counts change over all passes,
     the window only shapes the change layer beneath), card row per cell with the cell's values for the terms.
     Grammar = /api/v1/ne/filter (above); unknown terms are not errors — they stay in the input with a hint and
@@ -400,7 +417,7 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
       ;ortho[=0.1–1]      basemap.at orthophoto under the near tiles (≥110×, any profile), weight .5 unless given
       ;roads[=0.1–1]      OSM roads + rail over the near tiles (≥110×, any profile, any overlay), weight .7 unless given
       ;f=<expr>           filter: veil the cells not matching <expr> (canonical form of /api/v1/ne/filter's f=; near
-                          tiles only; e.g. ;f=d=bau+geb,sl>=3 · ;f=steep,forest · ;f=chg=conf · ;f=d=wald|o=wald,ht>=15)
+                          tiles exact, farther out ≈ from the national sample; e.g. ;f=d=bau+geb,sl>=3 · ;f=steep,forest · ;f=chg=conf · ;f=d=wald|o=wald,ht>=15)
       ;screen             full screen
       ;z=<zoom>           zoom about the selection's centre, no fly — ≥300 reads single cells (read-only, never
                           written back; e.g. /#q=kohlschwarz;v=obs;full;trees;relief;z=400 and the same with

@@ -515,7 +515,36 @@ the `ne_fidx` LRU hit rate on `the debug inflight page`.
    (br on fidx), this file → status *live*.
 6. Peers ship §4 → `hb`/`snar`/… chips leave *unknown*.
 
-## 8. Next: every term at every zoom — fleet-cheap (plan, nothing built)
+## 8. Every term at every zoom — fleet-cheap (**live** 2026-11-03)
+
+Status: **live.** What shipped (step numbers = the plan below): (1) `ne_mvt_samp.go` — the national pass
+(`neNatBuild`) also writes the sample: one row per res-10 cell = its res-12 centre child (`neSampIsCentre`,
+`neSampRowID`, test `TestNESampRowID`), our columns from the declared view / obs rows / cum (`cont` by union-find
+over `GridDisk(1)` same-declared neighbours per KG, bit 7 = touches the KG border; `het`/`edge` 255 when a
+neighbour is outside the KG), joined by H3 id with the peers' national samples (`neSampPeerFetch`: conditional
+GET, zstd body kept as `samp_<name>.src` + `.etag` + `.meta`; observed-layer NEX1 via `neFidxSrtmParse`, subsidy
+`IVS1` via `neSampSubParse`; a missing file → 255/unknown), `n2k/n2ks` by 0.1° bucket + ring fill, `rem` from the
+250 m grid, `rd/wat` from the national 100 m distance raster `ne_dist_raster.go` (`data/ne_mvt/dist100.bin`,
+2.7 MB zstd, built once per osm db). Image `NSMP`: ids9/lon9/lat9/start9 per res-9 run, `d10` per row, planar
+columns in `neFiltFields` order; zstd on disk (`data/ne_mvt/samp.bin`), decoded into an **anonymous mmap**
+(off-heap); size line `ne_mvt.sample` on the inflight page; rebuilt with the table or when a peer ETag moves
+(`neSampPeersCheck`, hourly). No `pa` column (WDPA, §6). (2) `fnat?f=`: d/o/chg-only one-group expressions keep the
+exact table; everything else = `neFnatSample` (`neFiltEval` over the sample, `fold9` cached per state+canonical
+form in `neSampFoldLRU`, `fold7` over the frame; `exact:false`, `sample:49`, `k>=` → `skipped[]`);
+`&res=9&bbox=` (≤ 2.5°) → `NSF9` binary. (3) Page: `fv9*` block veils res-9 dots in the mid band (full res on,
+view wider than `FLT_BINS`), readout "≈ … · 1-in-49 sample" / "n res-9 cells in view", legend row from the same
+figures (`fvLegend`), the funnel only dims for a bare `k>=`. (4) `/ne/filter?adm=&format=count` and boxes
+0.1°–2.5° (`neSampCountIn`), `/ne/stats/unit` units beyond 48 bins (`neStatsSample`, ×49, `approx:true`),
+`/filter/fields` `histogram{}` (`neSampHist`). (5) Peer block bodies without ids: NEXB v2 (`neFidxBlockParse`:
+present bitmap + `ids_xor` over the `neBBoxCells` enumeration, `&ids=1` retry on mismatch, counter
+`block_id_fallback`), subsidy `noid` bins (`neSubBlockNoidToIDs`, `ids=1` for an hour after a bad block).
+(6) Tests `TestNESampBuild`, `TestNESampFnat` (fold vs brute force, k>= alone, NSF9, counts, histogram),
+`TestNESampSubParse`, `TestNESubNoidToIDs`, `TestNEFidxBlockParseV2`; soak `m.filter` z=1 + mid band (needs
+`?dbgveil`). Measured on the first build: see the inflight `ne_mvt.sample` line.
+
+Original plan (kept as the rationale):
+
+### 8.0 Plan as written before the build
 
 Measured 2026-11-03: a bin builds in **100–130 ms** when the peer blocks are in RAM, **11 s** when the
 observed-layer peer has to build its block (10.6 s on its side); an observed-layer block body is **4.8 MB

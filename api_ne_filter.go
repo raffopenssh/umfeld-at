@@ -38,7 +38,7 @@ func handleNEFilterFields(w http.ResponseWriter, r *http.Request) {
 	for _, p := range neFiltPresets {
 		presets = append(presets, map[string]string{"label": p[0], "f": p[1]})
 	}
-	writeJSON(w, 200, map[string]interface{}{
+	out := map[string]interface{}{
 		"version": neFidxVer,
 		"grammar": neFilterGrammar,
 		"fields":  neFiltFields,
@@ -47,7 +47,52 @@ func handleNEFilterFields(w http.ResponseWriter, r *http.Request) {
 		"bin_deg": neFidxBinDeg,
 		"index":   "/api/v1/ne/glyph/fidx?i=&j=&p=core|ext|all  (w = i·0.025, s = j·0.025; application/vnd.ne-fidx, see docs/ne-filter.md §3b)",
 		"notice":  NENotice(),
-	})
+	}
+	if sp := neSampGet(); sp != nil && r.URL.Query().Get("hist") != "0" {
+		// national histograms per field from the 1-in-49 sample (counts ×49)
+		out["histogram"] = neSampHist(sp)
+		out["histogram_note"] = fmt.Sprintf("national cell counts per field estimated from a 1-in-%d sample (one res-12 cell per res-10 cell, ×%d); number fields: 16 bins, edges in the field's unit; set/bucket fields: one count per member; bits: cells holding the bit; flags: [off,on]; hist=0 omits", neSampK, neSampK)
+		out["sample"] = map[string]interface{}{"k": neSampK, "state": sp.Hdr.State, "rows": sp.Hdr.N, "built": sp.Hdr.Built}
+	}
+	writeJSON(w, 200, out)
+}
+
+// neFilterAdm — GET /api/v1/ne/filter?adm=<code>&format=count: one
+// Gemeinde / Bezirk / Land / Natura 2000 site answered nationally from the
+// 1-in-49 sample (docs/ne-filter.md §8), counts ×49, approx:true.
+func neFilterAdm(w http.ResponseWriter, r *http.Request, code string, expr *neFiltExpr) {
+	u, msg := neStatsUnitAdm(code)
+	if u == nil {
+		apiError(w, msg, 404)
+		return
+	}
+	sp := neSampGet()
+	if sp == nil {
+		w.Header().Set("Retry-After", "120")
+		apiError(w, "national sample not built yet", 503)
+		return
+	}
+	bb := u.scan
+	if bb == [4]float64{} {
+		bb = u.bbox
+	}
+	cells, match, ha, byD := neSampCountIn(sp, expr, bb[0], bb[1], bb[2], bb[3], u.member)
+	link := neStatsLink(u, expr.Canonical())
+	out := map[string]interface{}{
+		"adm": code, "name": u.name, "bbox": neStatsRoundBox(u.bbox), "expr": expr.Canonical(), "words": expr.Words(), "ignored": expr.Ignored, "incomplete": expr.Incomplete,
+		"cells": cells, "match": match, "ha": math.Round(ha*10) / 10, "by_d": neFilterByD(byD),
+		"approx": true, "sample": neSampK, "note": fmt.Sprintf("estimated from the national 1-in-%d sample (one res-12 cell per res-10 cell, counts ×%d); k>= does not apply", neSampK, neSampK),
+		"link": link, "notice": NENotice(), "attribution": neFidxAttribution,
+	}
+	if len(expr.Groups) == 0 && expr.K > 0 {
+		out["match"], out["ha"], out["by_d"] = 0, 0, neFilterByD([9]int{})
+		out["note"] = "k>= alone has no national answer: clusters are a full-resolution notion (use kg= or bbox=)"
+	}
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("X-NE-Notice", NENotice())
+	w.Header().Set("X-Data-Attribution", asciiFold(neFidxAttribution))
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	writeJSON(w, 200, out)
 }
 
 type neFilterBinRes struct {
@@ -62,6 +107,14 @@ func handleNEFilter(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	var bw, bs, be, bn float64
 	kg := q.Get("kg")
+	if adm := q.Get("adm"); adm != "" {
+		if f := q.Get("format"); f != "" && f != "count" {
+			apiError(w, "adm= answers format=count only (the national sample has no cell list)", 400)
+			return
+		}
+		neFilterAdm(w, r, adm, neFiltParse(q.Get("f")))
+		return
+	}
 	if kg != "" {
 		kg = padKGCode(kg)
 		var found bool
@@ -96,13 +149,33 @@ func handleNEFilter(w http.ResponseWriter, r *http.Request) {
 		apiError(w, "box outside Austria or empty", 400)
 		return
 	}
-	if be-bw > 0.1001 || bn-bs > 0.1001 {
-		apiError(w, "bbox span ≤ 0.1° per call (16 bins) — split the box", 413)
-		return
-	}
 	format := q.Get("format")
 	if format == "" {
 		format = "count"
+	}
+	if be-bw > 0.1001 || bn-bs > 0.1001 {
+		if sp := neSampGet(); sp != nil && format == "count" && kg == "" && be-bw <= neSampMaxBox && bn-bs <= neSampMaxBox {
+			// a wide box: the national 1-in-49 sample, counts ×49 (docs/ne-filter.md §8)
+			expr := neFiltParse(q.Get("f"))
+			cells, match, ha, byD := neSampCountIn(sp, expr, bw, bs, be, bn, nil)
+			link := fmt.Sprintf("%s/#pt=%.5f,%.5f;z=%d", publicURL(), (bw+be)/2, (bs+bn)/2, neFilterZoomFor(be-bw))
+			if c := expr.Canonical(); c != "" {
+				link += ";f=" + c
+			}
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("X-NE-Notice", NENotice())
+			w.Header().Set("X-Data-Attribution", asciiFold(neFidxAttribution))
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+			writeJSON(w, 200, map[string]interface{}{
+				"bbox": []float64{bw, bs, be, bn}, "expr": expr.Canonical(), "words": expr.Words(), "ignored": expr.Ignored, "incomplete": expr.Incomplete,
+				"cells": cells, "match": match, "ha": math.Round(ha*10) / 10, "by_d": neFilterByD(byD),
+				"approx": true, "sample": neSampK, "note": fmt.Sprintf("box wider than 0.1°: estimated from the national 1-in-%d sample (counts ×%d); k>= does not apply; boxes ≤ 0.1° are cell-exact", neSampK, neSampK),
+				"link": link, "notice": NENotice(), "attribution": neFidxAttribution,
+			})
+			return
+		}
+		apiError(w, "bbox span ≤ 0.1° per call (16 bins) for cell lists — split the box; format=count accepts up to 2.5° (sampled) and adm=", 413)
+		return
 	}
 	if format != "count" && format != "cells" && format != "h3" && format != "geojson" {
 		apiError(w, "format=count|cells|h3|geojson", 400)
