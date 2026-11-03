@@ -240,7 +240,8 @@ GET /api/v1/ne/glyph/fnat?f=<expr>[&res=9&bbox=w,s,e,n]
                                             /filter/fields): exact=false, sample=49, counts ×49; only k>= is skipped (clusters
                                             are a full-resolution notion). res=9&bbox= (≤ 2.5°) returns the res-9 fold of the
                                             sample as binary NSF9: 'NSF9' u32 n, u16 lon[n] (9+q/65535·9 °E), u16 lat[n]
-                                            (46+q/65535·4 °N), u8 match[n], u8 n[n] (sample rows, ×49 for cells); header
+                                            (46+q/65535·4 °N), u8 match[n], u8 n[n] (sample rows, ×49 for cells), u16 trees[n]
+                                            (tree apices of the matching rows, ×49 for a tree guess); header
                                             X-NE-Sample: 49. 1 h cache; 503 + Retry-After until the first national pass.
 GET /api/v1/ne/glyph/fidx?i=&j=&p=core|ext|all
                                             the per-bin index the page filters on (bin = 0.025° cell, w = i·0.025, s = j·0.025;

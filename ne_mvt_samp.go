@@ -1282,6 +1282,32 @@ func (s *neSamp) fold9(e *neFiltExpr) []uint8 {
 	return out
 }
 
+// fold9Trees — Σ tree apices (tn, 255 = unknown → 0) over the matching samples
+// per res-9 parent; ×49 is the instant tree guess the glyph shows until the
+// cell-exact veil tiles have answered. Same LRU, key suffix "/tn", u16 LE per parent.
+func (s *neSamp) fold9Trees(e *neFiltExpr) []uint8 {
+	key := s.Hdr.State + "/" + e.Canonical() + "/tn"
+	if b, ok := neSampFoldLRU.get(key); ok && len(b) == 2*len(s.ids9) {
+		return b
+	}
+	mask := neFiltEval(s, e)
+	tn := s.col("tn")
+	out := make([]uint8, 2*len(s.ids9))
+	for i := range s.ids9 {
+		c := 0
+		if tn != nil {
+			for k := s.start9[i]; k < s.start9[i+1]; k++ {
+				if mask[k] != 0 && tn[k] != 255 {
+					c += int(tn[k])
+				}
+			}
+		}
+		binary.LittleEndian.PutUint16(out[2*i:], uint16(c))
+	}
+	neSampFoldLRU.put(key, out)
+	return out
+}
+
 // n9 — samples under res-9 parent i.
 func (s *neSamp) n9(i int) int { return int(s.start9[i+1] - s.start9[i]) }
 

@@ -367,6 +367,24 @@ func TestNESampFnat(t *testing.T) {
 	if string(bin[:4]) != "NSF9" || binary.LittleEndian.Uint32(bin[4:]) != 2 {
 		t.Fatalf("fnat9: %q n=%d", bin[:4], binary.LittleEndian.Uint32(bin[4:]))
 	}
+	if len(bin) != 8+8*2 {
+		t.Fatalf("fnat9 length %d: want match, n and u16 trees per parent", len(bin))
+	}
+	// the tree tail: Σ tn over the matching rows of each parent = the brute force
+	{
+		tn, mask := s.col("tn"), neFiltEval(s, e)
+		for pi, i := range s.inBox9(13.0, 47.2, 13.2, 47.4) {
+			want := 0
+			for k := s.start9[i]; k < s.start9[i+1]; k++ {
+				if mask[k] != 0 && tn != nil && tn[k] != 255 {
+					want += int(tn[k])
+				}
+			}
+			if got := int(binary.LittleEndian.Uint16(bin[8+6*2+2*pi:])); got != want {
+				t.Fatalf("fnat9 trees[%d] = %d, want %d", pi, got, want)
+			}
+		}
+	}
 	cells, match, _, byD := neSampCountIn(s, e, 13.0, 47.2, 13.2, 47.4, nil)
 	if cells != 14*neSampK || match != 8*neSampK || byD[4] != 8*neSampK {
 		t.Fatalf("count in box: cells %d match %d byD %v", cells, match, byD)

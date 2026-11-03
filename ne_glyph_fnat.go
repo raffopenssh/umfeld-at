@@ -166,11 +166,14 @@ func neFnatSample(e *neFiltExpr, sp *neSamp) *neFnatResult {
 // under a box (the glyph's mid band, between the overview and the cell-exact
 // veil). Binary, little endian: "NSF9" u32 n · u16 lon[n] · u16 lat[n]
 // (quantised: lon = 9 + q/65535·9, lat = 46 + q/65535·4) · u8 match[n] (matching
-// samples, 0..7) · u8 n[n] (samples, 1..7). Each sample stands for 49 cells.
+// samples, 0..7) · u8 n[n] (samples, 1..7) · u16 trees[n] (tree apices of the
+// matching samples, since 2026-11-03; older readers stop before it). Each sample
+// stands for 49 cells.
 func neFnat9(e *neFiltExpr, sp *neSamp, w, s, ee, n float64) []byte {
 	f9 := sp.fold9(e)
+	t9 := sp.fold9Trees(e)
 	idx := sp.inBox9(w, s, ee, n)
-	out := make([]byte, 0, 8+6*len(idx))
+	out := make([]byte, 0, 8+8*len(idx))
 	out = append(out, "NSF9"...)
 	out = binary.LittleEndian.AppendUint32(out, uint32(len(idx)))
 	for _, i := range idx {
@@ -184,6 +187,9 @@ func neFnat9(e *neFiltExpr, sp *neSamp, w, s, ee, n float64) []byte {
 	}
 	for _, i := range idx {
 		out = append(out, byte(sp.n9(i)))
+	}
+	for _, i := range idx {
+		out = append(out, t9[2*i], t9[2*i+1])
 	}
 	return out
 }
