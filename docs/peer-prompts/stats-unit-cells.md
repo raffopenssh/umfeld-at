@@ -29,6 +29,13 @@ Answer = your usual `stats-envelope/1` over exactly these cells:
 - limits: ≤ 1 000 000 ids (8 MB raw, ~1–3 MB gzip'd); 413 above; 400 on bad magic/length;
   405/415 stay for anything that is not this body; same rate limits and `keys=`/`flat`/`csv` as GET
 - `year=` as on GET (subsidy peer); ignore otherwise
+- optional: for lists that take > ~5 s answer `202` `{"status":"computing","retry_after_s":N}` +
+  `Retry-After: N` quickly (cache by the body hash before aggregating) — umfeld-at re-POSTs the same
+  body after N s for up to ~25 s; answer the status in well under a second, not after a full re-parse
+
+Status (both peers implemented this): verified live — 7 ids of a res-10 cell ≡ `h3=` unit at both;
+a 183 k-id `scale=49` list answers 200 at the subsidy peer in ~1 s and 202→200 at the observed-layer
+peer after ~15 s.
 
 Implementation hint (Python): `ids = np.frombuffer(gzip.decompress(body)[8:], '<u8')`; join on your
 per-cell table by id (sorted → `searchsorted`), then the same aggregation code as a `bbox=` unit.

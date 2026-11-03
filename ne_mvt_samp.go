@@ -42,6 +42,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -668,15 +669,19 @@ func (b *neSampBuilder) finish(natState string) (*neSamp, error) {
 	if err := b.f.Close(); err != nil {
 		return nil, err
 	}
-	n := len(b.ids)
-	if n == 0 {
+	nAll := len(b.ids)
+	if nAll == 0 {
 		return nil, errors.New("no sample rows")
 	}
-	perm := make([]int32, n)
+	perm := make([]int32, nAll)
 	for i := range perm {
 		perm[i] = int32(i)
 	}
 	sort.Slice(perm, func(a, c int) bool { return b.ids[perm[a]] < b.ids[perm[c]] })
+	// a border cell built by two KGs appears twice (≈ 80 of 5.6 M): keep the first row
+	// so every id is one row (peers' cell lists count unique ids; our counts must agree)
+	perm = slices.CompactFunc(perm, func(a, c int32) bool { return b.ids[a] == b.ids[c] })
+	n := len(perm)
 	// res-9 runs
 	var ids9 []uint64
 	var start9 []uint32
@@ -747,7 +752,7 @@ func (b *neSampBuilder) finish(natState string) (*neSamp, error) {
 		syscall.Munmap(data)
 		return nil, err
 	}
-	rows, err := syscall.Mmap(int(tf.Fd()), 0, n*neSampRec, syscall.PROT_READ, syscall.MAP_PRIVATE)
+	rows, err := syscall.Mmap(int(tf.Fd()), 0, nAll*neSampRec, syscall.PROT_READ, syscall.MAP_PRIVATE)
 	tf.Close()
 	if err != nil {
 		syscall.Munmap(data)

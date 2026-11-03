@@ -117,6 +117,10 @@ a short hash of the list, `unit.cells_n` = n × scale, `unit.area_ha` = Σ cell 
 each listed cell stands for its 48 siblings; the peer may read the siblings' own rows instead of
 multiplying if it prefers). Unknown cells are counted in `coverage.cells_known` only when the peer
 holds a row; the border weighting of `kg=` does not apply (every listed cell counts 1). Limits:
-≤ 1 M ids (8 MB raw), the usual rate limits; a peer that does not support cell lists answers
-404/405/415 and umfeld-at reports `peers.<service>.available=false` with the reason — it never
-substitutes the whole-unit envelope for a filtered one.
+≤ 1 M ids (8 MB raw), the usual rate limits. Ids are unique (duplicates are a client bug; peers
+may drop them). A peer that needs time for a large list may answer `202` with
+`{"status":"computing","retry_after_s":N}` and a `Retry-After` header; umfeld-at re-POSTs the same
+body after that delay for up to ~25 s, then reports `available=false` with
+"still computing … retry in Ns" (a later call picks up the finished answer). A peer that does not
+support cell lists answers 404/405/415 and umfeld-at reports `peers.<service>.available=false`
+with the reason — it never substitutes the whole-unit envelope for a filtered one.

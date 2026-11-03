@@ -37,6 +37,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -58,10 +59,13 @@ const (
 var (
 	neStatsLRU    = newNELRU(16 << 20)
 	neStatsClient = &http.Client{Timeout: neStatsPeerTO}
-	neStatsDownMu sync.Mutex
-	neStatsDown   = map[string]time.Time{}
-	neStatsHits   [3]int64 // computed, peer fetches, peer errors (atomic via mutex below)
-	neStatsCntMu  sync.Mutex
+	// cell lists: upload of up to ~3 MB + the peer's aggregation; 202 polling budget
+	neStatsCellsClient = &http.Client{Timeout: 20 * time.Second}
+	neStatsCellsPollTO = 25 * time.Second
+	neStatsDownMu      sync.Mutex
+	neStatsDown        = map[string]time.Time{}
+	neStatsHits        [3]int64 // computed, peer fetches, peer errors (atomic via mutex below)
+	neStatsCntMu       sync.Mutex
 )
 
 type neStatsPeer struct{ id, service, base string }
@@ -922,6 +926,7 @@ type neStatsCells struct {
 func neStatsCellsBody(ids []uint64) []byte {
 	ids = append([]uint64(nil), ids...)
 	sortU64(ids)
+	ids = slices.Compact(ids) // the sample's rowsNear may yield a cell twice at box seams
 	raw := make([]byte, 0, 8+8*len(ids))
 	raw = append(raw, "NEI1"...)
 	raw = binary.LittleEndian.AppendUint32(raw, uint32(len(ids)))
@@ -968,21 +973,41 @@ func neStatsPeerFetchCells(p neStatsPeer, c *neStatsCells, year string) (map[str
 		return nil, "peer unavailable (backoff)"
 	}
 	neStatsCount(1)
-	req, _ := http.NewRequest("POST", u, bytes.NewReader(c.body))
-	req.Header.Set("User-Agent", "umfeld-at/stats-unit")
-	req.Header.Set("Content-Type", "application/octet-stream")
-	req.Header.Set("Content-Encoding", "gzip")
-	req.ContentLength = int64(len(c.body))
-	resp, err := neStatsClient.Do(req)
-	if err != nil {
-		neStatsCount(2)
-		neStatsDownMu.Lock()
-		neStatsDown[p.id] = time.Now()
-		neStatsDownMu.Unlock()
-		return nil, "peer unreachable"
+	// Large lists: the observed-layer peer answers 202 {"status":"computing",
+	// "retry_after_s":N} + Retry-After while it aggregates (≈ 15 s for 10⁵
+	// ids); poll within neStatsCellsPollTO, then report "still computing".
+	var resp *http.Response
+	var body []byte
+	start := time.Now()
+	for {
+		req, _ := http.NewRequest("POST", u, bytes.NewReader(c.body))
+		req.Header.Set("User-Agent", "umfeld-at/stats-unit")
+		req.Header.Set("Content-Type", "application/octet-stream")
+		req.Header.Set("Content-Encoding", "gzip")
+		req.ContentLength = int64(len(c.body))
+		var err error
+		resp, err = neStatsCellsClient.Do(req)
+		if err != nil {
+			neStatsCount(2)
+			neStatsDownMu.Lock()
+			neStatsDown[p.id] = time.Now()
+			neStatsDownMu.Unlock()
+			return nil, "peer unreachable"
+		}
+		body, _ = io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		resp.Body.Close()
+		if resp.StatusCode != 202 {
+			break
+		}
+		wait := 3 * time.Second
+		if ra, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && ra > 0 {
+			wait = time.Duration(min(ra, 10)) * time.Second
+		}
+		if time.Since(start)+wait > neStatsCellsPollTO {
+			return nil, fmt.Sprintf("peer still computing this cell list (202) — retry in %ds", int(wait/time.Second))
+		}
+		time.Sleep(wait)
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	switch resp.StatusCode {
 	case 200:
 	case 404, 405, 415, 501:
