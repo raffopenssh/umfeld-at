@@ -17,10 +17,11 @@ import (
 	"image/color"
 	"image/png"
 	"math"
+	"sort"
 	"strconv"
 )
 
-// palette index 1 = veil, 2 = hairline; `th=d` = the dark theme's page colour.
+// palette index 1 = veil, 2 = hairline, 3/4 = half/quarter veil (the feathered edge, neFltFeather); `th=d` = the dark theme's page colour.
 func neGlyphFltPalette(dark bool) color.Palette {
 	veil := color.RGBA{255, 255, 255, 255}
 	acc := color.RGBA{40, 110, 70, 230}
@@ -28,7 +29,9 @@ func neGlyphFltPalette(dark bool) color.Palette {
 		veil = color.RGBA{20, 22, 26, 255}
 		acc = color.RGBA{110, 190, 140, 230}
 	}
-	return color.Palette{color.RGBA{0, 0, 0, 0}, veil, acc}
+	half := color.RGBA{veil.R / 2, veil.G / 2, veil.B / 2, 128}
+	quarter := color.RGBA{veil.R / 4, veil.G / 4, veil.B / 4, 64}
+	return color.Palette{color.RGBA{0, 0, 0, 0}, veil, acc, half, quarter}
 }
 
 type neGlyphFltMeta struct {
@@ -39,7 +42,10 @@ func (m *neGlyphFltMeta) String() string {
 	return "match=" + strconv.Itoa(m.match) + ";bins=" + strconv.Itoa(m.bins) + ";pend=" + strconv.Itoa(m.pending)
 }
 
-// neFidxEdgeMap — for each IJ neighbour direction the hexagon edge (vertex index) facing it.
+// neFidxEdgeMap — for each IJ neighbour direction the hexagon edge (vertex index)
+// facing it. A bijection: directions and edges are both sorted by angle and paired
+// cyclically at the rotation with the least angular error — a nearest-edge pick per
+// direction can map two directions onto one edge and leave two sides unstroked.
 func neFidxEdgeMap(b *neFidxBin) [6]int {
 	var E [6]int
 	a, hex := b.Hdr.A, b.Hdr.Hex
@@ -50,21 +56,78 @@ func neFidxEdgeMap(b *neFidxBin) [6]int {
 	if len(a) >= 12 {
 		ax, ay = 7, 8
 	}
+	type ang struct {
+		i int
+		t float64
+	}
+	var dirs, edges [6]ang
 	for d := 0; d < 6; d++ {
 		dx := a[1]*float64(neFidxNbr[d][0]) + a[2]*float64(neFidxNbr[d][1])
 		dy := a[ax]*float64(neFidxNbr[d][0]) + a[ay]*float64(neFidxNbr[d][1])
-		best, bv := -2.0, 0
-		for v := 0; v < 6; v++ {
-			w := (v + 1) % 6
-			mx, my := (hex[v][0]+hex[w][0])/2, (hex[v][1]+hex[w][1])/2
-			dot := (mx*dx + my*dy) / math.Sqrt((mx*mx+my*my)*(dx*dx+dy*dy)+1e-12)
-			if dot > best {
-				best, bv = dot, v
+		dirs[d] = ang{d, math.Atan2(dy, dx)}
+		w := (d + 1) % 6
+		edges[d] = ang{d, math.Atan2((hex[d][1]+hex[w][1])/2, (hex[d][0]+hex[w][0])/2)}
+	}
+	less := func(v []ang) func(i, j int) bool { return func(i, j int) bool { return v[i].t < v[j].t } }
+	sort.Slice(dirs[:], less(dirs[:]))
+	sort.Slice(edges[:], less(edges[:]))
+	best, br := math.Inf(1), 0
+	for r := 0; r < 6; r++ {
+		sum := 0.0
+		for k := 0; k < 6; k++ {
+			dt := math.Abs(dirs[k].t - edges[(k+r)%6].t)
+			if dt > math.Pi {
+				dt = 2*math.Pi - dt
 			}
+			sum += dt
 		}
-		E[d] = bv
+		if sum < best {
+			best, br = sum, r
+		}
+	}
+	for k := 0; k < 6; k++ {
+		E[dirs[k].i] = edges[(k+br)%6].i
 	}
 	return E
+}
+
+// neFltFeather — soften the veil's edge: transparent pixels next to the veil get a
+// half veil, the next ring a quarter. The cells underneath come from another tile
+// (the declared base, its own bleed and resampling), so the two pictures may sit a
+// screen pixel apart on some browsers; a soft edge reads as shading, a hard one as a
+// white sliver beside the matching cell.
+func neFltFeather(img *image.Paletted) {
+	w, h := img.Rect.Dx(), img.Rect.Dy()
+	pix := img.Pix
+	at := func(x, y int) uint8 {
+		if x < 0 || y < 0 || x >= w || y >= h {
+			return 1
+		}
+		return pix[y*img.Stride+x]
+	}
+	// pass 0: transparent next to veil/hairline → half; pass 1: transparent next to half → quarter
+	for pass := 0; pass < 2; pass++ {
+		hit := func(v uint8) bool {
+			if pass == 0 {
+				return v == 1 || v == 2
+			}
+			return v == 3
+		}
+		var mark []int
+		for y := 0; y < h; y++ {
+			for x := 0; x < w; x++ {
+				if at(x, y) != 0 {
+					continue
+				}
+				if hit(at(x-1, y)) || hit(at(x+1, y)) || hit(at(x, y-1)) || hit(at(x, y+1)) {
+					mark = append(mark, y*img.Stride+x)
+				}
+			}
+		}
+		for _, o := range mark {
+			pix[o] = uint8(3 + pass)
+		}
+	}
 }
 
 // neLineIdx — 1-px DDA line in palette index ci.
@@ -181,6 +244,7 @@ func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, 
 			}
 		}
 	}
+	neFltFeather(img)
 	var buf bytes.Buffer
 	enc := png.Encoder{CompressionLevel: png.DefaultCompression}
 	if err := enc.Encode(&buf, img); err != nil {
