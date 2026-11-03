@@ -215,7 +215,8 @@ and the words in the legend; the hash always carries the numeric form.
 ;f=hb>=12,sub=none,k>=3        →  tall structures on unclaimed land, clusters of ≥ 3 cells
 ```
 
-`,` AND between groups · `|` OR inside a group · `..` ranges · `+` sets · flags bare. All characters
+`,` AND between groups · `|` OR inside a group · `..` ranges · `+` sets · flags bare · a bare numeric
+field (`ht`) = *known*, a value is present (any tree), so operator-less old links still apply. All characters
 hash- and query-safe, no `%` encoding. **`;f=` absent = no filter.** Unknown field names / malformed
 terms are ignored one by one (`dbg: filter term ignored`) and the rest applies — the "reserved
 token" posture. `curHash` writes the **canonical form** (fields sorted inside a group, groups in
