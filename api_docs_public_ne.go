@@ -119,7 +119,7 @@ GET /api/v1/ne/glyph/tile?lod=0|1|2&i=&j=[&v=obs|tree|chg|dif|rd|sub|subc][&raw=
                                             by the band of its tallest tree (cells without a tree transparent), v=chg → candidate/confirmed
                                             change, aged: fresh = full change hue, a year old = ash (opacity floor .18; the scale
                                             shrinks to the history there is while it is < 1 year, epoch = first change day);
-                                            &t= limits it to a window (grammar below; header adds ;win=); header X-NE-Tile n=;lu=9 sums (observed sums under v=obs|tree);unk=;obs=cells painted;trees=Σ tree_n;tmax=tallest
+                                            &t= limits it to a window (grammar below; header adds ;win=); header X-NE-Tile n=;lu=9 sums (observed sums under v=obs|tree);unk=;obs=cells painted;trees=Σ tree_n;tmax=tallest (v=flt: match=;trees= apices of the matching cells, inside a height term when tx= equals match=)
                                             tree (0.5 m);th=5 bands of cells by tallest tree (<5,5–15,15–25,25–35,35+ m);
                                             chg=confirmed,candidate;dlu=9 m².
                                             v=dif (lod 0/1 only, 400 at lod 2) → DIFF: the declared row vs the observed row of the

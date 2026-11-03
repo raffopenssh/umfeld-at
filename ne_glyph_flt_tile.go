@@ -8,7 +8,7 @@ package main
 // by the same hiTile / hiCull / hiEvict path as every other view. Cells that
 // fail the expression get the veil; the outer boundary of matching clusters
 // gets the hairline at LOD 0/1 (sub-pixel at LOD 2). Meta: n (cells), match,
-// trees (Σ tree apices of the matching cells, the readout's tree count), bins, pending (bins that failed to build — the tile is served no-store and
+// trees (apices of the matching cells — inside the height term when the bins carry apex lists, ne_tree_h.go; tx = cells counted from a list), bins, pending (bins that failed to build — the tile is served no-store and
 // asked again on the next move).
 
 import (
@@ -35,11 +35,11 @@ func neGlyphFltPalette(dark bool) color.Palette {
 }
 
 type neGlyphFltMeta struct {
-	n, match, trees, bins, pending int
+	n, match, trees, tx, bins, pending int // tx: matching cells whose trees came from an apex list (= match → the figure is exact, inside the height term if one is set)
 }
 
 func (m *neGlyphFltMeta) String() string {
-	return "match=" + strconv.Itoa(m.match) + ";trees=" + strconv.Itoa(m.trees) + ";bins=" + strconv.Itoa(m.bins) + ";pend=" + strconv.Itoa(m.pending)
+	return "match=" + strconv.Itoa(m.match) + ";trees=" + strconv.Itoa(m.trees) + ";tx=" + strconv.Itoa(m.tx) + ";bins=" + strconv.Itoa(m.bins) + ";pend=" + strconv.Itoa(m.pending)
 }
 
 // neFidxEdgeMap — for each IJ neighbour direction the hexagon edge (vertex index)
@@ -182,7 +182,7 @@ func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, 
 				continue
 			}
 			mask := b.eval(expr)
-			tn := b.col("tn")
+			tc := neNewTreeCounter(b.TH, b.col("tn"), expr)
 			hex := b.Hdr.Hex
 			var hx, hy [6]float64
 			for v := 0; v < 6; v++ {
@@ -208,8 +208,10 @@ func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, 
 					m.n++
 					if mask[k] != 0 {
 						m.match++
-						if tn != nil && tn[k] != 255 {
-							m.trees += int(tn[k])
+						v, exact := tc.at(k)
+						m.trees += v
+						if exact {
+							m.tx++
 						}
 					}
 				}

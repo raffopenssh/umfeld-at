@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	neSampVer    = 1
+	neSampVer    = 2 // 2: apex height list tail (ne_tree_h.go)
 	neSampMagic  = "NSMP"
 	neSampK      = 49 // res-12 cells per res-10 cell: one sample stands for 49
 	neSampLon0   = 9.0
@@ -104,6 +104,7 @@ type neSampHdr struct {
 	Ms       int64       `json:"ms"`
 	KGs      int         `json:"kgs"`
 	Cells    int         `json:"cells"`
+	THLen    int         `json:"th_len"` // bytes of apex height lists in the tail (-1: no lists — the peer's sample had none)
 }
 
 // neSamp — the live store: slices into one anonymous mapping.
@@ -116,6 +117,7 @@ type neSamp struct {
 	start9 []uint32
 	d10    []byte
 	cols   map[string][]byte
+	th     *neTreeH // apex height lists per sample row (nil when the peer's sample carried none)
 	built  time.Time
 }
 
@@ -262,7 +264,7 @@ func NESampStats() map[string]interface{} {
 
 // neSampAttach — slices over an image (validated); the image must outlive the store.
 func neSampAttach(data []byte) (*neSamp, error) {
-	if len(data) < 9 || string(data[:4]) != neSampMagic || data[4] != neSampVer {
+	if len(data) < 9 || string(data[:4]) != neSampMagic || (data[4] != neSampVer && data[4] != 1) {
 		return nil, errors.New("not a national sample")
 	}
 	hl := int(binary.LittleEndian.Uint32(data[5:]))
@@ -270,8 +272,12 @@ func neSampAttach(data []byte) (*neSamp, error) {
 		return nil, errors.New("truncated header")
 	}
 	s := &neSamp{data: data, cols: map[string][]byte{}}
+	s.Hdr.THLen = -1
 	if err := json.Unmarshal(data[9:9+hl], &s.Hdr); err != nil {
 		return nil, err
+	}
+	if data[4] == 1 {
+		s.Hdr.THLen = -1 // a v1 image (no tail) still serves until the next pass rebuilds it
 	}
 	n, n9 := s.Hdr.N, s.Hdr.N9
 	if n <= 0 || n9 <= 0 || n9 > n {
@@ -281,6 +287,9 @@ func neSampAttach(data []byte) (*neSamp, error) {
 	need := 8*n9 + 2*n9 + 2*n9 + 4*(n9+1) + n
 	for _, c := range s.Hdr.Cols {
 		need += n * neFidxColSize(c.DT)
+	}
+	if s.Hdr.THLen >= 0 {
+		need += 2*n + s.Hdr.THLen
 	}
 	if o+need != len(data) {
 		return nil, fmt.Errorf("image length %d, want %d", len(data), o+need)
@@ -312,6 +321,11 @@ func neSampAttach(data []byte) (*neSamp, error) {
 		s.cols[c.ID] = data[o : o+sz]
 		o += sz
 	}
+	if s.Hdr.THLen >= 0 {
+		if s.th = neTreeHFromCounts(data[o:o+2*n], data[o+2*n:o+2*n+s.Hdr.THLen]); s.th == nil {
+			return nil, errors.New("apex list counts do not sum to the lists")
+		}
+	}
 	s.built, _ = time.Parse(time.RFC3339, s.Hdr.Built)
 	return s, nil
 }
@@ -335,7 +349,7 @@ func neSampLoad(path string) (*neSamp, error) {
 	if _, err := io.ReadFull(dec, magic[:]); err != nil {
 		return nil, err
 	}
-	if string(magic[:4]) != neSampMagic || magic[4] != neSampVer {
+	if string(magic[:4]) != neSampMagic || (magic[4] != neSampVer && magic[4] != 1) {
 		return nil, errors.New("not a national sample")
 	}
 	st, _ := f.Stat()
@@ -712,11 +726,32 @@ func (b *neSampBuilder) finish(natState string) (*neSamp, error) {
 	}
 	state := neSampState(natState, obsMeta, subMeta, hdr.Dist)
 	hdr.State = state
+	// the apex height lists (heap, transient): joined by id before the image is sized
+	hdr.THLen = -1
+	var th *neTreeH
+	if obsS != nil && obsS.th != nil {
+		th = &neTreeH{Off: make([]uint32, 1, n+1), H: make([]byte, 0, len(obsS.th.H))}
+		j := 0
+		for _, p := range perm {
+			id := b.ids[p]
+			for j < len(obsS.ids) && obsS.ids[j] < id {
+				j++
+			}
+			if j < len(obsS.ids) && obsS.ids[j] == id {
+				th.H = append(th.H, obsS.th.H[obsS.th.Off[j]:obsS.th.Off[j+1]]...)
+			}
+			th.Off = append(th.Off, uint32(len(th.H)))
+		}
+		hdr.THLen = len(th.H)
+	}
 	hdrJSON, _ := json.Marshal(hdr)
 	// the image
 	colsBytes := 0
 	for _, c := range neSampCols {
 		colsBytes += n * neFidxColSize(c.DT)
+	}
+	if th != nil {
+		colsBytes += 2*n + len(th.H)
 	}
 	total := 9 + len(hdrJSON) + 8*n9 + 4*n9 + 4*(n9+1) + n + colsBytes
 	data, err := neSampAnon(total)
@@ -774,6 +809,11 @@ func (b *neSampBuilder) finish(natState string) (*neSamp, error) {
 			}
 		}
 		o += n * sz
+	}
+	if th != nil {
+		o += copy(data[o:], th.counts())
+		o += copy(data[o:], th.H)
+		th = nil
 	}
 	syscall.Munmap(rows)
 	if o != total {
@@ -1107,7 +1147,7 @@ func neSampPeerTag(name string) string {
 
 func neSampObsURL() string {
 	if p := peers().ObsAPI; p != "" {
-		return p + "/api/v1/cells/sample?res=10&format=bin&fields=" + neFidxSrtmFlds // = the peer's "glyph" set
+		return p + "/api/v1/cells/sample?res=10&format=bin&fields=" + neTreeHFields() // = the peer's "glyph" set (+ tree_h once the peer serves it prebuilt, ne_tree_h.go)
 	}
 	return ""
 }
@@ -1136,8 +1176,10 @@ func neSampPeerObs() (*neFidxSrtm, interface{}) {
 	if s == nil {
 		return nil, nil
 	}
-	neSampNormIDs(s.ids, s.cols)
-	return s, map[string]interface{}{"epoch": s.epoch, "rows": len(s.ids)}
+	if perm := neSampNormIDs(s.ids, s.cols); perm != nil && s.th != nil {
+		s.th = s.th.reorder(perm)
+	}
+	return s, map[string]interface{}{"epoch": s.epoch, "rows": len(s.ids), "tree_h": s.th != nil}
 }
 
 // neSampPeerSub — the subsidy peer's sample: "IVS1" u8 res u8 child_res u32 n,
@@ -1282,31 +1324,35 @@ func (s *neSamp) fold9(e *neFiltExpr) []uint8 {
 	return out
 }
 
-// fold9Trees — Σ tree apices (tn, 255 = unknown → 0) over the matching samples
-// per res-9 parent; ×49 is the instant tree guess the glyph shows until the
-// cell-exact veil tiles have answered. Same LRU, key suffix "/tn", u16 LE per parent.
+// fold9Trees — Σ tree apices over the matching samples per res-9 parent (from
+// the apex lists when the store has them — inside the height term if one is
+// set — else tn, 255 = unknown → 0); ×49 is the instant tree guess the glyph
+// shows until the cell-exact veil tiles have answered. Same LRU, key suffix
+// "/tn", u16 LE per parent.
 func (s *neSamp) fold9Trees(e *neFiltExpr) []uint8 {
 	key := s.Hdr.State + "/" + e.Canonical() + "/tn"
 	if b, ok := neSampFoldLRU.get(key); ok && len(b) == 2*len(s.ids9) {
 		return b
 	}
 	mask := neFiltEval(s, e)
-	tn := s.col("tn")
+	tc := neNewTreeCounter(s.th, s.col("tn"), e)
 	out := make([]uint8, 2*len(s.ids9))
 	for i := range s.ids9 {
 		c := 0
-		if tn != nil {
-			for k := s.start9[i]; k < s.start9[i+1]; k++ {
-				if mask[k] != 0 && tn[k] != 255 {
-					c += int(tn[k])
-				}
+		for k := s.start9[i]; k < s.start9[i+1]; k++ {
+			if mask[k] != 0 {
+				v, _ := tc.at(int(k))
+				c += v
 			}
 		}
-		binary.LittleEndian.PutUint16(out[2*i:], uint16(c))
+		binary.LittleEndian.PutUint16(out[2*i:], uint16(min(c, 65535)))
 	}
 	neSampFoldLRU.put(key, out)
 	return out
 }
+
+// treesExact — the store's tree figures come from apex lists (range-limited when a height term is set).
+func (s *neSamp) treesExact() bool { return s.th != nil }
 
 // n9 — samples under res-9 parent i.
 func (s *neSamp) n9(i int) int { return int(s.start9[i+1] - s.start9[i]) }
@@ -1333,6 +1379,27 @@ func (s *neSamp) fold7(f9 []uint8) (match, n []int32) {
 		n[fi] += int32(s.n9(i))
 	}
 	return
+}
+
+// fold7Trees — Σ of a fold9Trees (u16 LE per res-9) per res-7 cell of the glyph frame.
+func (s *neSamp) fold7Trees(t9 []uint8) []int32 {
+	fr := &neGlyphFrame
+	out := make([]int32, len(fr.cells))
+	last, fi := uint64(0), int32(-1)
+	for i, id := range s.ids9 {
+		p7 := neH3ParentFast(id, 7)
+		if i == 0 || p7 != last {
+			last = p7
+			fi = -1
+			if q, ok := fr.index[p7]; ok {
+				fi = q
+			}
+		}
+		if fi >= 0 {
+			out[fi] += int32(binary.LittleEndian.Uint16(t9[2*i:]))
+		}
+	}
+	return out
 }
 
 // eval — the full mask (callers that need per-row membership: adm / bbox counts).

@@ -595,3 +595,34 @@ peers hold their national columns already; sampling is free for them and 20 MB o
 Fleet cost: disk +225 MB here, +≈ 1 GB per epoch at the observed-layer peer (prebuilt blocks it builds on demand
 today); bandwidth ≈ 30 MB per epoch + on-demand blocks at 1/5 of today's size; RAM ≈ 0 heap. Full-res bins
 stay view-driven (2 GB LRU), cold-open ≈ 0.4 s instead of 11 s because the peer side is warm.
+
+## 9. The tree figure — apex height lists in the bins (2026-11-03)
+
+The readout's `· N trees` counts the apices of the matching cells; with a height term (`ht=35..45`) only the
+apices **inside** it. `tree_n`/`tree_h_max` cannot answer that, so the observed-layer peer's bins carry, when
+`tree_h` is in `fields=`, a ragged column pair: `tree_h_n` (u16, exact apex count per cell, the trees layer's
+population h ≥ 3 m; auto-inserted, the fields hash is over the normalised list) and `tree_h` (u8 × 0.5 m, 1..254,
+lists back to back in row order, **sorted ascending** within a cell; `columns[]` entry `{dtype:"u8",
+shape:"ragged", counts:"tree_h_n"}`). Measured by the peer: glyph block 882 KB → 1.24 MB zstd (+41 %, ≈ 1 B/apex),
+sample +8 MB zstd, computed inside their hourly warm (~8 ms/bin). The national res-9 `tree_hh` histogram they
+also added is not read (the res-7 overview folds the sample).
+
+Ours (`ne_tree_h.go`): `neTreeH{Off,H}` with `count(k, lo, hi)` = two binary searches; `neFiltApexRange` = the
+union of the expression's `ht` terms in raw 0.5 m units (none → every apex counts); `neTreeCounter` = lists when
+present (range-limited), else `tn` (u8, 255 → 0) and *not exact*. Carried: NEXB v2 / NEX1 parse (`neFidxSrtm.th`,
+the block's lists split per bin by the running `tree_h_n` sum; rows re-sorted by id reorder the lists too) →
+`neFidxBin.TH` → blob tail on plane `all` only (`u16 counts[n] · u32 len · lists`, header `th:true`,
+`neFidxVer` 4 — the browser planes never carry it) → `v=flt` tile meta `trees=` + `tx=` (matching cells counted
+from a list; `tx == match` → exact) → page `fltTreeS`: exact when every tile is, else the sample's ≈ (when the sample
+has lists), else — with a height term — the apex layer or nothing. Sample image `NSMP` v2: `th_len` in the header
+(−1 = none), tail `u16 counts[n] · lists` after the columns; `fold9Trees` uses the same counter; `NSF9` ends with
+a `u8 exact` byte; `fnat?f=` JSON adds `trees[]` (×49) + `trees_exact`.
+
+**Gate** (bandwidth, and the peer builds a new field set on demand at 0.5–1.4 s per bin): the field list grows by
+`tree_h` only in **tree mode** (`neTreeHMode`). An hourly probe (`neTreeHLoop`, first after 2 min) fetches the
+block a user last needed with the tree set under a 6 s deadline; two fast answers that carry the column switch the
+mode on — `neFidxState` gains `;th`, so bins rebuild with lists on their next use (disk blobs of the old state age
+out under the 2 GB cap) and the sample URL changes (next national pass, peer ETag moves). A tree-set fetch slower
+than 8 s or failing in service switches the mode off for an hour (the block is re-asked with the prebuilt set at
+once). `NE_TREE_H=0|1` pins it. Inflight: `ne_fidx.tree_h {on, pinned, probes, probe_ok, off_until}`. Tests
+`TestNETreeHCount`, `TestNEFiltApexRange`, `TestNEFidxTreeHTail`, `TestNEFidxBlockParseRagged`.

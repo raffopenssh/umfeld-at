@@ -367,8 +367,8 @@ func TestNESampFnat(t *testing.T) {
 	if string(bin[:4]) != "NSF9" || binary.LittleEndian.Uint32(bin[4:]) != 2 {
 		t.Fatalf("fnat9: %q n=%d", bin[:4], binary.LittleEndian.Uint32(bin[4:]))
 	}
-	if len(bin) != 8+8*2 {
-		t.Fatalf("fnat9 length %d: want match, n and u16 trees per parent", len(bin))
+	if len(bin) != 8+8*2+1 || bin[len(bin)-1] != 0 {
+		t.Fatalf("fnat9 length %d: want match, n, u16 trees per parent and the exact flag (0: no apex lists in this fixture)", len(bin))
 	}
 	// the tree tail: Σ tn over the matching rows of each parent = the brute force
 	{

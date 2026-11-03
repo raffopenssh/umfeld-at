@@ -97,8 +97,10 @@ type neFnatResult struct {
 	Rows    int      `json:"rows"`
 	State   string   `json:"state"`
 	Share   []int    `json:"share"`
-	N       []int    `json:"n"` // res-12 cells with a digest per frame cell (0 = no row); Σ share/254·n over any subset = its match
+	N       []int    `json:"n"`                // res-12 cells with a digest per frame cell (0 = no row); Σ share/254·n over any subset = its match
 	Sample  int      `json:"sample,omitempty"` // 49 when the figures come from the national 1-in-49 sample (docs/ne-filter.md §8)
+	Trees   []int    `json:"trees,omitempty"`  // sample: tree apices of the matching cells per frame cell (×49; inside the height term when trees_exact)
+	TreesX  bool     `json:"trees_exact,omitempty"`
 	Units   string   `json:"units"`
 }
 
@@ -144,9 +146,13 @@ func neFnatSample(e *neFiltExpr, sp *neSamp) *neFnatResult {
 		return res
 	}
 	match, n := sp.fold7(sp.fold9(e))
+	trees := sp.fold7Trees(sp.fold9Trees(e))
 	share := make([]int, len(fr.cells))
 	ncell := make([]int, len(fr.cells))
+	res.Trees = make([]int, len(fr.cells))
+	res.TreesX = sp.treesExact()
 	for i := range fr.cells {
+		res.Trees[i] = int(trees[i]) * neSampK
 		if n[i] == 0 {
 			share[i] = 255
 			continue
@@ -167,7 +173,8 @@ func neFnatSample(e *neFiltExpr, sp *neSamp) *neFnatResult {
 // veil). Binary, little endian: "NSF9" u32 n · u16 lon[n] · u16 lat[n]
 // (quantised: lon = 9 + q/65535·9, lat = 46 + q/65535·4) · u8 match[n] (matching
 // samples, 0..7) · u8 n[n] (samples, 1..7) · u16 trees[n] (tree apices of the
-// matching samples, since 2026-11-03; older readers stop before it). Each sample
+// matching samples, since 2026-11-03; older readers stop before it) · u8 exact
+// (1: from apex lists, inside the height term when one is set). Each sample
 // stands for 49 cells.
 func neFnat9(e *neFiltExpr, sp *neSamp, w, s, ee, n float64) []byte {
 	f9 := sp.fold9(e)
@@ -191,6 +198,7 @@ func neFnat9(e *neFiltExpr, sp *neSamp, w, s, ee, n float64) []byte {
 	for _, i := range idx {
 		out = append(out, t9[2*i], t9[2*i+1])
 	}
+	out = append(out, b2u(sp.treesExact()))
 	return out
 }
 

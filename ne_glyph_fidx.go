@@ -59,7 +59,7 @@ import (
 )
 
 const (
-	neFidxVer      = 3 // 3: rem column (remoteness grid). 2: bins built before e8d7338 (declared view serving log-only res-9 chunks) lacked those cells and their state hash did not move
+	neFidxVer      = 4 // 4: apex height list tail (ne_tree_h.go). 3: rem column (remoteness grid). 2: bins built before e8d7338 (declared view serving log-only res-9 chunks) lacked those cells and their state hash did not move
 	neFidxBinDeg   = 0.025
 	neFidxHaloDeg  = 0.0005 // > one res-12 cell (≈ 16 m ≈ 0.0002°)
 	neFidxDiskCap  = 2 << 30
@@ -98,6 +98,7 @@ func NEFidxStats() map[string]interface{} {
 	m["disk_hits"] = neFidxDiskHits.Load()
 	m["disk_bytes"] = neFidxDiskSize()
 	m["srtm_epoch"] = neFidxSrtmEpoch()
+	m["tree_h"] = NETreeHStats()
 	m["srtm_blk"] = neFidxSrtmBlk.stats()
 	m["warm"] = neFidxWarmStats()
 	return m
@@ -147,6 +148,7 @@ type neFidxHdr struct {
 	BuiltMs int64        `json:"built_ms"`
 	Unk     int          `json:"unk"`
 	ResPx   float64      `json:"res_px"`
+	TH      bool         `json:"th,omitempty"` // the blob carries the apex height list tail (plane all only)
 	I, J    int          `json:"-"`
 }
 
@@ -161,6 +163,7 @@ type neFidxBin struct {
 	N    int
 	IJ   []int32 // 2n: i, j of cell k
 	Cols map[string][]byte
+	TH   *neTreeH         // apex height lists (nil: not in this blob / not served yet)
 	idx  map[uint32]int32 // (i<<16|j) → k, built lazily
 }
 
@@ -256,6 +259,7 @@ func neFidxColSize(dt string) int {
 func (b *neFidxBin) encode(plane string) []byte {
 	hdr := b.Hdr
 	hdr.Cols = nil
+	hdr.TH = plane == "all" && b.TH != nil
 	for _, f := range neFiltFields {
 		if plane != "all" && f.Plane != plane {
 			continue
@@ -313,6 +317,13 @@ func (b *neFidxBin) encode(plane string) []byte {
 	}
 	for _, c := range hdr.Cols {
 		buf.Write(b.Cols[c.ID])
+	}
+	if hdr.TH {
+		// tail: u16 apices per cell, u32 total, the lists (0.5 m units, ascending within a cell)
+		buf.Write(b.TH.counts())
+		binary.LittleEndian.PutUint32(tmp[:], uint32(len(b.TH.H)))
+		buf.Write(tmp[:4])
+		buf.Write(b.TH.H)
 	}
 	return buf.Bytes()
 }
@@ -372,6 +383,21 @@ func neFidxDecode(d []byte) (*neFidxBin, error) {
 		b.Cols[c.ID] = d[o : o+sz : o+sz]
 		o += sz
 	}
+	if b.Hdr.TH {
+		if o+2*n+4 > len(d) {
+			return nil, errors.New("short th counts")
+		}
+		cnt := d[o : o+2*n]
+		o += 2 * n
+		tl := int(binary.LittleEndian.Uint32(d[o:]))
+		o += 4
+		if o+tl > len(d) {
+			return nil, errors.New("short th lists")
+		}
+		if b.TH = neTreeHFromCounts(cnt, d[o:o+tl:o+tl]); b.TH == nil {
+			return nil, errors.New("th counts do not sum to the lists")
+		}
+	}
 	return b, nil
 }
 
@@ -388,15 +414,23 @@ func neFidxState(i, j int) string {
 	w, s, e, n := neFidxBox(i, j)
 	h := sha256.New()
 	h.Write([]byte("nfx" + strconv.Itoa(neFidxVer) + ";" + neGlyphTileState(KGCodesInBBoxMem(w-neFidxHaloDeg, s-neFidxHaloDeg, e+neFidxHaloDeg, n+neFidxHaloDeg), true)))
-	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch()))
+	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch() + neFidxStateTH()))
 	return hex.EncodeToString(h.Sum(nil))[:12]
+}
+
+// neFidxStateTH — ";th" once the apex lists are asked for, so bins built without them rebuild on their next use.
+func neFidxStateTH() string {
+	if neTreeHMode() {
+		return ";th"
+	}
+	return ""
 }
 
 // neFidxBoxState — the same hash for an arbitrary box (a glyph tile of the filter veil, ne_glyph_flt_tile.go).
 func neFidxBoxState(w, s, e, n float64) string {
 	h := sha256.New()
 	h.Write([]byte("nfx" + strconv.Itoa(neFidxVer) + ";" + neGlyphTileState(KGCodesInBBoxMem(w-neFidxHaloDeg, s-neFidxHaloDeg, e+neFidxHaloDeg, n+neFidxHaloDeg), true)))
-	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch()))
+	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch() + neFidxStateTH()))
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
@@ -724,8 +758,18 @@ func neFidxBuild(i, j int, st string) (*neFidxBin, error) {
 	// srtm cells bin: structure heights, roof, canopy, aspect_deg; terrain for cells without an obs row
 	if sr := neFidxSrtmFetch(w, s, e, n); sr != nil {
 		bin.Hdr.Srtm = map[string]interface{}{"epoch": sr.epoch}
+		var th *neTreeH
+		if sr.th != nil {
+			th = &neTreeH{Off: make([]uint32, 1, len(ord)+1), H: make([]byte, 0, len(sr.th.H))}
+		}
 		for q, k := range ord {
 			x := sr.find(cells[k].id)
+			if th != nil {
+				if x >= 0 {
+					th.H = append(th.H, sr.th.H[sr.th.Off[x]:sr.th.Off[x+1]]...)
+				}
+				th.Off = append(th.Off, uint32(len(th.H)))
+			}
 			if x < 0 {
 				continue
 			}
@@ -770,6 +814,7 @@ func neFidxBuild(i, j int, st string) (*neFidxBin, error) {
 				}
 			}
 		}
+		bin.TH = th
 	}
 	// Natura 2000: rasterised rings on a 25 m grid, one lookup per cell centre
 	neFidxN2K(bin, cells, ord, w, s, e, n)
@@ -1316,6 +1361,7 @@ type neFidxSrtm struct {
 	epoch string
 	ids   []uint64
 	cols  map[string][]byte
+	th    *neTreeH // tree_h_n + tree_h when asked for and served
 }
 
 func (s *neFidxSrtm) find(id uint64) int {
@@ -1339,7 +1385,8 @@ func neFidxSrtmFetch(w, s, e, n float64) *neFidxSrtm {
 	}
 	i, j := int(math.Floor(w/neFidxBinDeg+0.5)), int(math.Floor(s/neFidxBinDeg+0.5))
 	key := fmt.Sprintf("%d/%d", i, j)
-	if v, ok := neFidxSrtmBlk.get(key); ok {
+	wantTH := neTreeHMode()
+	if v, ok := neFidxSrtmBlk.get(key); ok && (!wantTH || v.th != nil || len(v.ids) == 0) {
 		neFidxSrtmBlkHits.Add(1)
 		return v
 	}
@@ -1348,10 +1395,15 @@ func neFidxSrtmFetch(w, s, e, n float64) *neFidxSrtm {
 			return v
 		}
 	}
-	url := fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&fields=%s", peers().ObsAPI+"/api/v1/cells", w, s, e, n, neFidxSrtmFlds)
+	treeSet := neTreeHMode()
+	url := fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&fields=%s", peers().ObsAPI+"/api/v1/cells", w, s, e, n, neTreeHFields())
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("User-Agent", "umfeld-at/fidx (+"+publicURL()+")")
+	t0 := time.Now()
 	resp, err := neFidxClient.Do(req)
+	if treeSet && (err != nil || time.Since(t0) > neTreeHSlow) {
+		neTreeHSlowFetch(time.Since(t0), err)
+	}
 	if err != nil {
 		neFidxSrtmDown.set(time.Now())
 		return nil
@@ -1475,7 +1527,9 @@ func neFidxSrtmBlockFetch(i, j int) bool {
 		wg.Done()
 	}()
 	w, s := float64(bi)*0.1, float64(bj)*0.1
-	url := fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&block=1&fields=%s", peers().ObsAPI+"/api/v1/cells", w, s, w+0.1, s+0.1, neFidxSrtmFlds)
+	neTreeHLastBlk.Store(bkey)
+	treeSet := neTreeHMode()
+	url := fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&block=1&fields=%s", peers().ObsAPI+"/api/v1/cells", w, s, w+0.1, s+0.1, neTreeHFields())
 	t0 := time.Now()
 	for attempt := 0; attempt < 2; attempt++ {
 		if attempt == 1 {
@@ -1484,7 +1538,19 @@ func neFidxSrtmBlockFetch(i, j int) bool {
 		}
 		req, _ := http.NewRequest("GET", url, nil)
 		req.Header.Set("User-Agent", "umfeld-at/fidx (+"+publicURL()+")")
+		t1 := time.Now()
 		resp, err := neFidxClient.Do(req)
+		if treeSet && (err != nil || time.Since(t1) > neTreeHSlow) {
+			// the peer is still building that field set: drop to the prebuilt set for an hour and ask again now
+			neTreeHSlowFetch(time.Since(t1), err)
+			if err != nil {
+				url = fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&block=1&fields=%s", peers().ObsAPI+"/api/v1/cells", w, s, w+0.1, s+0.1, neFidxSrtmFlds)
+				treeSet = false
+				req, _ = http.NewRequest("GET", url, nil)
+				req.Header.Set("User-Agent", "umfeld-at/fidx (+"+publicURL()+")")
+				resp, err = neFidxClient.Do(req)
+			}
+		}
 		if err != nil {
 			neFidxSrtmDown.set(time.Now())
 			return false
@@ -1572,9 +1638,11 @@ func neFidxBlockParse(body []byte, ep string, bi, bj int) (map[string]*neFidxSrt
 		IDs          string `json:"ids"`
 		PresentBytes int    `json:"present_bytes"`
 		Columns      []struct {
-			Name  string `json:"name"`
-			Dtype string `json:"dtype"`
-			Bytes int    `json:"bytes"`
+			Name   string `json:"name"`
+			Dtype  string `json:"dtype"`
+			Bytes  int    `json:"bytes"`
+			Shape  string `json:"shape"` // "ragged": lists back to back, lengths in the `counts` column
+			Counts string `json:"counts"`
 		} `json:"columns"`
 		Bins []struct {
 			I, J   int
@@ -1623,7 +1691,7 @@ func neFidxBlockParse(body []byte, ep string, bi, bj int) (map[string]*neFidxSrt
 		}
 		cols[c.Name] = body[o : o+c.Bytes]
 		o += c.Bytes
-		if c.Name == "id" {
+		if c.Name == "id" || c.Shape == "ragged" {
 			continue
 		}
 		sz := 1
@@ -1633,6 +1701,11 @@ func neFidxBlockParse(body []byte, ep string, bi, bj int) (map[string]*neFidxSrt
 		if r := c.Bytes / sz; rowsTotal == 0 || r < rowsTotal {
 			rowsTotal = r
 		}
+	}
+	// the ragged tree lists: offsets over all rows from the counts column
+	var thAll *neTreeH
+	if cnt, th := cols["tree_h_n"], cols["tree_h"]; cnt != nil && th != nil && len(cnt) == 2*rowsTotal {
+		thAll = neTreeHFromCounts(cnt, th)
 	}
 	bit, row := 0, 0
 	for _, b := range hdr.Bins {
@@ -1663,7 +1736,7 @@ func neFidxBlockParse(body []byte, ep string, bi, bj int) (map[string]*neFidxSrt
 			return nil, 2, false
 		}
 		for _, c := range hdr.Columns {
-			if c.Name == "id" {
+			if c.Name == "id" || c.Shape == "ragged" {
 				continue
 			}
 			sz := 1
@@ -1671,6 +1744,14 @@ func neFidxBlockParse(body []byte, ep string, bi, bj int) (map[string]*neFidxSrt
 				sz = 2
 			}
 			v.cols[c.Name] = cols[c.Name][r0*sz : row*sz]
+		}
+		if thAll != nil {
+			a := thAll.Off[r0]
+			off := make([]uint32, row-r0+1)
+			for q := range off {
+				off[q] = thAll.Off[r0+q] - a
+			}
+			v.th = &neTreeH{Off: off, H: thAll.H[a:thAll.Off[row]]}
 		}
 		out[k] = v
 	}
@@ -1695,11 +1776,13 @@ func neFidxSrtmParse(body []byte, ep string) *neFidxSrtm {
 			Name  string `json:"name"`
 			Dtype string `json:"dtype"`
 			Bytes int    `json:"bytes"`
+			Shape string `json:"shape"`
 		} `json:"columns"`
 	}
 	if json.Unmarshal(body[8:8+hl], &hdr) != nil {
 		return nil
 	}
+	var ragged []byte
 	if ep == "" {
 		ep = hdr.Epoch
 	}
@@ -1743,6 +1826,12 @@ func neFidxSrtmParse(body []byte, ep string) *neFidxSrtm {
 			}
 			continue
 		}
+		if c.Shape == "ragged" || c.Name == "tree_h" {
+			if c.Name == "tree_h" {
+				ragged = seg
+			}
+			continue
+		}
 		sz := 1
 		if c.Dtype == "u16" || c.Dtype == "i16" {
 			sz = 2
@@ -1751,6 +1840,9 @@ func neFidxSrtmParse(body []byte, ep string) *neFidxSrtm {
 			continue
 		}
 		out.cols[c.Name] = seg
+	}
+	if cnt := out.cols["tree_h_n"]; cnt != nil && ragged != nil {
+		out.th = neTreeHFromCounts(cnt, ragged)
 	}
 	if out.ids == nil || !sort.SliceIsSorted(out.ids, func(a, b int) bool { return out.ids[a] < out.ids[b] }) {
 		if out.ids == nil {
@@ -1774,6 +1866,9 @@ func neFidxSrtmParse(body []byte, ep string) *neFidxSrtm {
 				copy(nc[k*sz:(k+1)*sz], c[p*sz:(p+1)*sz])
 			}
 			out.cols[name] = nc
+		}
+		if out.th != nil {
+			out.th = out.th.reorder(perm)
 		}
 	}
 	return out
