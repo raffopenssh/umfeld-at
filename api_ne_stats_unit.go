@@ -1076,7 +1076,8 @@ func neStatsLink(u *neStatsUnit, canon string) string {
 		tok = fmt.Sprintf("pt=%.5f,%.5f;z=%d", (u.bbox[0]+u.bbox[2])/2, (u.bbox[1]+u.bbox[3])/2, neFilterZoomFor(u.bbox[2]-u.bbox[0]))
 	}
 	if canon != "" {
-		tok += ";f=" + canon
+		// < > | percent-encoded: mail clients stop linkifying at them; the page decodes f=
+		tok += ";f=" + strings.NewReplacer("<", "%3C", ">", "%3E", "|", "%7C", " ", "%20").Replace(canon)
 	}
 	return publicURL() + "/#" + tok
 }
