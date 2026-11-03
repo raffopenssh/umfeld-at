@@ -292,6 +292,11 @@ func neFiltParseTerm(t string) (neFiltTerm, bool) {
 			term.Set = []string{"cand", "conf"}
 			return term, true
 		}
+		if neFiltRangeOK(fd) {
+			// bare numeric field = known (a value is present): `ht` = any tree
+			term.Flag = true
+			return term, true
+		}
 		return term, false
 	}
 	num := func(s string) (float64, bool) {
@@ -485,6 +490,9 @@ func (t neFiltTerm) Words() string {
 	case t.Unk:
 		return fd.Label + " unknown"
 	case t.Flag:
+		if neFiltRangeOK(fd) {
+			return fd.Label + " known"
+		}
 		return fd.Label
 	case len(t.Set) > 0:
 		if fd.Kind == nfSites {
@@ -636,6 +644,10 @@ func neFiltTermFn(cols neFiltCols, t neFiltTerm) func(k int) bool {
 		}
 		return func(k int) bool { v := neFiltRaw(fd, c, k); return v != nd && v < 64 && mask&(1<<uint(v)) != 0 }
 	}
+	zeroNone := fd.ID == "loss" || fd.ID == "snar" || fd.ID == "snar2" // 0 = none: never a value
+	if t.Flag {
+		return func(k int) bool { v := neFiltRaw(fd, c, k); return v != nd && !(zeroNone && v == 0) }
+	}
 	lo, hi := neFiltBounds(fd, t)
 	if fd.Halo {
 		// cont: bit 7 = the patch leaves the bin: ≥ 64 for a lower bound, unknown for an upper bound
@@ -650,7 +662,6 @@ func neFiltTermFn(cols neFiltCols, t neFiltTerm) func(k int) bool {
 			return v >= lo && v <= hi
 		}
 	}
-	zeroNone := fd.ID == "loss" || fd.ID == "snar" || fd.ID == "snar2" // 0 = none: never a value
 	return func(k int) bool {
 		v := neFiltRaw(fd, c, k)
 		if v == nd || (zeroNone && v == 0) {

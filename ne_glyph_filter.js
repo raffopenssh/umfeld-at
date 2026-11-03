@@ -28,7 +28,7 @@ var ALIAS={tree:'ht',trees:'ht',treeheight:'ht',height:'h',slope:'sl',elevation:
 function parseTerm(t){var m=/^([a-z][a-z0-9]*)(.*)$/.exec(t);if(!m)return null;var f=ALIAS[m[1]]||m[1],rest=m[2],term={f:f,lo:NaN,hi:NaN,set:[],unk:false,flag:false};
  if(f==='k'){var r=rest.indexOf('>=')===0?rest.slice(2):rest.indexOf('=')===0?rest.slice(1):null;if(r==null)return null;var v=+r;if(!isFinite(v))return null;term.lo=v;return term}
  var fd=FIELDS[f];if(!fd)return null;
- if(rest===''){if(fd.kind==='flag'||fd.kind==='sites'){term.flag=true;return term}if(f==='chg'){term.set=['cand','conf'];return term}return null}
+ if(rest===''){if(fd.kind==='flag'||fd.kind==='sites'){term.flag=true;return term}if(f==='chg'){term.set=['cand','conf'];return term}if(rangeOK(fd)){term.flag=true;return term}/* bare numeric field = known (a value is present): `ht` = any tree */return null}
  var num=function(s){var v=+s;return s!==''&&isFinite(v)?v:null};
  if(rest.indexOf('>=')===0){if(!rangeOK(fd))return null;var a=num(rest.slice(2));if(a==null)return null;term.lo=a;return term}
  if(rest.indexOf('<=')===0){if(!rangeOK(fd))return null;var b=num(rest.slice(2));if(b==null)return null;term.hi=b;return term}
@@ -40,7 +40,7 @@ function parse(s){var e={groups:[],k:0,ignored:[]};s=(s||'').trim().toLowerCase(
 function fnum(v){return Math.abs(v-Math.round(v))<1e-9?String(Math.round(v)):String(+v.toFixed(3))}
 function termStr(t){if(t.f==='k')return'k>='+fnum(t.lo);if(t.unk)return t.f+'=unk';if(t.flag)return t.f;if(t.set.length)return t.f+'='+t.set.join('+');if(!isNaN(t.lo)&&!isNaN(t.hi))return t.lo===t.hi?t.f+'='+fnum(t.lo):t.f+'='+fnum(t.lo)+'..'+fnum(t.hi);if(!isNaN(t.lo))return t.f+'>='+fnum(t.lo);return t.f+'<='+fnum(t.hi)}
 function canonical(e){var p=e.groups.map(function(g){return g.map(termStr).sort().join('|')});if(e.k>1)p.push('k>='+e.k);return p.join(',')}
-function termWords(t){var fd=FIELDS[t.f];if(!fd)return t.f;var L=fd.label,u=fd.unit||'';if(u&&u!=='%'&&u!=='°')u='\u202f'+u;if(t.f==='k')return'clusters ≥ '+t.lo+' cells';if(t.unk)return L+' unknown';if(t.flag)return L;if(t.set.length){if(fd.kind==='sites')return'site '+t.set.join(' / ');return L+' '+t.set.map(function(m){var i=member(fd,m);return fd.labels&&fd.labels[i]!=null?fd.labels[i]:(m===''?'none':m)}).join(' / ')}
+function termWords(t){var fd=FIELDS[t.f];if(!fd)return t.f;var L=fd.label,u=fd.unit||'';if(u&&u!=='%'&&u!=='°')u='\u202f'+u;if(t.f==='k')return'clusters ≥ '+t.lo+' cells';if(t.unk)return L+' unknown';if(t.flag)return rangeOK(fd)?L+' known':L;if(t.set.length){if(fd.kind==='sites')return'site '+t.set.join(' / ');return L+' '+t.set.map(function(m){var i=member(fd,m);return fd.labels&&fd.labels[i]!=null?fd.labels[i]:(m===''?'none':m)}).join(' / ')}
  if(fd.kind==='bucket'){var E=fd.edges;if(!isNaN(t.hi)&&isNaN(t.lo))return L+' < '+E[Math.min(bucketOf(E,t.hi)+1,E.length-1)]+u;if(!isNaN(t.lo)&&isNaN(t.hi))return L+' ≥ '+E[bucketOf(E,t.lo)]+u}
  if(!isNaN(t.lo)&&!isNaN(t.hi))return t.lo===t.hi?L+' = '+fnum(t.lo)+u:L+' '+fnum(t.lo)+'–'+fnum(t.hi)+u;if(!isNaN(t.lo))return L+' ≥ '+fnum(t.lo)+u;return L+' ≤ '+fnum(t.hi)+u}
 function words(e){var p=e.groups.map(function(g){var w=g.map(termWords);return w.length>1?'('+w.join(' or ')+')':w[0]});if(e.k>1)p.push('clusters ≥ '+e.k+' cells');return p.join(' · ')}
@@ -54,8 +54,9 @@ function termFn(bin,t){var fd=FIELDS[t.f];if(!fd)return function(){return false}
  if(fd.kind==='set'){var mask=0;t.set.forEach(function(m){var i=member(fd,m);if(i>=0&&i<31)mask|=1<<i});return function(k){var v=raw(k);return v!==nd&&v>=0&&v<31&&(mask&(1<<v))!==0}}
  if(fd.kind==='bits'){var bm=0;t.set.forEach(function(m){var i=member(fd,m);if(i>=0)bm|=1<<i});return function(k){var v=raw(k);return v!==nd&&(v&bm)!==0}}
  if(fd.kind==='sites'){if(t.flag)return function(k){return raw(k)!==nd};var sm=0;(bin.hdr.n2k||[]).forEach(function(code,i){if(t.set.indexOf(code)>=0&&i<31)sm|=1<<i});if(!sm)return function(){return false};return function(k){var v=raw(k);return v!==nd&&v<31&&(sm&(1<<v))!==0}}
+ var zn=fd.id==='loss'||fd.id==='snar'||fd.id==='snar2';if(t.flag)return function(k){var v=raw(k);return v!==nd&&!(zn&&v===0)};
  var b=bounds(fd,t),lo=b[0],hi=b[1];if(fd.halo)return function(k){var v=raw(k);if(v===nd)return false;if(v&128)return hi===2147483647&&lo<=64;return v>=lo&&v<=hi};
- var zn=fd.id==='loss'||fd.id==='snar'||fd.id==='snar2';return function(k){var v=raw(k);if(v===nd||(zn&&v===0))return false;return v>=lo&&v<=hi}}
+ return function(k){var v=raw(k);if(v===nd||(zn&&v===0))return false;return v>=lo&&v<=hi}}
 function evaluate(bin,e){var n=bin.n,out=new Uint8Array(n),k;if(!e.groups.length){out.fill(1)}else{var fns=e.groups.map(function(g){return g.map(function(t){return termFn(bin,t)})});for(k=0;k<n;k++){var ok=true;for(var gi=0;gi<fns.length&&ok;gi++){var any=false,g=fns[gi];for(var ti=0;ti<g.length;ti++)if(g[ti](k)){any=true;break}if(!any)ok=false}out[k]=ok?1:0}}
  if(e.k>1)clusterFilter(bin,out,e.k);return out}
 function lattice(bin){if(bin.lat)return bin.lat;var m=new Map();for(var k=0;k<bin.n;k++)m.set(key(bin.ij[2*k],bin.ij[2*k+1]),k);return bin.lat=m}
