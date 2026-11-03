@@ -672,33 +672,16 @@ func neFidxBuild(i, j int, st string) (*neFidxBin, error) {
 		if !v41 || len(ob) != neObsRecordV41 {
 			continue
 		}
-		bin.Cols["bcov"][q] = ob[17]
-		bin.Cols["bn"][q] = ob[18]
-		bin.Cols["hmean"][q] = ob[19]
-		bin.Cols["h"][q] = ob[20]
-		bin.Cols["hmax"][q] = ob[21]
-		bin.Cols["tn"][q] = ob[22]
-		bin.Cols["ht"][q] = ob[23]
-		bin.Cols["canopy"][q] = ob[24]
-		bin.Cols["ndvi"][q] = ob[25]
-		bin.Cols["ndva"][q] = ob[26]
-		bin.Cols["dh"][q] = ob[27]
+		for _, m := range neFidxObsMap {
+			bin.Cols[m.id][q] = ob[m.off]
+		}
 		if ob[28] != 0 {
 			bin.Cols["als"][q] = ob[28]
 		}
-		bin.Cols["ver"][q] = ob[29]
 		put16("el", q, binary.LittleEndian.Uint16(ob[30:]))
-		bin.Cols["sl"][q] = ob[32]
-		bin.Cols["sl90"][q] = ob[33]
-		bin.Cols["as"][q] = ob[34]
-		bin.Cols["rough"][q] = ob[35]
-		bin.Cols["tri"][q] = ob[36]
-		bin.Cols["tpi"][q] = ob[37]
-		bin.Cols["dtm"][q] = ob[38]
 		if ob[39] != 0 {
 			bin.Cols["loss"][q] = ob[39]
 		}
-		bin.Cols["phen"][q] = ob[40]
 	}
 	bin.Hdr.Unk = unk
 	// subsidy (peer bin, from the LRU or one fetch)
@@ -821,6 +804,15 @@ func neFidxBuild(i, j int, st string) (*neFidxBin, error) {
 	}
 	return bin, nil
 }
+
+// neFidxObsMap — NEO1 v2.4 (41 B) byte offsets → filter columns, verbatim.
+// Shared by the bin builder and the national sample (ne_mvt_samp.go) so both
+// read the same byte for the same field. Not in the table: als (28, 0 = unknown),
+// el (u16 at 30), loss (39, 0 = unknown), o/osh (the lu block at lay.luOff).
+var neFidxObsMap = []struct {
+	id  string
+	off int
+}{{"bcov", 17}, {"bn", 18}, {"hmean", 19}, {"h", 20}, {"hmax", 21}, {"tn", 22}, {"ht", 23}, {"canopy", 24}, {"ndvi", 25}, {"ndva", 26}, {"dh", 27}, {"ver", 29}, {"sl", 32}, {"sl90", 33}, {"as", 34}, {"rough", 35}, {"tri", 36}, {"tpi", 37}, {"dtm", 38}, {"phen", 40}}
 
 func b2u(b bool) uint8 {
 	if b {

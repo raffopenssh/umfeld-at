@@ -119,6 +119,7 @@ func neNatState() string {
 // neNatStart — load the file, then keep the table fresh. Called once from main.
 func neNatStart() {
 	neNatOnce.Do(func() {
+		neSampStart()
 		if n, err := neNatLoad(neNatPath()); err == nil {
 			neNatMu.Lock()
 			neNatCur = n
@@ -139,7 +140,9 @@ func neNatStart() {
 
 func neNatMaybeBuild() {
 	cur := neNatGet()
-	if cur != nil && (time.Since(cur.Built) < neNatMinAge || cur.State == neNatState()) {
+	// the peers' national samples: conditional GETs, a few bytes while their epochs stand
+	peersMoved := neSampPeersCheck()
+	if cur != nil && neSampGet() != nil && !peersMoved && (time.Since(cur.Built) < neNatMinAge || cur.State == neNatState()) {
 		return
 	}
 	neNatBuild()
@@ -159,6 +162,7 @@ func neNatBuild() *neNat {
 	agg := make(map[uint64]*neNatRow, 1<<20)
 	cells, held := 0, 0
 	var obsBuf []byte
+	samp := neSampBegin() // the 1-in-49 sample rides on the same pass (ne_mvt_samp.go)
 	for _, kg := range kgs {
 		neNatProgress.Add(1)
 		v := neDeclViewOf(kg)
@@ -188,6 +192,7 @@ func neNatBuild() *neNat {
 			}
 		}
 		rows := v.Rows
+		samp.kg(kg, rows, obs, lay, cum)
 		oi, on := 0, 0
 		if obs != nil {
 			on = len(obs) / lay.rowBytes
@@ -252,6 +257,12 @@ func neNatBuild() *neNat {
 	n.Lv[1] = n.Lv[0].fold(8)
 	n.Lv[2] = n.Lv[1].fold(7)
 	n.ms = time.Since(t0).Milliseconds()
+	if sp, err := samp.finish(st); err != nil {
+		log.Printf("national sample: %v", err)
+	} else {
+		neSampSet(sp)
+		log.Printf("🎯 national sample built: %d rows (1-in-%d), %d res-9 parents, state %s, %.1f s", sp.Hdr.N, neSampK, sp.Hdr.N9, sp.Hdr.State, float64(sp.Hdr.Ms)/1000)
+	}
 	if err := neNatSave(neNatPath(), n); err != nil {
 		log.Printf("national cell table: save: %v", err)
 	}

@@ -98,6 +98,7 @@ func NEMVTStats() map[string]interface{} {
 	m["queue"] = neFidxQueueStats()
 	m["jobs"] = nePMTJobStats()
 	m["national"] = NENatStats()
+	m["sample"] = NESampStats()
 	return m
 }
 
