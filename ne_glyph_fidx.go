@@ -392,6 +392,14 @@ func neFidxState(i, j int) string {
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
+// neFidxBoxState — the same hash for an arbitrary box (a glyph tile of the filter veil, ne_glyph_flt_tile.go).
+func neFidxBoxState(w, s, e, n float64) string {
+	h := sha256.New()
+	h.Write([]byte("nfx" + strconv.Itoa(neFidxVer) + ";" + neGlyphTileState(KGCodesInBBoxMem(w-neFidxHaloDeg, s-neFidxHaloDeg, e+neFidxHaloDeg, n+neFidxHaloDeg), true)))
+	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch()))
+	return hex.EncodeToString(h.Sum(nil))[:12]
+}
+
 // ── get: LRU → disk → build ──────────────────────────────────────────────────
 
 // neFidxGet — the full blob (all columns) of a bin at the current state.

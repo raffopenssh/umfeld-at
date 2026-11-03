@@ -337,14 +337,32 @@ type neGlyphTileGeom struct {
 }
 
 func neGlyphTileGeomOf(lod neGlyphLOD, i, j int) (g neGlyphTileGeom, w, s, e, n float64, ok bool) {
+	return neGlyphTileGeomBleed(lod, i, j, neGlyphTileBleed)
+}
+
+// neGlyphTileGeomBleed — the same with a wider ring (the filter veil uses 3 px:
+// one flat colour, so two tiles' anti-aliased edges must never share a screen pixel).
+func neGlyphTileGeomBleed(lod neGlyphLOD, i, j int, bleed float64) (g neGlyphTileGeom, w, s, e, n float64, ok bool) {
 	w, s, e, n = neGlyphTileBox(lod, i, j)
 	x0, y0 := neGlyphProj(w, n) // top-left in viewBox units (y grows south)
 	x1, y1 := neGlyphProj(e, s)
-	pw, ph := int(math.Ceil((x1-x0)*lod.px))+2*neGlyphTileBleed, int(math.Ceil((y1-y0)*lod.px))+2*neGlyphTileBleed
+	pw, ph := int(math.Ceil((x1-x0)*lod.px))+2*int(bleed), int(math.Ceil((y1-y0)*lod.px))+2*int(bleed)
 	if pw < 1 || ph < 1 || pw*ph > 4<<20 {
 		return g, w, s, e, n, false
 	}
-	return neGlyphTileGeom{lod: lod, x0: x0 - neGlyphTileBleed/lod.px, y0: y0 - neGlyphTileBleed/lod.px, pw: pw, ph: ph}, w, s, e, n, true
+	return neGlyphTileGeom{lod: lod, x0: x0 - bleed/lod.px, y0: y0 - bleed/lod.px, pw: pw, ph: ph}, w, s, e, n, true
+}
+
+// neGlyphFltBleed — the veil tile's ring in tile pixels. The browser resamples every
+// image edge into a half-transparent screen pixel, so two neighbours must overlap by
+// ≥ 2 screen pixels at the LOD's lowest zoom (LOD 2 is drawn down to ~0.12 screen px per
+// tile px, LOD 0/1 to ~0.4) — 18 px for LOD 2, 6 px otherwise. The ring is painted with
+// the neighbours' cells (neGlyphFltRender). The client mirrors this table (FLT_BLEED).
+func neGlyphFltBleed(lod neGlyphLOD) float64 {
+	if lod.px <= 10 {
+		return 18
+	}
+	return 6
 }
 
 // poly — the cell's hexagon in tile pixels (+ centroid); false when H3 fails.
@@ -796,9 +814,19 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := q.Get("v")
-	if view != "" && view != "obs" && view != "tree" && view != "chg" && view != "sub" && view != "subc" && view != "dif" && view != "rd" {
-		apiError(w, "v=obs|tree|chg|sub|subc|dif|rd", 400)
+	if view != "" && view != "obs" && view != "tree" && view != "chg" && view != "sub" && view != "subc" && view != "dif" && view != "rd" && view != "flt" {
+		apiError(w, "v=obs|tree|chg|sub|subc|dif|rd|flt", 400)
 		return
+	}
+	// v=flt: the filter veil (ne_glyph_flt_tile.go) — f= the expression, th=d the dark theme
+	var fltExpr *neFiltExpr
+	if view == "flt" {
+		fe := neFiltParse(q.Get("f"))
+		if len(fe.Groups) == 0 && fe.K <= 1 {
+			apiError(w, "v=flt needs f=<expr> (grammar: /api/v1/ne/filter/fields)", 400)
+			return
+		}
+		fltExpr = fe
 	}
 	if (view == "dif" || view == "rd") && lod == 2 {
 		apiError(w, "v="+view+" is drawn at lod=0|1 only (the marks need the near tiles)", 400)
@@ -835,7 +863,10 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 		key += "/e" + strconv.FormatInt(st, 36)
 		noStore = st == 0 // no lidar year yet (table loading): never let a browser keep this one
 	}
-	if view == "rd" {
+	if view == "flt" {
+		tw, ts, te, tn := neGlyphTileBox(L, i, j)
+		key += "/" + fltExpr.Canonical() + "/" + q.Get("th") + "/" + neFidxBoxState(tw, ts, te, tn)
+	} else if view == "rd" {
 		// static OSM extract: no cell state in the key
 		w.Header().Set("X-Data-Attribution", "(c) OpenStreetMap contributors (ODbL) - roads + rail")
 	} else if !sub {
@@ -868,6 +899,29 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t0 := time.Now()
+	if view == "flt" {
+		g, tw, ts, te, tn, ok := neGlyphTileGeomBleed(L, i, j, neGlyphFltBleed(L))
+		if !ok {
+			apiError(w, "tile geometry", 500)
+			return
+		}
+		var fm neGlyphFltMeta
+		pngb := neGlyphFltRender(&g, tw, ts, te, tn, fltExpr, q.Get("th") == "d", &fm)
+		if pngb == nil {
+			apiError(w, "tile render failed", 500)
+			return
+		}
+		meta := "n=" + strconv.Itoa(fm.n) + ";ms=" + strconv.FormatInt(time.Since(t0).Milliseconds(), 10) + ";" + fm.String()
+		if fm.pending == 0 {
+			neGlyphTileLRU.put(key, neGlyphTileJoin(meta, pngb))
+		} else {
+			w.Header().Set("Cache-Control", "no-store")
+		}
+		w.Header().Set("X-NE-Tile", meta)
+		w.Header().Set("Content-Length", strconv.Itoa(len(pngb)))
+		_, _ = w.Write(pngb)
+		return
+	}
 	pngb, m := neGlyphTileRenderWin(L, i, j, view, raw, win)
 	if pngb == nil && m.sub.down {
 		// the subsidy peer is down: no picture, the legend says so

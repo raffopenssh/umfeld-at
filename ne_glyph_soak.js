@@ -169,8 +169,9 @@ export async function run(o) {
         if (c0 && c0.cells) want(P + 'filter agent endpoint agrees', Math.abs(c0.match / c0.cells - F.match / F.cells) < 0.15, { api: [c0.match, c0.cells], page: [F.match, F.cells] });
         s = await go(`#kg=${kg};full;z=200;f=chg=confirmed|bogus`); F = await fw();
         want(P + 'filter labels + ignored', F.f === 'chg=conf' && F.ignored.length === 1 && document.querySelector('.gf-in').value.indexOf('bogus') >= 0, { f: F.f, ignored: F.ignored, input: document.querySelector('.gf-in').value });
-        s = await go(`#kg=${kg};full;z=20;f=steep`); F = await fw(); layers(P + 'filter/20 (coarse: token kept, veil off)', s, { view: '', lod: 2 });
-        want(P + 'filter coarse readout', F.f === 'sl>=20' && /zoom in/.test(F.readout) && F.bins === 0, { f: F.f, readout: F.readout, bins: F.bins });
+        /* LOD 2 (z=20): the veil is a server tile like any layer — cell-exact at every LOD since the §8 harmonisation */
+        s = await go(`#kg=${kg};full;z=20;f=steep`); F = await fw(); layers(P + 'filter/20 (coarse: veil tile)', s, { view: '', lod: 2 });
+        want(P + 'filter coarse readout', F.f === 'sl>=20' && /of .* cells/.test(F.readout) && F.bins > 0 && !/zoom in/.test(F.readout), { f: F.f, readout: F.readout, bins: F.bins });
         /* §8 national sample: at z=1 every term folds (sample:49), the funnel stays lit, the readout says sample; k>= alone dims it */
         s = await go(`#z=1;f=d=forest,hb>=10`); await settle(); { const until = Date.now() + 8000; while (Date.now() < until && !(window.__fv && __fv(13.5, 47.5).d && __fv(13.5, 47.5).d.sample)) await sleep(150); }
         if (window.__fv) { const v = __fv(13.5, 47.5); want(P + 'filter national sample at z=1', !!(v.d && v.d.sample === 49 && v.far && v.veil && !/zoom in/.test(G.filter().readout) && /1-in-49/.test(G.filter().readout) && !document.querySelector('.gt-flt.off')), { d: v.d, readout: G.filter().readout, veil: v.veil });

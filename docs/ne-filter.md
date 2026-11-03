@@ -2,10 +2,10 @@
 
 Status: **live**. Code map: `docs/ne-glyph.md` Files row *FILTER* + JS map *Filter*; caching:
 `docs/payload-caching-contract.md` §Filter index; client-facing: `llm.txt` (`/api/v1/ne/filter`, `/filter/fields`,
-`/glyph/fidx`). What shipped differs from the design below in three places — (1) the Worker paints one PNG per
-*view tile* (the glyph's LOD-0/1 grid, at the view's pixel density) rather than per bin, so the veil sits on the
-same frame box as the data tile beneath (no seam, crisp at any zoom); a LOD-1 tile straddling two bins waits for
-both; (2) chips are the AND groups themselves — click a chip to edit it in the input, there is no popover; typed
+`/glyph/fidx`). What shipped differs from the design below in three places — (1) the veil is a **server tile**
+(`v=flt`, §8 step 3b, since 2026-11-03) on the glyph's LOD-0/1/2 grid like every other layer; the Worker still
+holds the bins the page needs cell-exact (tree points, the card/peek `at`); before that the Worker painted one PNG
+per view tile; (2) chips are the AND groups themselves — click a chip to edit it in the input, there is no popover; typed
 input gets suggestions (presets → words → fields → members), member *labels* are accepted on input
 (`chg=confirmed`, `sub=vineyard`) and canonicalised to ids; (3) `k>=n` is capped at 4 096, groups at 64, the
 string at 2 048 chars; nothing is an error — unparsable terms land in `ignored[]` and stay in the input with a hint.
@@ -535,7 +535,15 @@ form in `neSampFoldLRU`, `fold7` over the frame; `exact:false`, `sample:49`, `k>
 view wider than `FLT_BINS`), readout "≈ … · 1-in-49 sample" / "n res-9 cells in view", legend row from the same
 figures (`fvLegend`), the funnel only dims for a bare `k>=`. (4) `/ne/filter?adm=&format=count` and boxes
 0.1°–2.5° (`neSampCountIn`), `/ne/stats/unit` units beyond 48 bins (`neStatsSample`, ×49, `approx:true`),
-`/filter/fields` `histogram{}` (`neSampHist`). (5) Peer block bodies without ids: NEXB v2 (`neFidxBlockParse`:
+`/filter/fields` `histogram{}` (`neSampHist`). (3b, **harmonised with the subsidy layer, 2026-11-03**) the
+cell-exact veil is a **server tile** `v=flt&f=&th=d` (`ne_glyph_flt_tile.go`) on the glyph's own LOD grid at every LOD
+(0/1/2, no `FLT_BINS` cap, no Worker paint): key `flt/lod/i/j/<canon>/<th>/<neFidxBoxState>`, meta `n/match/bins/pend`
+(counts only cells centred in the box), palette transparent/veil/accent, hairlines at LOD 1 only; the ring
+(`neGlyphFltBleed`: 18 px at LOD 2, 6 px otherwise, ≥ 2 screen px at the LOD's lowest zoom) is painted with the
+neighbours' cells (`ring` bins) so resampled image edges never show a seam; the client (`hiTile(t,'flt')`,
+`FLT_BLEED`) loads it with the base tiles — same under-LOD cull, eviction and sample bridge (`fv9Show` until the first
+exact tile lands); the Worker keeps bins only for tree points and the card's/peek's `at` (`fltWantAt`,
+`fltPeekLine` = "filter · matches/outside" in the hover peek, `fltCardRow` in the card). `.ov-flt` opacity .82. (5) Peer block bodies without ids: NEXB v2 (`neFidxBlockParse`:
 present bitmap + `ids_xor` over the `neBBoxCells` enumeration, `&ids=1` retry on mismatch, counter
 `block_id_fallback`), subsidy `noid` bins (`neSubBlockNoidToIDs`, `ids=1` for an hour after a bad block).
 (6) Tests `TestNESampBuild`, `TestNESampFnat` (fold vs brute force, k>= alone, NSF9, counts, histogram),
