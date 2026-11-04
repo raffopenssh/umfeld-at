@@ -714,6 +714,26 @@ func neVersionsCoverage(ma, mb map[uint64][]byte) bool {
 	return false
 }
 
+// neLandDiffers — per-cell land rule (2026-11-04). `land` (row byte 9) is the
+// share of the cell covered by the union of the register units the build held.
+// The register tiles the country without gaps, so a complete build gives every
+// interior cell the same land share in every version; a `land` that moves
+// between two versions means one build held a truncated copy of a unit — a
+// seam of the source tiles or of the 0.02° fetch cells (bevdirect < v0.3.6
+// kept the neighbour's clipped copy of a wide unit, docs/ne-cells.md
+// "Edge-cell history") — and the lu shares, normalised to that land, move with
+// it: one group "gains" what the clip had cut away, nothing is lost, the edge
+// density drops. Seen as columns of change along a z15 tile seam (KG 90011,
+// 13 of 16 candidates on one meridian). Such a pair is status "coverage", like
+// a cell-set difference — the build's domain moved, not the land use.
+func neLandDiffers(a, b []byte) bool {
+	d := int(b[9]) - int(a[9])
+	if d < 0 {
+		d = -d
+	}
+	return d >= 13 // neQCFloorShare × 255
+}
+
 // neQCFloorShare — quantisation floor. z16 tiles have a 4096 extent (≈ 0.6 m);
 // a 1/255 share step on a 307 m² res-12 cell is 1.2 m². Boundary vertex jitter
 // moves a few m² per cell without any class winning or losing the cell; 5 %
@@ -878,9 +898,12 @@ func (c *neChangeKG) deltasOf() (*neChangeDeltas, error) {
 				if !okB {
 					x.Share = a[8]
 				}
+				if okA && okB && neLandDiffers(a, b) {
+					x.Coverage = true
+				}
 				if th := c.entries[vs[i+1]].TileHash; th != "" && th == c.entries[vs[i]].TileHash {
 					x.SameInput = true
-				} else if okA && okB {
+				} else if okA && okB && !x.Coverage {
 					x.Jitter = neDeltaJitter(a, b, &x, area)
 				}
 				d.rows = append(d.rows, x)
@@ -909,7 +932,7 @@ func neRowMap(rows []byte) map[uint64][]byte {
 // neChangeSummary — the roll-up of one KG (edge cells counted where kg_share ≥ 128).
 // neChangeSummarySchema — bump when the summary gains fields; a derived file
 // with an older schema is recomputed from the log.
-const neChangeSummarySchema = 6
+const neChangeSummarySchema = 7 // 7: per-cell land rule (neLandDiffers) folds into cells_coverage
 
 type neChangeSummary struct {
 	Schema    int                        `json:"schema"`
@@ -953,7 +976,7 @@ type neQCDay struct {
 type neChangeQC struct {
 	Pipeline      int     `json:"cells_pipeline"`  // same tile hash on both sides: pipeline, not land
 	Jitter        int     `json:"cells_jitter"`    // below the quantisation floor
-	Coverage      int     `json:"cells_coverage"`  // the chunk's cell set differs between the two versions (neVersionsCoverage): fetch/domain, not land
+	Coverage      int     `json:"cells_coverage"`  // the chunk's cell set differs between the two versions (neVersionsCoverage) or the cell's land share moved (neLandDiffers): fetch/domain, not land
 	Clustered     int     `json:"cells_clustered"` // counted cells with ≥ 1 counted neighbour (res-12 ring 1)
 	Isolated      int     `json:"cells_isolated"`  // counted cells with none
 	ClusterShare  float64 `json:"cluster_share"`   // clustered / (clustered + isolated); real change clusters, noise scatters

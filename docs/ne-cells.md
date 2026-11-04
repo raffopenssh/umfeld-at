@@ -53,8 +53,10 @@ epsilon, so for ~7 % of columns/rows an aligned single-cell `/viewport`
 resolved to two cells and compose kept the *neighbour's* truncated copy of a
 wide unit — which copy won depended on the requester's cell block, i.e. on the
 KG. Fixed in vtcseamless **v0.3.6** (`cellEps`, `TestCellsForAlignedIsSingleCell`).
-Affected cells change **once** when a peer first builds on v0.3.6 — a candidate
-the next pass confirms; the per-chunk rule keeps the ping-pong out of the figure.
+Affected cells carry a truncated `land` share; the first v0.3.6 build moves it
+back to the full cell — status `coverage` by the per-cell land rule
+(`neLandDiffers`, ne-change.md §5a), never a candidate; the per-chunk rule
+keeps the cell-set ping-pong out of the figure.
 The bevdirect tag is **not** the classifier: `neBevEquivalentTags` keeps
 v0.2.1…v0.3.6 in one class (v0.3.4 added tile hashes only; v0.3.5 a TLS trust
 fix for the BEV host plus `/health` `upstream{}`; v0.3.6 the cellOf fix — none

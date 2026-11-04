@@ -123,26 +123,26 @@ export async function run(o) {
       want(P + 'outline', kgo.s === 200 && kgo.j.d && kgo.j.cells > 0 && (!row || (kgo.j.bbox[0] >= row[4] - 40 && kgo.j.bbox[2] <= row[6] + 40 && kgo.j.bbox[1] >= row[5] - 40 && kgo.j.bbox[3] <= row[7] + 40)), kgo.s === 200 ? { bbox: kgo.j.bbox, idx: row && row.slice(4) } : kgo.s);
       /* declared, full resolution, single cells */
       s = await go(`#kg=${kg};full;z=400`);
-      layers(P + 'declared/400', s, { view: '', lod: 1 });
+      await layers(P + 'declared/400', s, { view: '', lod: 1 });
       /* observed */
-      s = await go(`#kg=${kg};v=obs;full;z=400`); layers(P + 'obs/400', s, { view: 'obs', lod: 1 });
+      s = await go(`#kg=${kg};v=obs;full;z=400`); await layers(P + 'obs/400', s, { view: 'obs', lod: 1 });
       /* trees on either profile */
-      if (o.trees !== false) { s = await go(`#kg=${kg};v=obs;full;trees;z=400`); layers(P + 'obs+trees/400', s, { view: 'obs', lod: 1, trees: true }); s = await go(`#kg=${kg};full;trees;z=400`); layers(P + 'declared+trees/400', s, { view: '', lod: 1, trees: true }); }
+      if (o.trees !== false) { s = await go(`#kg=${kg};v=obs;full;trees;z=400`); await layers(P + 'obs+trees/400', s, { view: 'obs', lod: 1, trees: true }); s = await go(`#kg=${kg};full;trees;z=400`); await layers(P + 'declared+trees/400', s, { view: '', lod: 1, trees: true }); }
       /* photo (basemap.at orthophoto under the base, near tiles only): default weight, a given weight (hash round trip of ;ortho=), off at lod 2 while the token stays */
       if (o.ortho !== false) {
-        s = await go(`#kg=${kg};full;ortho;z=400`); layers(P + 'ortho/400', s, { view: '', lod: 1, ortho: true }); want(P + 'ortho default weight', s.orthoOp === 0.5 && /;ortho(;|$)/.test(s.hash), { op: s.orthoOp, hash: s.hash });
-        s = await go(`#kg=${kg};v=obs;change;full;ortho=0.8;z=200`); layers(P + 'obs+chg+ortho=0.8/200', s, { view: 'obs', change: true, lod: 0, ortho: true }); want(P + 'ortho weight kept', s.orthoOp === 0.8 && /;ortho=0\.8(;|$)/.test(s.hash), { op: s.orthoOp, hash: s.hash });
+        s = await go(`#kg=${kg};full;ortho;z=400`); await layers(P + 'ortho/400', s, { view: '', lod: 1, ortho: true }); want(P + 'ortho default weight', s.orthoOp === 0.5 && /;ortho(;|$)/.test(s.hash), { op: s.orthoOp, hash: s.hash });
+        s = await go(`#kg=${kg};v=obs;change;full;ortho=0.8;z=200`); await layers(P + 'obs+chg+ortho=0.8/200', s, { view: 'obs', change: true, lod: 0, ortho: true }); want(P + 'ortho weight kept', s.orthoOp === 0.8 && /;ortho=0\.8(;|$)/.test(s.hash), { op: s.orthoOp, hash: s.hash });
         const otf = getComputedStyle(document.querySelector('svg.glyph .hi .b')).opacity; want(P + 'ortho fills step back with the slider (obs base .3 × .48 = .144)', Math.abs(+otf - 0.144) < 0.01, otf);
-        s = await go(`#kg=${kg};full;ortho;z=20`); layers(P + 'ortho/20 (coarse: token kept, layer off)', s, { view: '', lod: 2, ortho: true });
+        s = await go(`#kg=${kg};full;ortho;z=20`); await layers(P + 'ortho/20 (coarse: token kept, layer off)', s, { view: '', lod: 2, ortho: true });
         want(P + 'ortho button faded at lod 2', document.querySelector('.gv-ortho').classList.contains('off'), document.querySelector('.gv-ortho').className);
       }
       /* roads (OSM roads + rail, v=rd tiles, near tiles only): default weight, a given weight (hash round trip of ;roads=), off at lod 2 while the token stays, under observed + change + photo */
       if (o.roads !== false) {
-        s = await go(`#kg=${kg};full;roads;z=400`); layers(P + 'roads/400', s, { view: '', lod: 1, roads: true }); want(P + 'roads default weight', s.roadsOp === 0.7 && /;roads(;|$)/.test(s.hash), { op: s.roadsOp, hash: s.hash });
+        s = await go(`#kg=${kg};full;roads;z=400`); await layers(P + 'roads/400', s, { view: '', lod: 1, roads: true }); want(P + 'roads default weight', s.roadsOp === 0.7 && /;roads(;|$)/.test(s.hash), { op: s.roadsOp, hash: s.hash });
         const rg = document.querySelector('svg.glyph .hi .ov-rd'); want(P + 'roads group weighed', !!rg && +rg.style.opacity === 0.7, rg && rg.style.opacity);
-        s = await go(`#kg=${kg};v=obs;change;full;roads=0.4;z=200`); layers(P + 'obs+chg+roads=0.4/200', s, { view: 'obs', change: true, lod: 0, roads: true }); want(P + 'roads weight kept', s.roadsOp === 0.4 && /;roads=0\.4(;|$)/.test(s.hash) && +rg.style.opacity === 0.4, { op: s.roadsOp, hash: s.hash, g: rg.style.opacity });
+        s = await go(`#kg=${kg};v=obs;change;full;roads=0.4;z=200`); await layers(P + 'obs+chg+roads=0.4/200', s, { view: 'obs', change: true, lod: 0, roads: true }); want(P + 'roads weight kept', s.roadsOp === 0.4 && /;roads=0\.4(;|$)/.test(s.hash) && +rg.style.opacity === 0.4, { op: s.roadsOp, hash: s.hash, g: rg.style.opacity });
         const rt = s.tiles.find(t => t.v === 'rd' && t.ok); want(P + 'roads tile meta', !!rt && 'rd' in rt.m && 'km' in rt.m && 'rdc' in rt.m, rt && rt.m); const rtk = s.tiles.find(t => t.v === 'rd' && t.ok && +t.m.km > 0.3 && (+t.m.rdc.split(',')[0] + +t.m.rdc.split(',')[1] + +t.m.rdc.split(',')[2]) > 0); if (rtk) want(P + 'roads remoteness meta (rm 0–100, rmb 4 bands)', 'rm' in rtk.m && +rtk.m.rm >= 0 && +rtk.m.rm <= 100 && (rtk.m.rmb || '').split(',').length === 4, rtk.m);
-        s = await go(`#kg=${kg};full;roads;z=20`); layers(P + 'roads/20 (coarse: token kept, layer off)', s, { view: '', lod: 2, roads: true });
+        s = await go(`#kg=${kg};full;roads;z=20`); await layers(P + 'roads/20 (coarse: token kept, layer off)', s, { view: '', lod: 2, roads: true });
         want(P + 'roads button faded at lod 2', document.querySelector('.gv-rd').classList.contains('off'), document.querySelector('.gv-rd').className);
       }
       /* locate (the reader's position, phones/tablets; docs/ne-glyph.md row 'my position'): a fed fix draws the pulsing dot and writes nothing; the second stage pins it as the found point (pt= in the hash, full resolution); off removes the point, the selection and the card; nothing lands in localStorage */
@@ -159,7 +159,7 @@ export async function run(o) {
       /* filter (docs/ne-filter.md): ;f= round trip, worker bins + tiles complete, veil group shown, counts sane, chips, legend row, label input canonicalised, LOD-2 readout, clear */
       if (o.filter !== false) {
         const fw = async () => { const until = Date.now() + 12000; let f = G.filter(); while ((f.pending > 0 || (f.bins === 0 && f.f)) && Date.now() < until) { await sleep(150); f = G.filter(); } return f; };
-        s = await go(`#kg=${kg};full;z=200;f=d=geb+bau,sl>=3`); let F = await fw(); layers(P + 'filter/200', s, { view: '', lod: 0 });
+        s = await go(`#kg=${kg};full;z=200;f=d=geb+bau,sl>=3`); let F = await fw(); await layers(P + 'filter/200', s, { view: '', lod: 0 });
         want(P + 'filter applied', F.f === 'd=bau+geb,sl>=3' && F.open && !F.ignored.length && /;f=d=bau\+geb,sl>=3(;|$)/.test(decodeURIComponent(location.hash)), { f: F.f, hash: location.hash });
         want(P + 'filter bins complete', F.bins > 0 && F.pending === 0 && F.cells > 0 && F.match >= 0 && F.match <= F.cells, { bins: F.bins, pending: F.pending, cells: F.cells, match: F.match });
         const fg = document.querySelector('svg.glyph .hi .ov-flt'), fi = fg ? fg.querySelectorAll('image.in[href]').length : 0, onBase = s.tiles.filter(t => t.on && t.v === '' && t.k.split('/')[1] === String(s.lod)).length;
@@ -170,7 +170,7 @@ export async function run(o) {
         s = await go(`#kg=${kg};full;z=200;f=chg=confirmed|bogus`); F = await fw();
         want(P + 'filter labels + ignored', F.f === 'chg=conf' && F.ignored.length === 1 && document.querySelector('.gf-in').value.indexOf('bogus') >= 0, { f: F.f, ignored: F.ignored, input: document.querySelector('.gf-in').value });
         /* LOD 2 (z=20): the veil is a server tile like any layer — cell-exact at every LOD since the §8 harmonisation */
-        s = await go(`#kg=${kg};full;z=20;f=steep`); F = await fw(); layers(P + 'filter/20 (coarse: veil tile)', s, { view: '', lod: 2 });
+        s = await go(`#kg=${kg};full;z=20;f=steep`); F = await fw(); await layers(P + 'filter/20 (coarse: veil tile)', s, { view: '', lod: 2 });
         want(P + 'filter coarse readout', F.f === 'sl>=20' && /of .* cells/.test(F.readout) && F.bins > 0 && !/zoom in/.test(F.readout), { f: F.f, readout: F.readout, bins: F.bins });
         /* §8 national sample: at z=1 every term folds (sample:49), the funnel stays lit, the readout says sample; k>= alone dims it */
         s = await go(`#z=1;f=d=forest,hb>=10`); await settle(); { const until = Date.now() + 8000; while (Date.now() < until && !(window.__fv && __fv(13.5, 47.5).d && __fv(13.5, 47.5).d.sample)) await sleep(150); }
@@ -188,25 +188,25 @@ export async function run(o) {
         G.filter(''); await settle();
       }
       /* change (+ relief) at lod 0 on either profile; legacy v=chg reads as declared + change */
-      s = await go(`#kg=${kg};v=chg;full${o.relief !== false ? ';relief' : ''};z=200`); layers(P + 'chg(legacy)+relief/200', s, { view: '', change: true, lod: 0, relief: o.relief !== false });
-      s = await go(`#kg=${kg};v=obs;change;full;z=200`); layers(P + 'obs+chg/200', s, { view: 'obs', change: true, lod: 0 });
+      s = await go(`#kg=${kg};v=chg;full${o.relief !== false ? ';relief' : ''};z=200`); await layers(P + 'chg(legacy)+relief/200', s, { view: '', change: true, lod: 0, relief: o.relief !== false });
+      s = await go(`#kg=${kg};v=obs;change;full;z=200`); await layers(P + 'obs+chg/200', s, { view: 'obs', change: true, lod: 0 });
       /* subsidy on either profile; the subc variant whenever change is on — at every LOD the same rules as the profile
          (one cut per LOD since 2026-10-30: sub tiles = base tiles, no `~f` key, no 204 unless the peer is down, under-LOD
          cull waits for them, a sub tile of another LOD is hidden once its cover is in) */
       if (o.subsidy !== false) {
         for (const [z, lod] of [[400, 1], [200, 0], [20, 2]]) {
-          s = await go(`#kg=${kg};full;subsidy;z=${z}`); layers(P + 'sub/' + z, s, { view: '', lod, sub: true });
-          s = await go(`#kg=${kg};change;full;subsidy;z=${z}`); layers(P + 'subc/' + z, s, { view: '', change: true, lod, sub: true });
-          if (lod === 1) { s = await go(`#kg=${kg};v=obs;full;subsidy;z=${z}`); layers(P + 'obs+sub/' + z, s, { view: 'obs', lod, sub: true }); }
-          s = await go(`#kg=${kg};v=obs;change;full;subsidy;z=${z}`); layers(P + 'obs+subc/' + z, s, { view: 'obs', change: true, lod, sub: true });
+          s = await go(`#kg=${kg};full;subsidy;z=${z}`); await layers(P + 'sub/' + z, s, { view: '', lod, sub: true });
+          s = await go(`#kg=${kg};change;full;subsidy;z=${z}`); await layers(P + 'subc/' + z, s, { view: '', change: true, lod, sub: true });
+          if (lod === 1) { s = await go(`#kg=${kg};v=obs;full;subsidy;z=${z}`); await layers(P + 'obs+sub/' + z, s, { view: 'obs', lod, sub: true }); }
+          s = await go(`#kg=${kg};v=obs;change;full;subsidy;z=${z}`); await layers(P + 'obs+subc/' + z, s, { view: 'obs', change: true, lod, sub: true });
         }
         /* the LOD walk with the layer on: 2 → 0 → 1 → 0 → 2 by zoom, no tile of the LOD left behind painted once the new one is complete */
-        s = await go(`#kg=${kg};full;subsidy;z=20`); for (const z of [200, 400, 200, 20]) { s = await go(`#kg=${kg};full;subsidy;z=${z}`); layers(P + 'sub walk/' + z, s, { view: '', lod: z >= 300 ? 1 : z >= 110 ? 0 : 2, sub: true }); }
+        s = await go(`#kg=${kg};full;subsidy;z=20`); for (const z of [200, 400, 200, 20]) { s = await go(`#kg=${kg};full;subsidy;z=${z}`); await layers(P + 'sub walk/' + z, s, { view: '', lod: z >= 300 ? 1 : z >= 110 ? 0 : 2, sub: true }); }
       }
       /* the whole matrix at lod 1 */
       if (o.matrix !== false) { const r = await matrix(kg, { settle: SET, _want: want, P, lods: [1], trees: o.trees, relief: o.relief, subsidy: o.subsidy, ortho: o.ortho, roads: o.roads }); if (typeof r === 'string') R.lines.push(r); }
       /* coarse full res (lod 2) at z=20 */
-      s = await go(`#kg=${kg};full;z=20`); layers(P + 'declared/20', s, { view: '', lod: 2 });
+      s = await go(`#kg=${kg};full;z=20`); await layers(P + 'declared/20', s, { view: '', lod: 2 });
       /* pin a cell: client ↔ server agree on the cell under a lon/lat; card names it */
       s = await go(`#kg=${kg};full;z=400`);
       const cen = G.lonlat(s.vb[0] + s.vb[2] / 2, s.vb[1] + s.vb[3] / 2);
@@ -226,8 +226,8 @@ export async function run(o) {
       const same = s2.view === s.view && !!s2.change === !!s.change && s2.full === s.full && s2.trees === s.trees && s2.relief === s.relief && s2.ortho === s.ortho && s2.orthoOp === s.orthoOp && s2.roads === s.roads && s2.roadsOp === s.roadsOp && s2.subsidy === s.subsidy && Math.abs(s2.z / s.z - 1) < 0.03 && s2.pin === s.pin;
       want(P + 'share link round trip', same, { minted, from: pickState(s), to: pickState(s2) });
       /* rapid toggles must converge, never leave a half-loaded overlay */
-      G.view('obs'); G.change(true); G.view(''); G.view('obs'); G.change(false); G.change(true); G.trees(true); G.trees(false); G.trees(true); s = await settle(); layers(P + 'rapid toggles', s, { view: 'obs', change: true, lod: s.lod, trees: true });
-      G.trees(false); G.change(false); if (o.subsidy !== false) { G.subsidy(true); G.change(true); G.view(''); G.change(false); G.change(true); G.change(false); s = await settle(); layers(P + 'rapid sub', s, { view: '', lod: s.lod, sub: true }); G.subsidy(false); }
+      G.view('obs'); G.change(true); G.view(''); G.view('obs'); G.change(false); G.change(true); G.trees(true); G.trees(false); G.trees(true); s = await settle(); await layers(P + 'rapid toggles', s, { view: 'obs', change: true, lod: s.lod, trees: true });
+      G.trees(false); G.change(false); if (o.subsidy !== false) { G.subsidy(true); G.change(true); G.view(''); G.change(false); G.change(true); G.change(false); s = await settle(); await layers(P + 'rapid sub', s, { view: '', lod: s.lod, sub: true }); G.subsidy(false); }
       /* budget stress: a walk at lod 1 across > HI_KEEP tiles of three views — eviction must hold the budget, left must come back to 0,
          nothing may paint under the lod in use, no JS error (this is the "phone freezes after a while" path, docs/ne-glyph.md §paint budget) */
       if (o.stress !== false) { const r = await stress(kg, { settle: SET, _want: want, P }); if (typeof r === 'string') R.lines.push(r); }
@@ -249,7 +249,7 @@ export async function run(o) {
 }
 /* expectations for one state: tiles wanted ⇔ present, complete, and the right overlay groups shown.
    e: view ('' | 'obs' — the profile), change, full (default true; null = do not insist, tile checks only if on), lod (null = any), trees, relief, sub, ortho, roads */
-function layersOf(X, P, s, e) {
+async function layersOf(X, P, s, e) {
   const { want, G, subUp } = X, disp = (sel) => { const el = document.querySelector('svg.glyph .hi ' + sel); return el ? getComputedStyle(el).display : 'none'; }; /* no full-res layer yet (fresh page at the overview) counts as not displayed */
   {
     want(P + ' profile', s.view === e.view, s.view);
@@ -303,7 +303,8 @@ function layersOf(X, P, s, e) {
     const pr = (sel) => { const b = document.querySelector('.glyph-view ' + sel); return b ? b.getAttribute('aria-pressed') === 'true' : null; }, ck = (sel) => { const b = document.querySelector('.glyph-view ' + sel); return b ? b.getAttribute('aria-checked') === 'true' : null; };
     want(P + ' bar = state', ck('.gv-b[data-v=""]') === !s.view && ck('.gv-b[data-v="obs"]') === (s.view === 'obs') && pr('.gv-chg') === !!s.change && pr('.gv-dif') === !!s.diff && pr('.gv-sub') === !!s.subsidy && pr('.gv-tree') === !!s.trees && pr('.gv-relief') === !!s.relief && pr('.gv-ortho') === !!s.ortho && pr('.gv-rd') === !!s.roads, { dec: ck('.gv-b[data-v=""]'), obs: ck('.gv-b[data-v="obs"]'), chg: pr('.gv-chg'), dif: pr('.gv-dif'), sub: pr('.gv-sub'), tree: pr('.gv-tree'), rel: pr('.gv-relief') });
     /* the legend carries one block per overlay on, in z-order: profile head, change, (subsidy / relief appended), trees */
-    if (s.full) { const lg = G.legend().toLowerCase(), headOK = lg.indexOf(s.view === 'obs' ? 'in view · observed' : 'in view · declared') >= 0, ci = lg.indexOf('\nin view · change'), di = lg.indexOf('\nin view · diff'), ti = lg.indexOf('\nin view · trees'), si = lg.indexOf('\nin view · subsidy');
+    if (s.full) { { const until = Date.now() + 8000; while (!G.legend() && Date.now() < until) await sleep(150); } /* the legend lands after the last tile (debounced), after a long cold settle it may be a beat behind */
+      const lg = G.legend().toLowerCase(), headOK = lg.indexOf(s.view === 'obs' ? 'in view · observed' : 'in view · declared') >= 0, ci = lg.indexOf('\nin view · change'), di = lg.indexOf('\nin view · diff'), ti = lg.indexOf('\nin view · trees'), si = lg.indexOf('\nin view · subsidy');
       want(P + ' legend blocks', headOK && (ci >= 0) === !!s.change && (di >= 0) === !!s.diff && (!s.change || !s.diff || ci < di) && ((ti >= 0) === !!(s.trees && s.lod !== 2) || s.lod === 2) && (!subUp || (si >= 0) === !!s.subsidy) && (!s.change || !s.trees || s.lod === 2 || ci < ti), { headOK, change: ci, diff: di, trees: ti, subsidy: si, legend: lg.slice(0, 80) }); }
     if (document.querySelector('svg.glyph .hi .ov-rel')) want(P + ' ov-rel shown⇔relief', (disp('.ov-rel') !== 'none') === !!s.relief, disp('.ov-rel'));
     if (document.querySelector('svg.glyph .hi .ov-ortho')) { want(P + ' ov-ortho shown⇔ortho&near', (disp('.ov-ortho') !== 'none') === (!!s.ortho && s.full && s.lod !== 2), disp('.ov-ortho')); want(P + ' ov-ortho under the base', document.querySelector('svg.glyph .hi').firstElementChild.classList.contains('ov-ortho'), document.querySelector('svg.glyph .hi').firstElementChild.className.baseVal); }

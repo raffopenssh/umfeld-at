@@ -261,6 +261,14 @@ the stripped rows — nothing per object, nothing new stored about the source da
   never pending. Complements the report-level rule, whose reference is now the most cells among
   reports with a bbox contained in the report's own (bbox-independent; a viewport observer covering
   the block `revisit` names is checked against the observed-layer peer's block). Needs no peer field.
+  **Per-cell land rule** (`neLandDiffers`, 2026-11-04): the same status when a cell's `land` byte
+  (share covered by the union of the parcels the build held) moves ≥ 5 % between two versions. The
+  cadastre has no gaps, so land only moves when one build held a clipped copy of a parcel — a seam
+  of the source tiles or of the 0.02° fetch cells (bevdirect < v0.3.6, ne-cells.md "Edge-cell
+  history"); the lu shares normalised to that land then "gain" on one side with nothing lost and
+  the edge density drops. Found as columns of candidate change along one z15 tile meridian
+  (KG 90011: 13 of 16 candidates). Also `coverage`, never jitter/candidate; summary schema 7
+  (older derived files recompute). Nationally −572 confirmed, −576 candidate cells on 2026-11-04.
 - **Quantisation floor** (`neQCFloorShare` = 5 % of the cell, ≈ 15 m² at res 12): a delta
   with no structure-count change, no dominant-class flip and every |Δ| below the floor is
   `jitter` — z16 vertex quantisation (~0.6 m) wobbling cell boundaries. One early
@@ -698,7 +706,11 @@ across passes (unit d/w/m/q by span, ≤ 400 bins); hairline track, dot = √con
 = open pass + ETA; drag scrubs a range; `;t=` in the hash; keys `< > , .` step, space plays. **Play**
 runs at level 2 day by day, window growing from the first bin, head marker + date label; per step only
 the overview paths move (`tlPaint` additive, `tlAgeSync`), tiles/card/legend catch up on pause/stop
-(`tl.play.dirty → tlCatchUp`); the teaser never runs while playing. Chg tiles are keyed `~<win>` and the
+(`tl.play.dirty → tlCatchUp`); the teaser never runs while playing. **The play waits for the tiles**
+(`tlWait`, 2026-11-04): while full res has tiles in flight (`hi.left`, the `hiView` debounce, filter
+tiles not yet on screen) the run does not start or step — the date label carries `ldots()`, the play
+button pulses (`.tl-play.wait`, title "waiting for the tiles"), `state().timeWaiting`, dbg `time play
+wait` / `time play go <ms>`; pause/stop work as usual meanwhile. Chg tiles are keyed `~<win>` and the
 previous window's tile stays as backdrop until the new one is in (`hiCull`); `hiUnderMiss` and `hiSum`
 look up the windowed key. Readout = the standard `dluBar` + legend. Soak: `check('#change;t=2')`,
 `check('#kg=63330;change;full;t=@d1..d2')` — ` time`, ` time loaded`, ` time strip`, ` time tiles`.

@@ -462,6 +462,27 @@ func TestNEChangeQC(t *testing.T) {
 	if sum["candidate"].(map[string]interface{})["cells"].(float64) != 1 || qc["cells_isolated"].(float64) != 1 || qc["cluster_share"].(float64) != 0 {
 		t.Fatalf("qc after real: %v", sum)
 	}
+	// ── land rule: the same cell with a truncated land share (a seam clip, new
+	// tiles T4): one group loses exactly the clipped land → coverage, never a candidate
+	seam := clone()
+	r = find(seam)
+	copy(r, find(real))
+	r[9] -= 60
+	r[15] -= 60
+	rr, js = report(tiles(neTestReport("obs-f", seam, true), "T4"))
+	if rr.Code != 200 || len(js["want_chunks"].([]interface{})) != 1 {
+		t.Fatalf("seam report: %d %s", rr.Code, rr.Body.String())
+	}
+	rr, js = post("/k/api/v1/ne/63330/chunks?observer=obs-f", neNECH(seam, order[0]), "application/octet-stream")
+	deltas, _ = js["deltas"].([]interface{})
+	if rr.Code != 200 || len(deltas) != 1 || deltas[0].(map[string]interface{})["status"] != "coverage" {
+		t.Fatalf("land delta must be coverage: %d %s", rr.Code, rr.Body.String())
+	}
+	sum = js["summary"].(map[string]interface{})
+	qc = sum["qc"].(map[string]interface{})
+	if qc["cells_coverage"].(float64) != 1 || sum["candidate"].(map[string]interface{})["cells"].(float64) != 1 {
+		t.Fatalf("qc after land clip: %v", sum)
+	}
 	// stats roll-up carries qc; wants survive a restart with their tile hash
 	rr = env.do("GET", "/api/v1/ne/stats?kg=63330", nil)
 	if rr.Code != 200 || !bytes.Contains(rr.Body.Bytes(), []byte(`"cells_pipeline":1`)) || !bytes.Contains(rr.Body.Bytes(), []byte(`"cells_jitter":1`)) {
