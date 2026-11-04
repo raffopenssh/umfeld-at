@@ -275,7 +275,8 @@ type neGlyphTileMeta struct {
 	n        int
 	lus      [9]int64
 	unknown  int
-	sup      int // declared base: superseded cells painted faded (index/bev row, no logged build holds the cell)
+	sup      int   // declared base: superseded cells painted faded (index/bev row, no logged build holds the cell)
+	ssMs     int64 // supersample downfilter ms (ss=)
 	pending  []string
 	obs      int
 	trees    int64  // v=obs: Σ tree_n over the observed cells
@@ -300,6 +301,9 @@ func (m *neGlyphTileMeta) String(ms int64, view string) string {
 	s := fmt.Sprintf("n=%d;ms=%d;lu=%s;unk=%d;pending=%s", m.n, ms, strings.Join(lu, ","), m.unknown, strings.Join(m.pending, ","))
 	if m.sup > 0 {
 		s += fmt.Sprintf(";sup=%d", m.sup)
+	}
+	if m.ssMs > 0 {
+		s += fmt.Sprintf(";ssms=%d", m.ssMs)
 	}
 	switch view {
 	case "obs", "tree":
@@ -403,11 +407,27 @@ func neGlyphTileRenderOpt(lod neGlyphLOD, i, j int, view string, raw bool) ([]by
 
 // neGlyphTileRenderWin — win: v=chg restricted to a pass / detection-day window (ne_change_passes.go).
 func neGlyphTileRenderWin(lod neGlyphLOD, i, j int, view string, raw bool, win neChangeWin) ([]byte, neGlyphTileMeta) {
+	return neGlyphTileRenderSS(lod, i, j, view, raw, win, 1)
+}
+
+// neGlyphTileRenderSS — ss = 2: the base / obs picture is painted at twice the tile's pixels and
+// box-filtered down into an RGBA PNG of the usual size (neGlyphDownsample2) — the cell edges and the
+// inner hexagon get coverage anti-aliasing, which a paletted tile cannot carry. Asked by the client
+// with ss=2 when a tile px covers ≥ 2 device px (LOD 0/1 near full zoom, docs/ne-filter.md §12).
+func neGlyphTileRenderSS(lod neGlyphLOD, i, j int, view string, raw bool, win neChangeWin, ss int) ([]byte, neGlyphTileMeta) {
 	var m neGlyphTileMeta
 	m.win = win
 	g, w, s, e, n, ok := neGlyphTileGeomOf(lod, i, j)
 	if !ok {
 		return nil, m
+	}
+	if ss < 2 || ss > 4 || (view != "" && view != "obs") || lod.px <= 10 {
+		ss = 1
+	}
+	if ss > 1 {
+		g.lod.px *= float64(ss) // the geometry scales with the pixel density, the frame stays
+		g.pw *= ss
+		g.ph *= ss
 	}
 	kgs := KGCodesInBBoxMem(w, s, e, n)
 	m.pending = nePendingKGs(kgs)
@@ -567,10 +587,71 @@ func neGlyphTileRenderWin(lod neGlyphLOD, i, j int, view string, raw bool, win n
 	}
 	var buf bytes.Buffer
 	enc := png.Encoder{CompressionLevel: png.DefaultCompression}
+	if ss > 1 {
+		if p, ok := img.(*image.Paletted); ok {
+			t1 := time.Now()
+			img = neGlyphDownsampleN(p, ss)
+			m.ssMs = time.Since(t1).Milliseconds()
+		}
+	}
 	if err := enc.Encode(&buf, img); err != nil {
 		return nil, m
 	}
 	return buf.Bytes(), m
+}
+
+// neGlyphDownsampleN — n×n box filter of a paletted image into NRGBA (premultiplied average, then
+// un-premultiplied): every edge pixel carries the coverage of the colours that meet in it.
+func neGlyphDownsampleN(p *image.Paletted, n int) *image.NRGBA {
+	pal := make([][4]uint32, len(p.Palette))
+	nrgba := make([]color.NRGBA, len(p.Palette))
+	for k, c := range p.Palette {
+		r, g, b, a := c.RGBA() // premultiplied 16-bit
+		pal[k] = [4]uint32{r >> 8, g >> 8, b >> 8, a >> 8}
+		nrgba[k] = color.NRGBAModel.Convert(c).(color.NRGBA)
+	}
+	w, h := p.Rect.Dx()/n, p.Rect.Dy()/n
+	nn := uint32(n * n)
+	out := image.NewNRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		o := out.Pix[y*out.Stride:]
+		for x := 0; x < w; x++ {
+			first := p.Pix[(n*y)*p.Stride+n*x]
+			flat := true
+			var r, g, b, a uint32
+			for dy := 0; dy < n && flat; dy++ {
+				row := p.Pix[(n*y+dy)*p.Stride+n*x:]
+				for dx := 0; dx < n; dx++ {
+					if row[dx] != first {
+						flat = false
+						break
+					}
+				}
+			}
+			if flat {
+				c := nrgba[first]
+				o[4*x], o[4*x+1], o[4*x+2], o[4*x+3] = c.R, c.G, c.B, c.A
+				continue
+			}
+			for dy := 0; dy < n; dy++ {
+				row := p.Pix[(n*y+dy)*p.Stride+n*x:]
+				for dx := 0; dx < n; dx++ {
+					c := pal[row[dx]]
+					r, g, b, a = r+c[0], g+c[1], b+c[2], a+c[3]
+				}
+			}
+			if a == 0 {
+				o[4*x], o[4*x+1], o[4*x+2], o[4*x+3] = 0, 0, 0, 0
+				continue
+			}
+			// Σ premultiplied / Σ alpha = the straight colour of the covered part; alpha = mean coverage
+			o[4*x] = uint8(r * 255 / a)
+			o[4*x+1] = uint8(g * 255 / a)
+			o[4*x+2] = uint8(b * 255 / a)
+			o[4*x+3] = uint8((a + nn/2) / nn)
+		}
+	}
+	return out
 }
 
 // neObsTrees — the cell's trees after the same QA srtm applies to its own
@@ -840,6 +921,10 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := q.Get("v")
+	ss := 1 // ss=2|3: supersampled base / obs tile (neGlyphTileRenderSS), LOD 0/1
+	if v, err := strconv.Atoi(q.Get("ss")); err == nil && v >= 2 && v <= 3 && lod != 2 && (view == "" || view == "obs") {
+		ss = v
+	}
 	if view != "" && view != "obs" && view != "tree" && view != "chg" && view != "sub" && view != "subc" && view != "dif" && view != "rd" && view != "flt" {
 		apiError(w, "v=obs|tree|chg|sub|subc|dif|rd|flt", 400)
 		return
@@ -895,6 +980,9 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	}
 	if !win.zero() {
 		key += "/t=" + win.String()
+	}
+	if ss > 1 {
+		key += "/ss" + strconv.Itoa(ss)
 	}
 	if view == "dif" {
 		st := neDifEpochStamp()
@@ -1003,7 +1091,7 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(pngb)
 		return
 	}
-	pngb, m := neGlyphTileRenderWin(L, i, j, view, raw, win)
+	pngb, m := neGlyphTileRenderSS(L, i, j, view, raw, win, ss)
 	if pngb == nil && m.sub.down {
 		// the subsidy peer is down: no picture, the legend says so
 		w.Header().Set("Cache-Control", "no-store")
@@ -1119,6 +1207,38 @@ func handleNEGlyphCell(w http.ResponseWriter, r *http.Request) {
 	clon, clat := neCellCentre(id)
 	cx, cy := neGlyphProj(clon, clat)
 	out := map[string]interface{}{"cell": neCellHex(id), "poly": poly, "x": math.Round(cx*1000) / 1000, "y": math.Round(cy*1000) / 1000, "lon": clon, "lat": clat, "notice": NENotice()}
+	if q.Get("ring") == "1" || q.Get("geom") == "1" {
+		// ring=1: the hexagons of the three rings around the cell (36, geometry only, no doc) — the page draws
+		// the hover ring from them the moment the pointer crosses into a neighbour, before its doc has come
+		type stub struct {
+			Cell string       `json:"cell"`
+			Poly [][2]float64 `json:"poly"`
+		}
+		ring := make([]stub, 0, 36)
+		for _, n := range neGridDisk(id, 3) {
+			if n == id {
+				continue
+			}
+			nb, err := h3.Cell(n).Boundary()
+			if err != nil {
+				continue
+			}
+			np := make([][2]float64, 0, len(nb))
+			for _, v := range nb {
+				x, y := neGlyphProj(v.Lng, v.Lat)
+				np = append(np, [2]float64{math.Round(x*1000) / 1000, math.Round(y*1000) / 1000})
+			}
+			ring = append(ring, stub{neCellHex(n), np})
+		}
+		out["ring"] = ring
+	}
+	if q.Get("geom") == "1" {
+		// geom=1: geometry only (the cell and its ring stubs), sub-millisecond — the hover ring of the page;
+		// the doc (which may take tens of ms cold) is asked for by cell= afterwards
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		writeJSON(w, 200, out)
+		return
+	}
 	doc, ok := neCellDoc(id, &neReq{public: true, bevFirst: true})
 	if ok {
 		for k, v := range doc {

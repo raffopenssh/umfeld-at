@@ -5,9 +5,9 @@ package main
 // the device pixel ratio): every hexagon edge became a 3–4 device-px staircase and the hairline a
 // blurry band. This renders the same picture as an SVG the browser rasterises at the screen's own
 // resolution: one even-odd path = the sheet minus the union outline of the matching clusters (edges shared
-// by two matching cells cancel, across bin borders too), a veil-coloured stroke on the outline whose inner
-// half is the feather (its outer half lies on opaque veil, invisible under the group opacity), and the accent
-// hairline on top, both sized in tile px so they measure one device px at the client's scale. Same bins,
+// by two matching cells cancel, across bin borders too), painted over an accent stroke on the same outline
+// whose outer half the sheet covers — what remains is one device px of the wald green inside every hole, on
+// the cell colour, no feather, no halo (the browser anti-aliases the vector edge itself). Same bins,
 // same counts (neGlyphFltMeta), same cache key family, same <image> element on the client — the
 // response is just image/svg+xml instead of image/png. A tile whose outline would exceed neFltVecMaxEdges
 // edges (a fine checkerboard at LOD 0) falls back to the raster render: the client never has to know.
@@ -232,15 +232,15 @@ func neGlyphFltRenderVec(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExp
 			}
 		}
 	}
-	veil, acc := "#fff", "#286e46"
+	// the accent = the wald group colour (neGlyphGroupRGB[4]); the dark theme lifts it so it still reads on the dark veil
+	veil, acc := "#fff", "#276b38"
 	if dark {
 		veil, acc = "#14161a", "#6ebe8c"
 	}
 	if sp < 1 {
 		sp = 1
 	}
-	hair := 1.0 / sp            // one device px
-	feather := 2.0 * 1.25 / sp  // 1.25 device px inside the hole (the outer half sits on opaque veil)
+	hair := 2.0 / sp // the stroke straddles the outline; the sheet painted AFTER it covers the outer half → one crisp device px inside the hole, on the cell colour, no halo
 	var sb strings.Builder
 	sb.Grow(64 + 24*vec.n)
 	sb.WriteString(`<svg xmlns="http://www.w3.org/2000/svg" width="`)
@@ -255,25 +255,20 @@ func neGlyphFltRenderVec(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExp
 	var d strings.Builder
 	vec.loops(&d)
 	loops := d.String()
+	if loops != "" {
+		sb.WriteString(`<path fill="none" stroke="` + acc + `" stroke-linejoin="round" stroke-width="`)
+		sb.WriteString(strconv.FormatFloat(hair, 'f', 3, 64))
+		sb.WriteString(`" d="`)
+		sb.WriteString(loops)
+		sb.WriteString(`"/>`)
+	}
 	sb.WriteString(`<path fill="` + veil + `" fill-rule="evenodd" d="M0 0H`)
 	sb.WriteString(strconv.Itoa(g.pw))
 	sb.WriteString("V")
 	sb.WriteString(strconv.Itoa(g.ph))
 	sb.WriteString("H0Z")
 	sb.WriteString(loops)
-	sb.WriteString(`"/>`)
-	if loops != "" {
-		sb.WriteString(`<path fill="none" stroke="` + veil + `" stroke-opacity=".45" stroke-linejoin="round" stroke-width="`)
-		sb.WriteString(strconv.FormatFloat(feather, 'f', 3, 64))
-		sb.WriteString(`" d="`)
-		sb.WriteString(loops)
-		sb.WriteString(`"/><path fill="none" stroke="` + acc + `" stroke-opacity=".9" stroke-linejoin="round" stroke-width="`)
-		sb.WriteString(strconv.FormatFloat(hair, 'f', 3, 64))
-		sb.WriteString(`" d="`)
-		sb.WriteString(loops)
-		sb.WriteString(`"/>`)
-	}
-	sb.WriteString(`</svg>`)
+	sb.WriteString(`"/></svg>`)
 	return []byte(sb.String())
 }
 

@@ -689,3 +689,9 @@ At LOD 0/1 close to full zoom the browser upscales a tile px to several device p
   crisp 1.25 px white line; both `non-scaling-stroke`, the `drop-shadow` only under `@media(hover:hover)`.
 - Trees overlay: a tree term still switches it on (`fltTreeAuto`); once the reader switched it off by hand
   (`hi.treeOff`, set by a non-quiet `setTree(false)` while a filter is on, cleared with the filter) it stays off.
+- **Hover latency** (`hiAt`, `hiGeom`, `hiStubs`): the ring no longer waits for the cell doc. `glyph/cell?geom=1`
+  answers in well under a millisecond with the cell under the point and the 36 hexagons of its three rings
+  (geometry only); the page keeps them as stubs, draws the hover ring from the stub the moment the pointer crosses
+  into it, and asks the doc (`cell=`, cold ones take tens of ms) once per cell, aborted when the pointer moves on;
+  a stale doc answer never moves the ring (`onHover` compares the cell under the pointer). One geom request in
+  flight at a time; the old 55 ms debounce, which restarted on every move, is gone.
