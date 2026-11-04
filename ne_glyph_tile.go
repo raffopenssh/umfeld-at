@@ -697,6 +697,68 @@ func neGlyphDownsampleN(p *image.Paletted, n int) *image.NRGBA {
 	return out
 }
 
+// neGlyphTileDownsample — the finished tile box-filtered to 1/n of its pixels (ds=): a paletted tile
+// through neGlyphDownsampleN, an RGBA one (ss, roads) through the plain mean. Any failure returns the
+// tile as it was — the picture is never lost to the shortcut.
+func neGlyphTileDownsample(pngb []byte, n int) []byte {
+	img, err := png.Decode(bytes.NewReader(pngb))
+	if err != nil {
+		return pngb
+	}
+	var out image.Image
+	switch p := img.(type) {
+	case *image.Paletted:
+		out = neGlyphDownsampleN(p, n)
+	case *image.NRGBA:
+		out = neGlyphDownsampleNRGBA(p, n)
+	default:
+		b := img.Bounds()
+		q := image.NewNRGBA(b)
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			for x := b.Min.X; x < b.Max.X; x++ {
+				q.Set(x, y, img.At(x, y))
+			}
+		}
+		out = neGlyphDownsampleNRGBA(q, n)
+	}
+	var buf bytes.Buffer
+	if err := (&png.Encoder{CompressionLevel: png.DefaultCompression}).Encode(&buf, out); err != nil {
+		return pngb
+	}
+	return buf.Bytes()
+}
+
+// neGlyphDownsampleNRGBA — n×n box filter of a straight-alpha image: premultiplied mean, un-premultiplied.
+func neGlyphDownsampleNRGBA(p *image.NRGBA, n int) *image.NRGBA {
+	w, h := p.Rect.Dx()/n, p.Rect.Dy()/n
+	nn := uint32(n * n)
+	out := image.NewNRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		o := out.Pix[y*out.Stride:]
+		for x := 0; x < w; x++ {
+			var r, g, b, a uint32
+			for dy := 0; dy < n; dy++ {
+				row := p.Pix[(n*y+dy)*p.Stride+4*n*x:]
+				for dx := 0; dx < n; dx++ {
+					al := uint32(row[4*dx+3])
+					r += uint32(row[4*dx]) * al
+					g += uint32(row[4*dx+1]) * al
+					b += uint32(row[4*dx+2]) * al
+					a += al
+				}
+			}
+			if a == 0 {
+				continue
+			}
+			o[4*x] = uint8(r / a)
+			o[4*x+1] = uint8(g / a)
+			o[4*x+2] = uint8(b / a)
+			o[4*x+3] = uint8((a + nn/2) / nn)
+		}
+	}
+	return out
+}
+
 // neObsTrees — the cell's trees after the same QA srtm applies to its own
 // tree index (its /trees/bbox: masts, implausible heights and low-confidence
 // apices are dropped): a LiDAR flight must cover the cell (flight_years ≠ 0),
@@ -964,6 +1026,13 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := q.Get("v")
+	// ds=2|4|8: the tile box-filtered DOWN to 1/ds of its pixels (neGlyphTileDownsample) — asked by the client
+	// when a tile px covers ≤ 1/ds device px (LOD 2 far out, a tall phone at the lowest full-res zoom needs
+	// ~100 tiles per screen: at 1/16 of the bitmap each they fit the memory, so every tile of the view is drawn)
+	ds := 1
+	if v, err := strconv.Atoi(q.Get("ds")); err == nil && (v == 2 || v == 4 || v == 8) {
+		ds = v
+	}
 	ss := 1 // ss=2|3: supersampled base / obs tile (neGlyphTileRenderSS), LOD 0/1
 	if v, err := strconv.Atoi(q.Get("ss")); err == nil && v >= 2 && v <= 3 && lod != 2 && (view == "" || view == "obs") {
 		ss = v
@@ -1045,6 +1114,9 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	}
 	if ss > 1 {
 		key += "/ss" + strconv.Itoa(ss)
+	}
+	if ds > 1 {
+		key += "/ds" + strconv.Itoa(ds)
 	}
 	if view == "dif" {
 		st := neDifEpochStamp()
@@ -1145,6 +1217,9 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 			apiError(w, "tile render failed", 500)
 			return
 		}
+		if ds > 1 && !svg {
+			pngb = neGlyphTileDownsample(pngb, ds)
+		}
 		meta := "n=" + strconv.Itoa(fm.n) + ";ms=" + strconv.FormatInt(time.Since(t0).Milliseconds(), 10) + ";" + fm.String()
 		if svg {
 			meta += ";svg=1"
@@ -1177,6 +1252,9 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	if pngb == nil {
 		apiError(w, "tile render failed", 500)
 		return
+	}
+	if ds > 1 {
+		pngb = neGlyphTileDownsample(pngb, ds)
 	}
 	meta := m.String(time.Since(t0).Milliseconds(), view)
 	if m.flt != nil && m.flt.Pending > 0 {

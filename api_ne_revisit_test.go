@@ -32,7 +32,7 @@ func neRevisitFixture(t *testing.T) (dir string, cleanup func()) {
 	}
 	// sightings per log: chunks_confirmed / chunks_single and per-observer newest entry
 	type sight struct {
-		confirmed, single int
+		confirmed, single      int
 		since, lastAt, lastObs string
 		by                     map[string]string
 	}
@@ -51,7 +51,7 @@ func neRevisitFixture(t *testing.T) (dir string, cleanup func()) {
 		os.WriteFile(filepath.Join(dir, kg+".chunks.zst"), log, 0o644)
 		sg := sights[kg]
 		sum, _ := json.Marshal(map[string]interface{}{"schema": neChangeSummarySchema, "kg": kg, "log_bytes": len(log), "versions": 1 + len(rows), "since": sg.since,
-			"chunks": sg.confirmed + sg.single,
+			"chunks":    sg.confirmed + sg.single,
 			"sightings": map[string]interface{}{"chunks_confirmed": sg.confirmed, "chunks_single": sg.single, "last_at": sg.lastAt, "last_observer": sg.lastObs, "by_observer": sg.by}})
 		os.WriteFile(filepath.Join(dir, kg+".changes.jsonl"), []byte(string(sum)+"\n"+strings.Join(rows, "\n")+"\n"), 0o644)
 	}

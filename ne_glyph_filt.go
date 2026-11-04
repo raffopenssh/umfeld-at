@@ -64,7 +64,7 @@ function fltActive(){return !!flt.f&&!flt.empty}
 /* the LOD whose tiles carry the veil (= the picture's LOD; the veil is a server tile v=flt per box at LOD 0/1/2, fetched on the base-tile path hiTile/hiCull/hiEvict like every other view — ne_glyph_flt_tile.go), -1 when full res is off: then the res-7 overview / res-9 sheet from the 1-in-49 sample (fv*, fv9*) */
 function fltLOD(){return hi.on?hiLOD():-1}function fltFar(){return !hi.on}
 /* the veil tile key of a base tile key (hiTile v=flt): one per canonical expression and theme */
-function fltKey(tk){return 'flt/'+tk+'~'+flt.f+(fltDark()?'~d':'')+fltKV(+tk.charAt(0))}
+function fltKey(tk){return 'flt/'+tk+'~'+flt.f+(fltDark()?'~d':'')+fltKV(+tk.charAt(0))+(typeof dsK==='function'?dsK(tk):'')}
 /* hl = screen px per tile px the veil tile is downscaled by (1..16, integer): the server grows every matching cell to one screen pixel at least (neFltMinR), so a sub-pixel cell still shows at every zoom — gradually, the growth shrinking to nothing as the zoom closes in; a change of hl refetches the LOD's tiles (cached per hl) */
 /* device px per tile px of a LOD at the current view: the real screen (svg width × DPR), not the W/10 frame assumption — on a 2× display at z=900 a LOD-1 tile px is ~3.4 device px */
 var fltDPc={w:0,t:-1e9};addEventListener('resize',function(){fltDPc.t=-1e9});function fltDP(lod){/* the svg's screen width forces a layout; it is read at most every 250 ms (keys are computed per tile) */var now=performance.now();if(now-fltDPc.t>250){fltDPc.w=svg.getBoundingClientRect().width||W/10;fltDPc.t=now}return fltDPc.w/vb.w*(window.devicePixelRatio||1)/LOD[lod][1]}

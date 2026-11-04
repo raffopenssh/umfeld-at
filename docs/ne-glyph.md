@@ -256,6 +256,15 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   else 160 tiles ≈ 1.1 MP each; `mem.keep`): `hiEvict` evicts **off-screen tiles only**, oldest first,
   so a tile on screen is never dropped and re-fetched; `mem.evicted` counts, `dbg` logs `evict n`.
   A tile evicted while its fetch is in flight still releases `hi.left` (was a leak → busy forever).
+- **Downscaled tiles far out** (`ds=2|4|8`, `hiDS(lod)` from `fltDP`: a tile px covering ≤ ½ / ¼ / ⅛ device px;
+  the server box-filters the finished tile with `neGlyphTileDownsample`, LRU key `/ds4`, tile key `~s4`): at the
+  lowest full-res zoom a LOD-2 tile was drawn at a twentieth of its size, and a tall phone (412×915 @ 3×) needs
+  ~100 of them per screen — the old flat cap of 48 nearest the centre left stepped holes in the corners (relief
+  and veil included). Now the cap grows with the downscale (`hiCap` = 48 · min(ds, 4)), the budget counts a
+  tile as 1/ds² (`hiCost`, `hiLoad`), a tile of another `ds` steps out once its twin at the current one is in
+  (`hiCull`), and `hiEvict` drops stale-`ds` variants first. Relief / photo squares: `mtFit` steps the Web-Mercator
+  zoom coarser until the squares that touch the view fit `RL_TILES` (48) / `OT_TILES` (64) instead of cutting
+  nearest-first.
 - **Off-thread decode queue** (`hiDecode`, `dec`): a tile's PNG is decoded via `HTMLImageElement.decode()`
   on the same blob URL (Blink shares the decoded frame by URL) before its `<image>` joins the SVG, at
   most 2 (touch) / 4 at a time — a burst of 30 tiles lands over frames, not in one paint. `mem.decQ/decN`.

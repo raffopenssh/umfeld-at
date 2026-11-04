@@ -100,7 +100,7 @@ func neChgGrow(img *image.Paletted, hl int) {
 	if hl < 1 {
 		return
 	}
-	r := int32(math.Round(float64(hl) * 2.2 * 3)) // ×3: chamfer units
+	r := int32(math.Round(float64(hl) * 2.2 * 3))  // ×3: chamfer units
 	rh := r + int32(math.Round(float64(hl)*1.0*3)) // the rim outside
 	w, h := img.Rect.Dx(), img.Rect.Dy()
 	pix := img.Pix
