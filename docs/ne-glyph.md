@@ -270,6 +270,23 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   (`hiCull`), and `hiEvict` drops stale-`ds` variants first. Relief / photo squares: `mtFit` steps the Web-Mercator
   zoom coarser until the squares that touch the view fit `RL_TILES` (48) / `OT_TILES` (64) instead of cutting
   nearest-first.
+- **One raster per batch** (`hiCommit`/`hiFlush`, `hi.cq` + `hi.cq2`): a landed, decoded tile waits and the whole
+  batch joins the SVG on one timer (400 ms while `lf.on`, 120 ms else); readout/legend/`fltCardFix` once per batch;
+  `.hi.ld` turns the per-image fade off while heavy. Relief squares go through the same batch (`cq2`, not counted in
+  `hi.left`). Every insert re-rasters the blended stack, and on a phone that raster is slower than a frame.
+  `hiCommit` must sit at **script scope** (it was once declared inside `hiTile` — tiles saw it, `relFetch` got
+  `ReferenceError`, the hillshade never appeared; `?trace` column `rel` shows it).
+- **Relief without an SVG filter** (`relBake`): the water key (alpha = |R−180|·127, formerly `filter=url(#relf)`
+  per `<image>`) is baked into the pixels on a 256-px canvas at decode time (`createImageBitmap` → `toBlob`);
+  the filter stays only as the fallback. A dozen filtered images re-ran the filter at every repaint of the
+  stack — on an emulated 384×721 @ 2.8 phone that was ~1 s of blank hillshade per tile batch (the "flashing").
+- **Filter row height settles early** (`fltSet` provisional chips from the canon groups, `.glyph-filt.act .gf-n`
+  min-height 2 lines, `fltChips`/`fltRow` call `fsFit()` synchronously): the map is fitted when the row appears,
+  not again when the Worker's words / the readout land, and never with a delay (the ResizeObserver callback
+  waited behind the Worker reply → the svg overflowed its box by 26 px for ~0.7 s).
+- **Status note over the sheet** (`.gt-n` bottom = `calc(100% + var(--tip-h))`): an observer IIFE after
+  `main.classList.add('js')` sets `--tip-h` to the card's height while it is a bottom sheet over the map
+  (`fs` + `--sheet:b`); verified on the phone emulation, folded and unfolded.
 - **Off-thread decode queue** (`hiDecode`, `dec`): a tile's PNG is decoded via `HTMLImageElement.decode()`
   on the same blob URL (Blink shares the decoded frame by URL) before its `<image>` joins the SVG, at
   most 2 (touch) / 4 at a time — a burst of 30 tiles lands over frames, not in one paint. `mem.decQ/decN`.
@@ -283,6 +300,36 @@ mobile path. Found with it the same day: a server data race — `neChangeKG.rows
 lazy caches unlocked while a tile burst of one KG read them (`fatal error: concurrent map read and map
 write`, process restart mid-session). Now `rowsMu`/`deltasMu`, and `neChangeAppend` is copy-on-write
 (drops the loaded KG, next reader reloads) — `TestNEChangeProtocol` runs 8 readers under `-race`.
+
+## Phone load triage — `?trace` field recorder + emulated screencast
+
+A load that "flashes" on a phone we cannot hold: add `?trace` (hard reload with a fresh `?r=N` after every
+deploy — the page is cached) to the URL and keep the tab in front 45 s. Every 120 ms the page samples
+`t | svg top:bottom:w | card rect | card classes | tools rect | filter-row rect | chips/<row children with px>
+| visible imgs | relief imgs | all imgs | vb w/h | hi.left | relief pending | fs | innerWxH | vv height | dpr
+| visibility | card head`, keeps the rows that changed and POSTs them with `dbg` and the error list to
+`/api/v1/feedback` (agent `glyph-trace`). Read the newest record:
+
+```
+curl -s 'localhost:8000/api/v1/feedback?agent=glyph-trace' | python3 -c "import sys,json;fb=sorted(json.load(sys.stdin)['feedback'],key=lambda f:f['created_at']);c=fb[-1]['context'];print(fb[-1]['created_at'],c['ua']);print('\n'.join(c['rows']));print('\n'.join(c['dbg']));print(c['err'])"
+```
+
+Reading it: svg bottom stepping = the frame refit (filter row / card changed height); `card classes` `on min`
+= the load fold; `hi.left` falling and `visible imgs` rising = tiles landing (monotone is good); `rel` = 0 while
+`relief pending` is 0 = the hillshade never made it (see `hiCommit` above). `err` must be `[]`.
+
+Emulate: `browser emulate_custom 384×721 @2.8 mobile touch`, `screencast_start` (max 384×721), navigate to
+`http://localhost:8000/?trace&r=N#<hash>`, wait ~40 s, `screencast_stop`. Blank frames between relief frames
+show up without looking at pictures: crop the map area and read `signalstats` YAVG per frame — an out-and-back
+pair of jumps (e.g. 227→225→227) is a blank; a contact sheet (`select='not(mod(n\,10))'`, `tile=16x10`) confirms.
+
+```
+ffmpeg -i /tmp/shelley-screencasts/<id>.mp4 -vf "crop=iw:ih*0.6:0:ih*0.05,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=/tmp/y.txt" -f null -
+```
+
+Before every deploy: `node --check` the first `<script>` of `curl localhost:8000/` (a syntax error silently
+kills the glyph — `window.neGlyph` undefined); and a brace-depth check that `function hiCommit`/`hiFlush` are at
+depth 1 of the IIFE (`/tmp/depth.js` style crude lexer, or just `typeof hiCommit` from `relFetch`).
 
 ## Soak test (`ne_glyph_soak.js` → `/api/v1/ne/glyph/soak.js`)
 
