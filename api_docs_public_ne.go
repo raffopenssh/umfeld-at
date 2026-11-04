@@ -216,7 +216,7 @@ GET /api/v1/ne/stats/unit?kg=|h3=|bbox=|adm=|pt=|share=[&f=][&format=json|flat|c
                                             subsidy/protection aggregates of the cell set + the same unit's envelopes from {OBS_NAME}
                                             and {SUB_NAME} ("peers"). Units: kg (≤ 50, one envelope each), h3 res 5–12
                                             (exact descendants), bbox ≤ 0.1°, adm = Gemeinde (5 digits) or Natura 2000 site, pt = the
-                                            res-7 cell under a point, share = the landing page's #hash verbatim (kg= h3= adm= pt= f=) —
+                                            res-7 cell under a point, share = the landing page's #hash verbatim (kg= h3= adm= pt= f=; f=off:… = no filter) —
                                             share link and export are one URL. A unit wider than 48 bins (a large Gemeinde, a
                                             Natura 2000 site, a Bezirk) is answered from the national 1-in-49 sample: counts and
                                             hectares ×49, coverage.approx=true, coverage.sample=49, kg.* empty. f= filters the cells (grammar above; unit_cells_n /

@@ -336,6 +336,10 @@ func neStatsParseShare(h string) (unitKey, unitVal, f string) {
 			} else {
 				f = v
 			}
+			// f=off:<expr> — the page's filter switched off but kept for the funnel: no filter here
+			if len(f) >= 4 && strings.EqualFold(f[:4], "off:") {
+				f = ""
+			}
 		}
 	}
 	return

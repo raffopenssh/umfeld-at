@@ -35,7 +35,7 @@ const neGlyphExportCSS = `
 const neGlyphExportJS = `
 /* ── export menu (ne_glyph_export.go): links only, same hash as the share link; QGIS tile URL + an archive of the current view */
 var tKX=tools.querySelector('.gt-kx'),tXM=tools.querySelector('.gt-xm'),XK='ne.key',XKM2=1500;/* XKM2 = the server's cap for a z 9–14 archive (ne_mvt_jobs.go nePMTMaxKm2); beyond it the menu offers the z ≤ 11 overview of the view */
-function unitHash(){var h=curHash().replace(/^#/,'');if(!h)return '';var u='',f='',t=h.split(';');for(var i=0;i<t.length;i++){if(!u&&/^(kg|h3|adm|pt)=/.test(t[i]))u=t[i];else if(/^f=/.test(t[i]))f=t[i]}return u?(f?u+';'+f:u):''}
+function unitHash(){var h=curHash().replace(/^#/,'');if(!h)return '';var u='',f='',t=h.split(';');for(var i=0;i<t.length;i++){if(!u&&/^(kg|h3|adm|pt)=/.test(t[i]))u=t[i];else if(/^f=/.test(t[i])&&!/^f=off:/i.test(t[i]))f=t[i]}return u?(f?u+';'+f:u):''}
 function xKey(){try{return localStorage.getItem(XK)||''}catch(e){return ''}}
 function xK(u){var k=xKey();return k?u+(u.indexOf('?')<0?'?':'&')+'key='+encodeURIComponent(k):u}
 /* the unit the table covers: the picked KG / Gemeinde / cell / point (share=, the hash verbatim) or, without one, the
@@ -49,7 +49,7 @@ function xBase(){var u=xUnit();return u?pubOrigin()+'/api/v1/ne/stats/unit?'+u.q
 function xURL(fmt,extra){var b=xBase();if(!b)return '';return xK(b+'&format='+fmt+'&src=glyph'+(extra||''))}
 /* the active filter (the hash's ;f=) rides on every QGIS URL: tiles and archives then hold only the matching cells, like the veil.
    < > | are percent-encoded (mail clients and messengers stop linkifying at them; the server unescapes) */
-function xF(){var t=curHash().replace(/^#/,'').split(';');for(var i=0;i<t.length;i++)if(/^f=/.test(t[i])&&t[i].length>2)return linkSafe(t[i].slice(2).replace(/\+/g,'%2B'));return ''}
+function xF(){var t=curHash().replace(/^#/,'').split(';');for(var i=0;i<t.length;i++)if(/^f=/.test(t[i])&&t[i].length>2&&!/^f=off:/i.test(t[i]))return linkSafe(t[i].slice(2).replace(/\+/g,'%2B'));return ''}
 function xMVT(){var f=xF();return xK(pubOrigin()+'/api/v1/ne/mvt/{z}/{x}/{y}.pbf'+(f?'?f='+f:''))}
 /* current view as a lon/lat box (the SVG viewBox), its km² and a size estimate for a z 9–14 archive (~0.17 MB/km², measured) */
 function xViewBox(){var a=lonlat(vb.x,vb.y),b=lonlat(vb.x+vb.w,vb.y+vb.h);return[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])]}

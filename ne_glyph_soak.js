@@ -180,6 +180,12 @@ export async function run(o) {
           const r9 = __fv(13.5, 47.5).r9; want(P + 'filter res-9 veil in the mid band', !!(r9 && r9.cells > 0 && r9.painted > 0) && /res-9 cells in view/.test(G.filter().readout), { r9, readout: G.filter().readout }); }
         else want(P + 'filter national sample at z=1 (needs ?dbgveil)', true, null);
         G.filter(''); await settle(); await sleep(400); F = G.filter(); want(P + 'filter cleared', !F.f && F.bins === 0 && !/;f=/.test(location.hash) && !document.querySelector('svg.glyph').classList.contains('v-flt'), { f: F.f, hash: location.hash });
+        /* the funnel is a switch: off keeps the expression (f=off:<expr> in the link, no veil, row hidden), on brings it back; a link with f=off: lands held */
+        s = await go(`#kg=${kg};full;z=20;f=steep`); await fw(); const fb0 = document.querySelector('.gt-flt'); fb0.click(); await sleep(500); F = G.filter();
+        want(P + 'filter funnel off = held', !F.f && F.held === 'sl>=20' && !F.open && fb0.classList.contains('held') && /;f=off:sl>=20(;|$)/.test(decodeURIComponent(location.hash)) && !document.querySelector('svg.glyph').classList.contains('v-flt'), { f: F.f, held: F.held, hash: location.hash });
+        fb0.click(); await fw(); F = G.filter(); want(P + 'filter funnel on = back', F.f === 'sl>=20' && !F.held && F.open && /;f=sl>=20(;|$)/.test(decodeURIComponent(location.hash)), { f: F.f, hash: location.hash });
+        s = await go(`#kg=${kg};full;z=20;f=off:sl>=20`); await sleep(600); F = G.filter(); want(P + 'filter link f=off: lands held', !F.f && F.held === 'sl>=20' && !F.open, { f: F.f, held: F.held });
+        G.filter(''); await settle();
       }
       /* change (+ relief) at lod 0 on either profile; legacy v=chg reads as declared + change */
       s = await go(`#kg=${kg};v=chg;full${o.relief !== false ? ';relief' : ''};z=200`); layers(P + 'chg(legacy)+relief/200', s, { view: '', change: true, lod: 0, relief: o.relief !== false });

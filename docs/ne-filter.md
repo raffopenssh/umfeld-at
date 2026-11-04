@@ -418,6 +418,17 @@ does nothing but swap hrefs. On a thumb drag we coalesce to one `eval` per frame
 Readout = `Σ match` over cells whose centre lies in the view box (the worker returns per-bin counts
 and the declared-group histogram of the match; ha = cells × 307 m²), `partial` = any bin missing.
 
+## 1d. The funnel is a switch, not a drawer (2026-11-04)
+
+Clicking the funnel (or `f`) with a filter on switches the filter **off**: veil, legend row, chip row
+and the `f=` token go, the expression is kept in `flt.held` (`fltToggle`, `ne_glyph_filt.go`) and the
+link reads `;f=off:<expr>`. The funnel then shows a faint fill (`.gt-flt.held`, title *filter off ·
+click to bring back …*); the next click/`f` restores exactly that expression. Any other clear (Escape,
+the row's ×) also fills `flt.held`, so the funnel can bring back what was just cleared. A link with
+`f=off:…` lands held (`applyHash`), `unitHash()`/`xF()` drop it from exports and the tile URL, and the
+server's share parser (`neStatsParseShare`) treats it as no filter. With nothing held the funnel still
+shows/hides the empty row for typing.
+
 ## 4. Peer requests — exact columns, pull-on-demand, nothing re-posted
 
 Principle: **we pull one aligned bin from a peer once per epoch and keep the bytes in the fidx**;
