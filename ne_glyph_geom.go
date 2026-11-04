@@ -333,3 +333,54 @@ func neGlyphGeomPreQLen() int {
 	defer neGlyphGeomPreMu.Unlock()
 	return len(neGlyphGeomPreQ)
 }
+
+// neBoxCellCount — the number of res-12 cells whose centre lies in the box:
+// the set of neBoxCellsCentres, counted without enumerating it. Res-10 cells
+// of the cover whose centre is more than one res-10 cell inside the box hold
+// all 49 children; only the rim is tested child by child (a 0.1° box: ~300
+// of 5 700 cover cells). Memoised per box — the count never changes.
+func neBoxCellCount(w, s, e, n float64) int {
+	key := [4]float64{w, s, e, n}
+	neBoxCountMu.Lock()
+	if c, ok := neBoxCount[key]; ok {
+		neBoxCountMu.Unlock()
+		return c
+	}
+	neBoxCountMu.Unlock()
+	const r10 = 0.0015
+	poly := h3.GeoPolygon{GeoLoop: h3.GeoLoop{
+		h3.NewLatLng(s-r10, w-r10), h3.NewLatLng(n+r10, w-r10), h3.NewLatLng(n+r10, e+r10), h3.NewLatLng(s-r10, e+r10),
+	}}
+	cover, err := h3.PolygonToCells(poly, 10)
+	if err != nil {
+		return len(neBBoxCells(w, s, e, n))
+	}
+	cnt := 0
+	for _, c := range cover {
+		if ll, err := c.LatLng(); err == nil && ll.Lng > w+2*r10 && ll.Lng < e-2*r10 && ll.Lat > s+2*r10 && ll.Lat < n-2*r10 {
+			cnt += 49
+			continue
+		}
+		kids, err := c.Children(neCellRes)
+		if err != nil {
+			continue
+		}
+		for _, k := range kids {
+			if ll, err := k.LatLng(); err == nil && ll.Lng >= w && ll.Lng <= e && ll.Lat >= s && ll.Lat <= n {
+				cnt++
+			}
+		}
+	}
+	neBoxCountMu.Lock()
+	if len(neBoxCount) >= 1<<16 {
+		neBoxCount = map[[4]float64]int{}
+	}
+	neBoxCount[key] = cnt
+	neBoxCountMu.Unlock()
+	return cnt
+}
+
+var (
+	neBoxCountMu sync.Mutex
+	neBoxCount   = map[[4]float64]int{}
+)

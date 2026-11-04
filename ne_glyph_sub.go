@@ -130,9 +130,10 @@ var (
 )
 
 type neSubCall struct {
-	wg  sync.WaitGroup
-	raw *neSubRaw
-	err error
+	wg   sync.WaitGroup
+	raw  *neSubRaw
+	raws []*neSubRaw // block fetch: the 16 bodies in k order (also stored in the LRU; held here so a thrashing LRU cannot lose a caller's bin between store and read)
+	err  error
 }
 
 type atomicTime struct {
@@ -443,21 +444,26 @@ func neSubBlockGet(poly bool, i, j int, single bool) (*neSubRaw, error) {
 	I, J := floorDiv4(i), floorDiv4(j)
 	fkey := fmt.Sprintf("B%s/%d/%d", key[:1], I, J)
 	neSubMu.Lock()
-	if c, ok := neSubFlight[fkey]; ok {
+	c, ok := neSubFlight[fkey]
+	if ok {
 		neSubMu.Unlock()
 		c.wg.Wait()
 	} else {
-		c := &neSubCall{}
+		c = &neSubCall{}
 		c.wg.Add(1)
 		neSubFlight[fkey] = c
 		neSubMu.Unlock()
-		c.err = neSubBlockFetch(poly, I, J)
+		c.raws, c.err = neSubBlockFetch(poly, I, J)
 		neSubMu.Lock()
 		delete(neSubFlight, fkey)
 		neSubMu.Unlock()
 		c.wg.Done()
 	}
-	// whatever the block fetch did, the answer is what the LRU holds now
+	// the block's own bodies first (a screen of LOD-2 tiles holds more blocks
+	// than the LRU: an entry may be gone before its caller reads it), then the LRU
+	if k := (i-I*4)*4 + (j - J*4); len(c.raws) == 16 && k >= 0 && k < 16 && c.raws[k] != nil {
+		return c.raws[k], nil
+	}
 	if got, _ := neSubCached(key); got != nil {
 		return got, nil
 	}
@@ -470,7 +476,7 @@ func neSubBlockGet(poly bool, i, j int, single bool) (*neSubRaw, error) {
 // neSubBlockFetch — GET the block (I, J), validate the 16 bodies, store them.
 // A peer without ?block=1 (400/404/405) falls back to the 16 single bins
 // through neSubGet so the layer keeps working either way.
-func neSubBlockFetch(poly bool, I, J int) error {
+func neSubBlockFetch(poly bool, I, J int) ([]*neSubRaw, error) {
 	// the block's ETag is on every bin entry; revalidate only when all 16 are still here
 	var all []*neSubRaw
 	etag := ""
@@ -486,13 +492,13 @@ func neSubBlockFetch(poly bool, I, J int) error {
 	select {
 	case neSubSem <- struct{}{}:
 	case <-time.After(neSubTimeout):
-		return errNeSubDown
+		return nil, errNeSubDown
 	}
 	defer func() { <-neSubSem }()
 	w, s := float64(I)*neSubBlockDeg, float64(J)*neSubBlockDeg
 	req, err := http.NewRequest("GET", neSubBinURL(poly, w, s, neSubBlockDeg, true), nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("User-Agent", "umfeld-at glyph")
 	if all != nil {
@@ -506,7 +512,7 @@ func neSubBlockFetch(poly bool, I, J int) error {
 		if ne, ok := err.(net.Error); !ok || !ne.Timeout() {
 			neSubDown.set(time.Now())
 		}
-		return errNeSubDown
+		return nil, errNeSubDown
 	}
 	defer resp.Body.Close()
 	neSubBlocks.Add(1)
@@ -516,32 +522,35 @@ func neSubBlockFetch(poly bool, I, J int) error {
 			neSubStore(neSubBinKey(poly, I*4+k/4, J*4+k%4), c, ttl)
 		}
 		neSubDown.set(time.Time{})
-		return nil
+		return all, nil
 	}
 	if resp.StatusCode != 200 {
 		if resp.StatusCode >= 500 || resp.StatusCode == 429 {
 			neSubDown.set(time.Now())
-			return fmt.Errorf("peer %d", resp.StatusCode)
+			return nil, fmt.Errorf("peer %d", resp.StatusCode)
 		}
 		// no block support: the 16 single bins (sem is held; release it for them)
 		<-neSubSem
 		defer func() { neSubSem <- struct{}{} }()
 		var firstErr error
+		singles := make([]*neSubRaw, 16)
 		for k := 0; k < 16; k++ {
 			i, j := I*4+k/4, J*4+k%4
 			key := neSubBinKey(poly, i, j)
 			c, _ := neSubCached(key)
 			bw, bs := float64(i)*neSubBinDeg, float64(j)*neSubBinDeg
-			if _, err := neSubGet(key, neSubBinURL(poly, bw, bs, neSubBinDeg, false), c); err != nil && firstErr == nil {
+			r, err := neSubGet(key, neSubBinURL(poly, bw, bs, neSubBinDeg, false), c)
+			if err != nil && firstErr == nil {
 				firstErr = err
 			}
+			singles[k] = r
 		}
-		return firstErr
+		return singles, firstErr
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, neSubBlockMaxBody+1))
 	if err != nil || len(body) > neSubBlockMaxBody {
 		neSubDown.set(time.Now())
-		return errNeSubDown
+		return nil, errNeSubDown
 	}
 	year, _ := strconv.Atoi(resp.Header.Get("X-Invekos-Year"))
 	prev := year - 1
@@ -563,7 +572,7 @@ func neSubBlockFetch(poly bool, I, J int) error {
 		}
 	}
 	if err != nil {
-		return fmt.Errorf("block: %w", err)
+		return nil, fmt.Errorf("block: %w", err)
 	}
 	ttl := neSubTTL(resp)
 	if rl := resp.Header.Get("X-Invekos-Release"); rl != "" {
@@ -574,7 +583,7 @@ func neSubBlockFetch(poly bool, I, J int) error {
 		neSubStore(neSubBinKey(poly, I*4+k/4, J*4+k%4), raw, ttl)
 	}
 	neSubDown.set(time.Time{})
-	return nil
+	return raws, nil
 }
 
 var (
@@ -816,18 +825,113 @@ func neSubInner(poly [][2]float64, np int, cx, cy, f float64, out *[8][2]float64
 // 16 bins of the 0.1° box + seams, 2026-10-30; the res-7 wash it used to paint
 // below ×40 flashed under the bins and is gone). lod is kept for the callers'
 // symmetry with the other views.
+// neSubBoxRes — one bin of a tile's padded box, as fetched.
+type neSubBoxRes struct {
+	i, j   int
+	single bool // a seam bin of a neighbouring block (fetched alone)
+	bin    *neSubBin
+	err    error
+	p      *neSubPolyBin
+	perr   error
+}
+
+// neSubFetchBox — the bins a tile painted over [w,e]×[s,n] reads, in two
+// steps: the tile's own 0.1° block first (two ?block=1 bodies, H3 + IVP1,
+// side by side); the seam bins of the neighbouring blocks (20 single
+// requests × 2 for a LOD-2 tile) only when an outline bin of the block is
+// missing — an outline that touches the tile is in one of the tile's own bins
+// (a Schlag touching two bins is in both), and the sums count centres in the
+// tile's own box, so with the outlines complete the seams are never read.
+// Called by handleNEGlyphTile BEFORE the render gate (the wait is the wire,
+// not a core) and handed to neGlyphSubRender through neSubHand.
+func neSubFetchBox(w, s, e, n float64) []*neSubBoxRes {
+	const padDeg = 0.0005
+	i0, i1 := int(math.Floor((w-padDeg)/neSubBinDeg)), int(math.Floor((e+padDeg)/neSubBinDeg))
+	j0, j1 := int(math.Floor((s-padDeg)/neSubBinDeg)), int(math.Floor((n+padDeg)/neSubBinDeg))
+	cI, cJ := floorDiv4(int(math.Floor((w+e)/2/neSubBinDeg))), floorDiv4(int(math.Floor((s+n)/2/neSubBinDeg)))
+	var own, seam []*neSubBoxRes
+	for i := i0; i <= i1; i++ {
+		for j := j0; j <= j1; j++ {
+			r := &neSubBoxRes{i: i, j: j, single: floorDiv4(i) != cI || floorDiv4(j) != cJ}
+			if r.single {
+				seam = append(seam, r)
+			} else {
+				own = append(own, r)
+			}
+		}
+	}
+	fetch := func(rs []*neSubBoxRes) {
+		var wg sync.WaitGroup
+		for _, r := range rs {
+			wg.Add(1)
+			go func(r *neSubBoxRes) {
+				defer wg.Done()
+				var pw sync.WaitGroup
+				pw.Add(1)
+				go func() {
+					defer pw.Done()
+					if p, err := neSubPolyAt(r.i, r.j, r.single); err == nil {
+						r.p = &neSubPolyBin{r.i, r.j, p}
+					} else {
+						r.perr = err
+					}
+				}()
+				r.bin, r.err = neSubBinAt(r.i, r.j, r.single)
+				pw.Wait()
+			}(r)
+		}
+		wg.Wait()
+	}
+	fetch(own)
+	complete := true
+	for _, r := range own {
+		if r.err != nil || r.p == nil {
+			complete = false
+		}
+	}
+	if complete {
+		return own
+	}
+	fetch(seam)
+	return append(own, seam...)
+}
+
+// neSubHand — fetched boxes handed from handleNEGlyphTile (before the render
+// gate) to neGlyphSubRender (inside it), keyed by the tile; bounded by the
+// requests in flight (the handler removes its entry when it returns).
+var (
+	neSubHandMu sync.Mutex
+	neSubHand   = map[string][]*neSubBoxRes{}
+)
+
+func neSubHandKey(w, s, e, n float64) string { return fmt.Sprintf("%.4f/%.4f/%.4f/%.4f", w, s, e, n) }
+
+// neSubPrefetch — fetch the box now and hold it for the render; the returned
+// func releases it.
+func neSubPrefetch(w, s, e, n float64) func() {
+	k := neSubHandKey(w, s, e, n)
+	res := neSubFetchBox(w, s, e, n)
+	neSubHandMu.Lock()
+	neSubHand[k] = res
+	neSubHandMu.Unlock()
+	return func() {
+		neSubHandMu.Lock()
+		if cur, ok := neSubHand[k]; ok && len(cur) == len(res) && (len(cur) == 0 || cur[0] == res[0]) {
+			delete(neSubHand, k)
+		}
+		neSubHandMu.Unlock()
+	}
+}
+
 func neGlyphSubRender(g *neGlyphTileGeom, lod int, w, s, e, n float64, strokes bool, m *neGlyphSubMeta) (*image.Paletted, bool) {
 	_ = lod
 	const padDeg = 0.0005
 	img := image.NewPaletted(image.Rect(0, 0, g.pw, g.ph), neGlyphSubPalette())
 	var poly, in [8][2]float64
 	_ = in
-	// the covering
-	// bins of the padded box (the seam cells of the neighbours paint their half,
-	// like the base tile)
 	i0, i1 := int(math.Floor((w-padDeg)/neSubBinDeg)), int(math.Floor((e+padDeg)/neSubBinDeg))
 	j0, j1 := int(math.Floor((s-padDeg)/neSubBinDeg)), int(math.Floor((n+padDeg)/neSubBinDeg))
-	m.cells = len(neBBoxCells(w, s, e, n))
+	m.cells = neBoxCellCount(w, s, e, n)
 	var kinds map[uint64]uint8 // strokes: lineage kind class per cell (1 new, 2 gone, 3 redrawn) across the bins
 	if strokes {
 		kinds = make(map[uint64]uint8, 4096)
@@ -838,45 +942,12 @@ func neGlyphSubRender(g *neGlyphTileGeom, lod int, w, s, e, n float64, strokes b
 	}
 	var bins []binAt
 	var pbins []neSubPolyBin // the outline bins; nil as soon as one cannot be had → hexagons
-	// a LOD-2 tile covers 16 bins (+ seams): fetch them side by side
-	// (neSubSem bounds the peer at 4) so a cold tile is not 32 round trips in a row
-	type binRes struct {
-		i, j   int
-		single bool
-		bin    *neSubBin
-		err    error
-		p      *neSubPolyBin
-		perr   error
+	neSubHandMu.Lock()
+	res, ok := neSubHand[neSubHandKey(w, s, e, n)]
+	neSubHandMu.Unlock()
+	if !ok {
+		res = neSubFetchBox(w, s, e, n)
 	}
-	var res []*binRes
-	// the tile's own 0.1° block comes as one ?block=1 body; a seam bin that
-	// falls into a neighbouring block is fetched alone
-	cI, cJ := floorDiv4(int(math.Floor((w+e)/2/neSubBinDeg))), floorDiv4(int(math.Floor((s+n)/2/neSubBinDeg)))
-	for i := i0; i <= i1; i++ {
-		for j := j0; j <= j1; j++ {
-			res = append(res, &binRes{i: i, j: j, single: floorDiv4(i) != cI || floorDiv4(j) != cJ})
-		}
-	}
-	var wg sync.WaitGroup
-	for _, r := range res {
-		wg.Add(1)
-		go func(r *binRes) {
-			defer wg.Done()
-			var pw sync.WaitGroup
-			pw.Add(1)
-			go func() {
-				defer pw.Done()
-				if p, err := neSubPolyAt(r.i, r.j, r.single); err == nil {
-					r.p = &neSubPolyBin{r.i, r.j, p}
-				} else {
-					r.perr = err
-				}
-			}()
-			r.bin, r.err = neSubBinAt(r.i, r.j, r.single)
-			pw.Wait()
-		}(r)
-	}
-	wg.Wait()
 	for _, r := range res {
 		{
 			i, j, bin := r.i, r.j, r.bin

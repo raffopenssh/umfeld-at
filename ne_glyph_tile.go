@@ -1098,6 +1098,13 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	// after all of them (9 tiles on 2 cores: first picture 0.4 s, not 4 s). A
 	// request the browser abandoned (pan) leaves the queue without rendering;
 	// a tile that was rendered meanwhile is served from the LRU after the wait.
+	if sub {
+		// the subsidy peer's bodies are fetched before the gate: the wait is the
+		// wire (≤ 8 to the peer at once), not a core — a screen of 45 LOD-2 tiles
+		// used to hold the two render slots for its network round trips
+		tw, ts, te, tn := neGlyphTileBox(L, i, j)
+		defer neSubPrefetch(tw, ts, te, tn)()
+	}
 	select {
 	case neGlyphRenderGate <- struct{}{}:
 	case <-r.Context().Done():

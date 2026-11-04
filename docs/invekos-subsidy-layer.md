@@ -66,8 +66,17 @@ The subsidy layer behaves exactly like the declared / observed tiles at all thre
 **and 2** (the 0.1° box = 16 bins + seams, fetched side by side, ≤ 8 to the peer). No zoom
 threshold of its own, no second cut, no res-7 wash under the full-res tiles. The `&f=1`
 parameter of the earlier "fine cut" is accepted and ignored; cache key `…/2/i/j/day`.
-Cold LOD-2 tile 2–8 s (32 peer bodies, alpine boxes the slowest), warm ≈ 0.5–1 s, then the tile
-LRU — the same order as a cold declared LOD-2 tile (3–12 s).
+Cold LOD-2 tile ≈ 0.6–0.8 s: **two** peer bodies (the tile's own `?block=1` block, H3 + IVP1,
+~60 KB gz each, the peer answers in ~150 ms) + a 100–170 ms render; then the tile LRU.
+The seam bins of the neighbouring blocks (20 single requests × 2 per tile before 2026-11-04)
+are fetched only when an outline bin of the block is missing (hexagon fallback): an outline
+that touches the tile is in one of the tile's own bins, and the sums count centres in the
+tile's own box (`neSubFetchBox`). The peer bodies are fetched **before** the render gate
+(`neSubPrefetch` in `handleNEGlyphTile`, handed over through `neSubHand`), so a screen of 45
+LOD-2 tiles overlaps its wire time instead of holding the two render slots for it — 45 cold
+tiles 29 s → 11 s wall; the block's 16 bodies travel with the single-flight call, not via the
+LRU (a screen of blocks is larger than the LRU). `cells=` comes from `neBoxCellCount`
+(memoised; rim-only child test, 7× cheaper than enumerating the box).
 
 Why the two cuts went: the res-7 wash arrived first and was swapped for the Schläge a few
 seconds later (the "wash flash"), had its own threshold (`HI_SUBF = 40`), its own cull rule,
