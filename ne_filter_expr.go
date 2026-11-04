@@ -248,8 +248,15 @@ func neFiltNorm(t string) string {
 			return num, u != "" && u == fd.Unit
 		}
 		if x := neFiltReBetween.FindStringSubmatch(rest); x != nil {
-			a, oka := val(x[1], x[2])
-			b, okb := val(x[3], x[4])
+			// a unit on one side only names both: `slope 10 to 12 %`, `trees 10 m to 20`
+			ua, ub := x[2], x[4]
+			if ua == "" {
+				ua = ub
+			} else if ub == "" {
+				ub = ua
+			}
+			a, oka := val(x[1], ua)
+			b, okb := val(x[3], ub)
 			if oka && okb {
 				return f + "=" + a + ".." + b
 			}
@@ -748,10 +755,10 @@ func neFiltAspectWords(fd *neFiltField, set []string) string {
 		if in[i] {
 			n++
 			if !in[(i+7)%8] {
-				if start >= 0 {
-					start = -2 // more than one arc
-				} else {
+				if start == -1 {
 					start = i
+				} else {
+					start = -2 // more than one arc (stays -2)
 				}
 			}
 		}

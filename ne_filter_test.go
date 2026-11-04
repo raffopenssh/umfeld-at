@@ -144,6 +144,10 @@ func TestNEFiltParseCanonical(t *testing.T) {
 		{"htmax>=30|ht=35..45", "ht=35..45|htmax>=30", "(tallest tree ≥ 30 m or tree height 35–45 m)", 0, false},
 		{"trees 10 to 20 m", "ht=10..20", "tree height 10–20 m", 0, false},
 		{"slope at least 15 %", "sl>=8.5", "slope ≥ 8.5° (15 %)", 0, false},
+		{"as=e+s+w", "as=e+s+w", "aspect east / south / west", 0, false},
+		{"slope 10 to 12 %", "sl=5.7..6.8", "slope 5.7–6.8° (10–12 %)", 0, false},
+		{"slope 10% to 12%", "sl=5.7..6.8", "slope 5.7–6.8° (10–12 %)", 0, false},
+		{"trees 10 m to 20", "ht=10..20", "tree height 10–20 m", 0, false},
 		{"sl=5..15", "sl=5..15", "slope 5–15° (9–27 %)", 0, false},
 		{"sl>15", "sl>=15", "slope ≥ 15° (27 %)", 0, false},
 		{"as northwest to northeast", "as=n+ne+nw", "aspect north-west to north-east", 0, false},
@@ -374,7 +378,7 @@ var neFiltTestExprs = []string{
 	// tree height over the apex lists (§9a) vs the tallest-tree rule
 	"ht=35..45", "ht<=10", "ht=20", "ht=3..4", "ht=0..2", "ht=unk", "htmax=35..45", "htmax<=10", "htmax>=20", "tallesttree>=30", "treemax=10..20", "ht=35..45|htmax>=50", "ht=10..20,d=wald", "ht<=10,k>=2", "htmax",
 	// human phrasing (neFiltNorm / norm): between, units, slope in percent, compass words and arcs
-	"ht between 10 and 20", "trees 10 to 20 m", "ht 10-20", "ht \u2265 20 m", "slope at least 15 %", "slope under 5\u00b0", "sl=5..15%", "sl between 10% and 20%", "sl>15", "el over 1500",
+	"ht between 10 and 20", "trees 10 to 20 m", "ht 10-20", "ht \u2265 20 m", "slope at least 15 %", "slope under 5\u00b0", "sl=5..15%", "sl between 10% and 20%", "slope 10 to 12 %", "ht 10 m to 20", "as=e+s+w", "sl>15", "el over 1500",
 	"as northwest to northeast", "as=nw..ne", "as=ne..nw", "aspect north east", "as north and south", "as=300..60", "facing s\u00fcd", "orientation=ost", "as=flat+n", "as=n+ne+e+se+s+sw+w+nw",
 	"d wald or wasser", "ht is unknown", "bio=yes", "ht 20", "ht between", "as nowhere to somewhere", "ht>=20 %", "sl90=10..20",
 	"as=nan..inf", "as=1e400..n", "as=-0..360", "as=..", "as=n..", "as=n..n", "as=n+n..e", "sl between 1e9% and 20%", "ht between 1 and 2 and 3", "ht 10 - 20 m", "as north west to south east", "as flat..n",

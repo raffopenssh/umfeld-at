@@ -33,7 +33,7 @@ var RE_HEAD=/^([a-z][a-z0-9]*)(.*)$/,RE_BETWEEN=new RegExp('^(?:=\\s*|is\\s+)?(?
 function norm(t){t=t.trim().split(/\s+/).join(' ');var m=RE_HEAD.exec(t);if(!m)return t;var f=ALIAS[m[1]]||m[1],rest=m[2].trim(),fd=FIELDS[f];if(!fd||f==='k'||rest==='')return t;
  if(rest==='unk'||rest==='=unk'||rest==='unknown'||rest==='is unknown'||rest==='= unknown')return f+'=unk';
  if(rangeOK(fd)){var val=function(num,unit){if(!unit)return num;var u=UNITS[unit];if(u==='%'&&fd.unit==='\u00b0'){var p=+num;if(!isFinite(p))return null;return fnum(Math.round(Math.atan(p/100)*180/Math.PI*10)/10)}return u&&u===fd.unit?num:null};
-  var x=RE_BETWEEN.exec(rest);if(x){var a=val(x[1],x[2]),b=val(x[3],x[4]);return a!=null&&b!=null?f+'='+a+'..'+b:t}
+  var x=RE_BETWEEN.exec(rest);if(x){var ua=x[2]||x[4],ub=x[4]||x[2],a=val(x[1],ua),b=val(x[3],ub);/* a unit on one side names both: slope 10 to 12 % */return a!=null&&b!=null?f+'='+a+'..'+b:t}
   var ops=[[RE_LOWER,'>='],[RE_UPPER,'<='],[RE_EXACT,'=']];for(var i=0;i<3;i++){x=ops[i][0].exec(rest);if(x){var a1=val(x[1],x[2]);return a1!=null?f+ops[i][1]+a1:t}}return t}
  if(f==='as'){var y=RE_SETTO.exec(rest);if(y)return f+'='+y[1].trim()+'..'+y[2].trim()}
  var v;if(rest[0]==='='||rest[0]===':')v=rest.slice(1).trim();else if(rest.indexOf('is ')===0)v=rest.slice(3).trim();else if(m[2][0]===' ')v=rest;else return t;
@@ -43,7 +43,7 @@ function norm(t){t=t.trim().split(/\s+/).join(' ');var m=RE_HEAD.exec(t);if(!m)r
 function aspectSector(fd,s){s=s.trim();if(/^-?\d+(\.\d+)?$/.test(s)){var d=+s;if(d<0||d>360)return -1;return Math.round(d/45)%8}var i=member(fd,s);return i>=0&&i<8?i:-1}
 function aspectExpand(v){var fd=FIELDS.as,out=[];v.split('+').forEach(function(p){var q=p.indexOf('..');if(q<0){out.push(p);return}var a=aspectSector(fd,p.slice(0,q)),b=aspectSector(fd,p.slice(q+2));if(a<0||b<0){out.push(p);return}for(var i=a;;i=(i+1)%8){out.push(fd.members[i]);if(i===b)break}});return out.join('+')}
 /* sectors in compass order; a clockwise arc of three or more reads `north-west to north-east` (= neFiltAspectWords) */
-function aspectWords(fd,set){var inn=[],i,n=0,start=-1;for(i=0;i<9;i++)inn[i]=false;set.forEach(function(m){var k=member(fd,m);if(k>=0)inn[k]=true});for(i=0;i<8;i++)if(inn[i]){n++;if(!inn[(i+7)%8])start=start>=0?-2:i}var ws=[];if(n>=3&&n<8&&start>=0)ws.push(fd.labels[start]+' to '+fd.labels[(start+n-1)%8]);else for(i=0;i<8;i++)if(inn[i])ws.push(fd.labels[i]);if(inn[8])ws.push(fd.labels[8]);return ws.join(' / ')}
+function aspectWords(fd,set){var inn=[],i,n=0,start=-1;for(i=0;i<9;i++)inn[i]=false;set.forEach(function(m){var k=member(fd,m);if(k>=0)inn[k]=true});for(i=0;i<8;i++)if(inn[i]){n++;if(!inn[(i+7)%8])start=start===-1?i:-2}var ws=[];if(n>=3&&n<8&&start>=0)ws.push(fd.labels[start]+' to '+fd.labels[(start+n-1)%8]);else for(i=0;i<8;i++)if(inn[i])ws.push(fd.labels[i]);if(inn[8])ws.push(fd.labels[8]);return ws.join(' / ')}
 function pct(deg){return fnum(Math.round(Math.tan(deg*Math.PI/180)*100))}
 function slopePct(fd,a,b){if(fd.id!=='sl'&&fd.id!=='sl90')return'';return isNaN(b)?' ('+pct(a)+'\u202f%)':' ('+pct(a)+'\u2013'+pct(b)+'\u202f%)'}
 function parseTerm(t){var m=/^([a-z][a-z0-9]*)(.*)$/.exec(t);if(!m)return null;var f=ALIAS[m[1]]||m[1],rest=m[2],term={f:f,lo:NaN,hi:NaN,set:[],unk:false,flag:false};
