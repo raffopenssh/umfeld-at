@@ -115,7 +115,7 @@ const (
 	neGlyphAgeSteps    = 8 // v=chg: age steps per tone (fresh → ashed)
 	neGlyphAgeFull     = 45.0
 	neGlyphAgeGone     = 365.0
-	neGlyphIdxObs      = 1 // v=obs
+	neGlyphIdxObs      = 1                     // v=obs
 	neGlyphIdxChgHalo  = 1 + 3*neGlyphAgeSteps // v=chg: the dark rim around a grown mark (neChgGrow)
 	neGlyphChgHaloA    = 90
 )
@@ -976,7 +976,7 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	// downscale factor (1..16: screen px per tile px) — a matching cell is grown to one screen pixel at least
 	var fltExpr *neFiltExpr
 	fltHL := 1
-	fltSP := 0.0 // vec=1&sp=<device px per tile px>: the vector veil (ne_glyph_flt_vec.go), LOD 0/1 only
+	fltSP := 0.0            // vec=1&sp=<device px per tile px>: the vector veil (ne_glyph_flt_vec.go), LOD 0/1 only
 	var chgExpr *neFiltExpr // v=chg&f=: only the matching cells' change (ne_glyph_flt_match.go)
 	chgHL := 1              // v=chg&hl=: the client's downscale factor (1..16), the marks grown to the screen's pixel
 	if view == "chg" {
