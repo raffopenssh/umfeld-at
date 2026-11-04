@@ -325,7 +325,7 @@ func NERevisitStats() map[string]interface{} {
 // public tier never sees it).
 //
 //	?limit=<n>      rows per list (default 100, max neRevisitMax); ?all=1 = the whole list
-//	?kind=a,b       only these lists (pending, stale, no_log, obs_on_index); default all four
+//	?kind=a,b       only these lists (pending, stale, no_log, obs_on_index, obs_missing); default all five
 //	?observer=<me>  per-peer view: drops pending KGs whose every pending version
 //	                I posted myself, and stale / no_log KGs I reported within
 //	                min_age_days (my own re-post inside neSamePassWindow is not a
@@ -367,13 +367,13 @@ func handleNERevisit(w http.ResponseWriter, r *http.Request) {
 	}
 	out := map[string]interface{}{
 		"generated_at":     m["stats_computed_at"],
-		"totals":           map[string]interface{}{"kgs_pending": m["kgs_pending"], "pending_versions": m["pending_versions"], "candidate_m2": m["candidate_m2"], "kgs_stale": m["kgs_stale"], "kgs_no_log": m["kgs_no_log"], "kgs_obs_on_index": m["kgs_obs_on_index"]},
+		"totals":           map[string]interface{}{"kgs_pending": m["kgs_pending"], "pending_versions": m["pending_versions"], "candidate_m2": m["candidate_m2"], "kgs_stale": m["kgs_stale"], "kgs_no_log": m["kgs_no_log"], "kgs_obs_on_index": m["kgs_obs_on_index"], "kgs_obs_missing": NEObsCompleteStats()["kgs_obs_missing"], "cells_obs_missing": NEObsCompleteStats()["cells_obs_missing"]},
 		"limit":            limit,
 		"min_age_days":     minAge,
 		"observer":         observer,
 		"same_pass_window": neSamePassWindow.String(),
 		"note": "Hints only, oldest first. pending = KGs holding chunk versions sighted once (candidate: not baseline, not pipeline/jitter/coverage; lossy builds are never logged) — a second sighting of the same digest_ap by another observer, or by the same one after same_pass_window, confirms them. " +
-			"stale = KGs whose chunk log was not re-sighted (more chunks with a single-sighting latest version than confirmed ones, nothing pending) — one report with chunk rows covering bbox by another observer, or by the same one after same_pass_window, confirms them. no_log = KGs without any chunk log yet (declared picture still the index epoch; one report with chunk rows gives them a baseline — a digest-only earlier report is not a layout, chunk rows are requested at once). obs_on_index = KGs whose observed layer was validated against the index epoch's cell set: re-post NEO1 built on GET {kg}/declared (has_view) or NEC1+NEO1. Order: pending, stale, no_log, obs_on_index, then your normal order. ?observer=<me> hides what I reported within min_age_days; ?kind=no_log&all=1 is the whole list (ETag, 304). Nothing here changes baselines or the confirm rule; values are a snapshot ≤ 10 min old (?refresh=1 recomputes).",
+			"stale = KGs whose chunk log was not re-sighted (more chunks with a single-sighting latest version than confirmed ones, nothing pending) — one report with chunk rows covering bbox by another observer, or by the same one after same_pass_window, confirms them. no_log = KGs without any chunk log yet (declared picture still the index epoch; one report with chunk rows gives them a baseline — a digest-only earlier report is not a layout, chunk rows are requested at once). obs_on_index = KGs whose observed layer was validated against the index epoch's cell set: re-post NEO1 built on GET {kg}/declared (has_view) or NEC1+NEO1. obs_missing = KGs whose observed layer lacks cells of today's declared view (missing_n; extra_n = observed rows the view no longer holds) — the view moved since the NEO1 was validated (re-baseline, bevdirect edge fix, another observer's edge cells): re-post NEO1 built on GET {kg}/declared; most missing first, snapshot of a background pass every few hours (obs_complete.pass_at). Order: pending, stale, no_log, obs_on_index, obs_missing, then your normal order. ?observer=<me> hides what I reported within min_age_days; ?kind=no_log&all=1 is the whole list (ETag, 304). Nothing here changes baselines or the confirm rule; values are a snapshot ≤ 10 min old (?refresh=1 recomputes).",
 	}
 	if want("pending") {
 		all, _ := m["pending"].([]*neRevisitPending)
@@ -420,6 +420,11 @@ func handleNERevisit(w http.ResponseWriter, r *http.Request) {
 	if want("obs_on_index") {
 		all, _ := m["obs_on_index"].([]neRevisitObsOnIndex)
 		out["obs_on_index"] = all[:min(limit, len(all))]
+	}
+	if want("obs_missing") { // ne_obs_complete.go: its own background pass, not the 10-min memo
+		all := neObsMissingRows()
+		out["obs_missing"] = all[:min(limit, len(all))]
+		out["obs_complete"] = NEObsCompleteStats()
 	}
 	body, err := json.Marshal(out)
 	if err != nil {

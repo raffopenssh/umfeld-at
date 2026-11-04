@@ -85,6 +85,7 @@ func main() {
 	neNatStart()                                         // national cell table behind the tiles' low zooms (ne_mvt_nat.go)
 	neTreeHRestore()                                     // tree mode survives a restart (marker in data/ne_fidx)
 	go neTreeHLoop()                                     // hourly probe: ask the observed-layer peer for apex height lists once it serves them prebuilt (ne_tree_h.go)
+	go neObsCompleteLoop()                               // observed layer vs declared view per KG (ne_obs_complete.go; /ne/revisit kind obs_missing)
 	go func() { neFidxPurgeEmpty(); neFidxWarmLoop() }() // filter index: prebuild the bins behind recent near tiles (ne_glyph_fidx.go)
 	go func() {
 		time.Sleep(20 * time.Second)

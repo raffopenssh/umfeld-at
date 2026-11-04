@@ -314,7 +314,20 @@ steers revisits — it does not touch the baseline, the confirm rule or any stor
 - `obs_on_index[] = {kg, obs_at, has_view, view_source, bbox}` — KGs whose observed layer was
   validated against the index epoch's cell set: re-post NEO1 built on `GET /contrib/api/v1/ne/{kg}/declared`
   (`has_view`), or NEC1+NEO1. `totals.kgs_no_log`, `totals.kgs_obs_on_index`.
-- `?limit=` (default 100, max 8000 ≥ the universe; all four lists), `?all=1` = the whole list,
+- `obs_missing[] = {kg, view_n, obs_n, missing_n, extra_n, view_source, obs_at, obs_declared_source, bbox}` —
+  **is the observed layer complete?** The NEO1 cell set was validated against the declared layer of
+  its POST day; the declared *view* (§4b) moves afterwards — a re-baseline, the bevdirect v0.3.6
+  edge-cell fix, another observer's edge cells. `missing_n` = view cells without an observed row,
+  `extra_n` = observed rows for cells the view no longer holds (an edge-cell drift of a few cells
+  per KG; the cells themselves follow the BEV KG polygons in the tiles — a declared/observed set that is
+  narrower than a generalised administrative outline is not a gap). Re-post NEO1 built on
+  `GET {kg}/declared`; most missing first. Computed by its own background pass (`ne_obs_complete.go`:
+  one merge of the two sorted id lists per KG, memoised per (view identity, obs digest), ~20 ms per
+  KG, whole universe ≈ 2.5 min on first pass then seconds, every 3 h, yields to tile renders) — a
+  snapshot, `obs_complete{pass_at, kgs_no_obs, kgs_obs_missing, cells_obs_missing, cells_obs_extra}`
+  rides on the answer; `totals.kgs_obs_missing`, `totals.cells_obs_missing`; `ne_obs_complete`
+  line on the debug inflight page.
+- `?limit=` (default 100, max 8000 ≥ the universe; all five lists), `?all=1` = the whole list,
   `?kind=no_log,stale` = only those lists; `?observer=<name>` is the per-peer view: drops pending
   KGs whose every pending version that observer posted itself (its own re-post inside
   `neSamePassWindow` = 20 h is not a sighting) and stale / no_log KGs it reported within
@@ -325,7 +338,7 @@ steers revisits — it does not touch the baseline, the confirm rule or any stor
   `StatsMemo("ne_revisit", 10 min)`, stale-while-revalidate, warmed 45 s after start; cold ≈ 10 s,
   warm ≈ 0.2 s, ≈ 8 MB; lists bounded to 8 000 rows; `ne_revisit` line on `the debug inflight page`.
 - Peers: fetch `revisit?observer=<me>&limit=50` at the start of a pass, observe `pending`, `stale`,
-  `no_log`, `obs_on_index` in that order, then the normal order (`docs/ne-cells.md` §triage peer note). No client change needed.
+  `no_log`, `obs_on_index`, `obs_missing` in that order, then the normal order (`docs/ne-cells.md` §triage peer note). No client change needed.
 
 ## 6. Public surface (after §3–4 exist)
 

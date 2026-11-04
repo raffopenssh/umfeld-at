@@ -88,6 +88,10 @@ var neGlyphAdminKinds = []neGlyphAdminKind{
 	{Key: "bz", Kind: "bezirk", Code: regexp.MustCompile(`^\d{3}$`), Notice: "© Statistik Austria, CC BY 4.0", Name: func(u *neGlyphAdminUnit) string { return neGlyphBezirkName(u.C) }},
 	{Key: "gem", Kind: "gemeinde", Code: regexp.MustCompile(`^\d{5}$`), Notice: "© Statistik Austria, CC BY 4.0"},
 	{Key: "n2k", Kind: "natura2000", Code: regexp.MustCompile(`^AT[0-9A-Z]{7}$`), Notice: "Source: European Environment Agency (EEA), Natura 2000 data"},
+	// the state border from OSM follows the BEV KG polygons to a few metres (the Statistik Austria
+	// outlines above are generalised by up to ~200 m there) — the glyph's relief clip, and
+	// "Österreich" as one unit in the find box. scripts/ne_glyph_at_outline_build.py.
+	{Key: "at", Kind: "staat", Code: regexp.MustCompile(`^AT$`), Notice: "© OpenStreetMap contributors (ODbL)"},
 }
 
 type neGlyphAdminFile map[string][]neGlyphAdminUnit
@@ -166,7 +170,7 @@ func neGlyphAdminLoad() error {
 			kinds[k.Key] = map[string]string{"kind": k.Kind, "notice": k.Notice}
 		}
 		idx["kinds"] = kinds
-		idx["notice"] = "Gemeindegrenzen © Statistik Austria, CC BY 4.0 (Bezirke/Bundesländer dissolved from them); Natura 2000: European Environment Agency (EEA)"
+		idx["notice"] = "Gemeindegrenzen © Statistik Austria, CC BY 4.0 (Bezirke/Bundesländer dissolved from them); Natura 2000: European Environment Agency (EEA); Staatsgrenze © OpenStreetMap contributors (ODbL)"
 		a.index, _ = json.Marshal(idx)
 	})
 	return a.err

@@ -96,6 +96,9 @@ there yet.
 "How many KGs still ride on the index epoch?" → `curl -s localhost:8000/api/v1/ne/manifest | python3 -c "import json,sys;
 d=json.load(sys.stdin); print(d['kgs_obs_on_index'], 'obs on index;', sum(1 for e in d['kgs'].values() if (e.get('declared') or {}).get('source','').startswith('index')), 'declared = lu')"`
 (the lists peers work off: `revisit.no_log`, `revisit.obs_on_index`).
+"Is the observed layer complete?" → `curl -s -H "Authorization: Bearer $TOK" '<private>/api/v1/ne/revisit?kind=obs_missing&limit=5'`
+→ `obs_complete{kgs_no_obs, kgs_obs_missing, cells_obs_missing, cells_obs_extra, pass_at}` + the worst
+KGs (`missing_n` = cells of today's declared view without an observed row; `docs/ne-change.md` §5b).
 ```
 TOK=<a private token>
 curl -s -H "Authorization: Bearer $TOK" localhost:8000<private>/api/v1/ne/reports | python3 -m json.tool | less
@@ -123,8 +126,9 @@ kgs, sources, first/last_at, compared, chunks_changed_since_last).
 the KGs in `pending[].kg` first (oldest first; single-sighting change your pass
 would confirm or supersede), then `stale[].kg` (baseline only), then
 `no_log[].kg` (no chunk rows ever — the declared picture there is still the
-index epoch) and, observed-layer peer only, `obs_on_index[].kg` (re-post NEO1
-built on `GET /contrib/api/v1/ne/{kg}/declared`), then continue your normal
+index epoch) and, observed-layer peer only, `obs_on_index[].kg` and
+`obs_missing[].kg` (re-post NEO1 built on `GET /contrib/api/v1/ne/{kg}/declared`;
+`missing_n` = view cells your layer lacks), then continue your normal
 order. `?observer=` drops KGs whose pending versions you posted yourself — a
 re-post of your own digest inside 20 h is not a sighting — and stale/no_log KGs
 you reported within `min_age_days`. A whole list for a monthly sweep:
