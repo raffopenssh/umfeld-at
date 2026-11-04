@@ -18,6 +18,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -38,6 +39,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/klauspost/compress/zstd"
 	"github.com/uber/h3-go/v4"
 )
 
@@ -289,6 +291,7 @@ func neSubGet(key, url string, cached *neSubRaw) (*neSubRaw, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "umfeld-at glyph")
+	req.Header.Set("Accept-Encoding", neSubAcceptEncoding)
 	if cached != nil && cached.ETag != "" {
 		req.Header.Set("If-None-Match", cached.ETag)
 	}
@@ -314,8 +317,8 @@ func neSubGet(key, url string, cached *neSubRaw) (*neSubRaw, error) {
 		}
 		return nil, fmt.Errorf("peer %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, neSubMaxBody+1))
-	if err != nil || len(body) > neSubMaxBody {
+	body, err := neSubReadBody(resp, neSubMaxBody)
+	if err != nil {
 		neSubDown.set(time.Now())
 		return nil, errNeSubDown
 	}
@@ -354,6 +357,44 @@ func neSubTTL(resp *http.Response) time.Duration {
 	return ttl
 }
 
+// neSubAcceptEncoding — the peer serves zstd (2026-11-04) and gzip. Setting
+// the header by hand switches off Go's transparent gzip, so both are decoded
+// here; the cap applies to the decoded bytes.
+const neSubAcceptEncoding = "zstd, gzip"
+
+var neSubZstd, _ = zstd.NewReader(nil, zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true))
+
+func neSubReadBody(resp *http.Response, max int) ([]byte, error) {
+	var r io.Reader = resp.Body
+	switch strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding"))) {
+	case "zstd":
+		if neSubZstd == nil {
+			return nil, errors.New("zstd decoder")
+		}
+		b, err := io.ReadAll(io.LimitReader(resp.Body, int64(max)+1))
+		if err != nil || len(b) > max {
+			return nil, errNeSubDown
+		}
+		out, err := neSubZstd.DecodeAll(b, make([]byte, 0, min(4*len(b), max+1)))
+		if err != nil || len(out) > max {
+			return nil, fmt.Errorf("zstd body: %v", err)
+		}
+		return out, nil
+	case "gzip":
+		z, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("gzip body: %v", err)
+		}
+		defer z.Close()
+		r = z
+	}
+	b, err := io.ReadAll(io.LimitReader(r, int64(max)+1))
+	if err != nil || len(b) > max {
+		return nil, errNeSubDown
+	}
+	return b, nil
+}
+
 // neSubStore — LRU put with the header line.
 func neSubStore(key string, raw *neSubRaw, ttl time.Duration) {
 	clean := func(s string) string { return strings.NewReplacer(";", "", "\n", "").Replace(s) }
@@ -379,13 +420,20 @@ func neSubBinOf(raw *neSubRaw, err error) (*neSubBin, error) {
 // is fetched alone — 16 cold outline bins for one pixel row would cost the
 // peer ~2 s for nothing.
 func neSubBinAt(i, j int, single bool) (*neSubBin, error) {
-	return neSubBinOf(neSubBlockGet(false, i, j, single))
+	return neSubBinOf(neSubBlockGet(false, false, i, j, single))
+}
+
+// neSubBinFullAt — the same bin with every peer column (snar, snar2, oepul,
+// nutz): the filter index. Its own key space (f/); one extra block request
+// per 0.1° box the index builds, never on the tile path.
+func neSubBinFullAt(i, j int) (*neSubBin, error) {
+	return neSubBinOf(neSubBlockGet(false, true, i, j, false))
 }
 
 // neSubPolyAt — the IVP1 outline bin (i, j): every Schlag of the year whose
 // outline intersects the bin, unclipped, plus the gone ones of prev_year.
 func neSubPolyAt(i, j int, single bool) (*neSubPolys, error) {
-	raw, err := neSubBlockGet(true, i, j, single)
+	raw, err := neSubBlockGet(true, false, i, j, single)
 	if err != nil {
 		return nil, err
 	}
@@ -403,10 +451,17 @@ func neSubPolyAt(i, j int, single bool) (*neSubPolys, error) {
 
 const neSubBlockDeg = 0.1
 
-func neSubBinURL(poly bool, w, s, size float64, block bool) string {
+// neSubLeanCols — the six columns the painter and the cell card read; the
+// peer's `cols=` selector (2026-11-04) drops snar/snar2/oepul/nutz from a
+// res-12 body (~40 % fewer bytes). The filter index needs them all (full).
+const neSubLeanCols = "cls,cov,bio,rel,chg,dcov"
+
+func neSubBinURL(poly, full bool, w, s, size float64, block bool) string {
 	base, extra := neSubPeer, "&res=12"
 	if poly {
 		base, extra = neSubPolyPeer, ""
+	} else if !full {
+		extra += "&cols=" + neSubLeanCols
 	}
 	u := fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&crs=4326%s&format=bin", base, w, s, w+size, s+size, extra)
 	if block {
@@ -415,9 +470,14 @@ func neSubBinURL(poly bool, w, s, size float64, block bool) string {
 	return u
 }
 
-func neSubBinKey(poly bool, i, j int) string {
-	if poly {
+// LRU keys: b/ lean H3 bin · f/ full H3 bin (filter index) · p/ outlines.
+// Lean and full bodies carry different peer ETags, so they never share a key.
+func neSubBinKey(poly, full bool, i, j int) string {
+	switch {
+	case poly:
 		return fmt.Sprintf("p/%d/%d", i, j)
+	case full:
+		return fmt.Sprintf("f/%d/%d", i, j)
 	}
 	return fmt.Sprintf("b/%d/%d", i, j)
 }
@@ -426,14 +486,14 @@ func floorDiv4(a int) int { return int(math.Floor(float64(a) / 4)) }
 
 // neSubBlockGet — the bin (i, j) via LRU → single-flight on its block → peer
 // (single: the bin alone through neSubFetch).
-func neSubBlockGet(poly bool, i, j int, single bool) (*neSubRaw, error) {
-	key := neSubBinKey(poly, i, j)
+func neSubBlockGet(poly, full bool, i, j int, single bool) (*neSubRaw, error) {
+	key := neSubBinKey(poly, full, i, j)
 	cached, stale := neSubCached(key)
 	if cached != nil && !stale {
 		return cached, nil
 	}
 	if single {
-		return neSubFetch(key, neSubBinURL(poly, float64(i)*neSubBinDeg, float64(j)*neSubBinDeg, neSubBinDeg, false))
+		return neSubFetch(key, neSubBinURL(poly, full, float64(i)*neSubBinDeg, float64(j)*neSubBinDeg, neSubBinDeg, false))
 	}
 	if d := neSubDown.get(); !d.IsZero() && time.Since(d) < 30*time.Second {
 		if cached != nil {
@@ -453,7 +513,7 @@ func neSubBlockGet(poly bool, i, j int, single bool) (*neSubRaw, error) {
 		c.wg.Add(1)
 		neSubFlight[fkey] = c
 		neSubMu.Unlock()
-		c.raws, c.err = neSubBlockFetch(poly, I, J)
+		c.raws, c.err = neSubBlockFetch(poly, full, I, J)
 		neSubMu.Lock()
 		delete(neSubFlight, fkey)
 		neSubMu.Unlock()
@@ -476,12 +536,12 @@ func neSubBlockGet(poly bool, i, j int, single bool) (*neSubRaw, error) {
 // neSubBlockFetch — GET the block (I, J), validate the 16 bodies, store them.
 // A peer without ?block=1 (400/404/405) falls back to the 16 single bins
 // through neSubGet so the layer keeps working either way.
-func neSubBlockFetch(poly bool, I, J int) ([]*neSubRaw, error) {
+func neSubBlockFetch(poly, full bool, I, J int) ([]*neSubRaw, error) {
 	// the block's ETag is on every bin entry; revalidate only when all 16 are still here
 	var all []*neSubRaw
 	etag := ""
 	for k := 0; k < 16; k++ {
-		c, _ := neSubCached(neSubBinKey(poly, I*4+k/4, J*4+k%4))
+		c, _ := neSubCached(neSubBinKey(poly, full, I*4+k/4, J*4+k%4))
 		if c == nil || c.ETag == "" || (etag != "" && c.ETag != etag) {
 			all = nil
 			break
@@ -496,11 +556,12 @@ func neSubBlockFetch(poly bool, I, J int) ([]*neSubRaw, error) {
 	}
 	defer func() { <-neSubSem }()
 	w, s := float64(I)*neSubBlockDeg, float64(J)*neSubBlockDeg
-	req, err := http.NewRequest("GET", neSubBinURL(poly, w, s, neSubBlockDeg, true), nil)
+	req, err := http.NewRequest("GET", neSubBinURL(poly, full, w, s, neSubBlockDeg, true), nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "umfeld-at glyph")
+	req.Header.Set("Accept-Encoding", neSubAcceptEncoding)
 	if all != nil {
 		req.Header.Set("If-None-Match", etag)
 	}
@@ -519,7 +580,7 @@ func neSubBlockFetch(poly bool, I, J int) ([]*neSubRaw, error) {
 	if resp.StatusCode == 304 && all != nil {
 		ttl := neSubTTL(resp)
 		for k, c := range all {
-			neSubStore(neSubBinKey(poly, I*4+k/4, J*4+k%4), c, ttl)
+			neSubStore(neSubBinKey(poly, full, I*4+k/4, J*4+k%4), c, ttl)
 		}
 		neSubDown.set(time.Time{})
 		return all, nil
@@ -536,10 +597,10 @@ func neSubBlockFetch(poly bool, I, J int) ([]*neSubRaw, error) {
 		singles := make([]*neSubRaw, 16)
 		for k := 0; k < 16; k++ {
 			i, j := I*4+k/4, J*4+k%4
-			key := neSubBinKey(poly, i, j)
+			key := neSubBinKey(poly, full, i, j)
 			c, _ := neSubCached(key)
 			bw, bs := float64(i)*neSubBinDeg, float64(j)*neSubBinDeg
-			r, err := neSubGet(key, neSubBinURL(poly, bw, bs, neSubBinDeg, false), c)
+			r, err := neSubGet(key, neSubBinURL(poly, full, bw, bs, neSubBinDeg, false), c)
 			if err != nil && firstErr == nil {
 				firstErr = err
 			}
@@ -547,8 +608,8 @@ func neSubBlockFetch(poly bool, I, J int) ([]*neSubRaw, error) {
 		}
 		return singles, firstErr
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, neSubBlockMaxBody+1))
-	if err != nil || len(body) > neSubBlockMaxBody {
+	body, err := neSubReadBody(resp, neSubBlockMaxBody)
+	if err != nil {
 		neSubDown.set(time.Now())
 		return nil, errNeSubDown
 	}
@@ -568,7 +629,7 @@ func neSubBlockFetch(poly bool, I, J int) ([]*neSubRaw, error) {
 			log.Printf("subsidy block %d/%d: id-less form rejected (%v) → ids=1", I, J, err)
 			<-neSubSem
 			defer func() { neSubSem <- struct{}{} }()
-			return neSubBlockFetch(poly, I, J)
+			return neSubBlockFetch(poly, full, I, J)
 		}
 	}
 	if err != nil {
@@ -580,7 +641,7 @@ func neSubBlockFetch(poly bool, I, J int) ([]*neSubRaw, error) {
 	}
 	for k, raw := range raws {
 		raw.Year, raw.Prev, raw.Release, raw.ETag = year, prev, resp.Header.Get("X-Invekos-Release"), resp.Header.Get("ETag")
-		neSubStore(neSubBinKey(poly, I*4+k/4, J*4+k%4), raw, ttl)
+		neSubStore(neSubBinKey(poly, full, I*4+k/4, J*4+k%4), raw, ttl)
 	}
 	neSubDown.set(time.Time{})
 	return raws, nil

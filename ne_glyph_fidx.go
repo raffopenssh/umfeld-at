@@ -754,7 +754,7 @@ func neFidxBuild(i, j int, st string) (*neFidxBin, error) {
 	}
 	bin.Hdr.Unk = unk
 	// subsidy (peer bin, from the LRU or one fetch)
-	if sb, err := neSubBinAt(i, j, false); err == nil && sb != nil {
+	if sb, err := neSubBinFullAt(i, j); err == nil && sb != nil {
 		bin.Hdr.Sub = map[string]interface{}{"year": sb.Year, "release": sb.Release}
 		for q, k := range ord {
 			if x := sb.find(cells[k].id); x >= 0 {
