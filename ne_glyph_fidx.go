@@ -1450,11 +1450,12 @@ func neFidxSrtmFetch(w, s, e, n float64) *neFidxSrtm {
 }
 
 // neFidxSrtmBlk — parsed srtm bins keyed "i/j" (0.025° bin), filled 16 at a
-// time by the block fetch. Bounded by count (256 bins ≈ 16 blocks ≈ 20 MB
-// parsed), 15 min TTL so a new peer generation is picked up; size on the
+// time by the block fetch. Bounded by count (768 bins ≈ 48 blocks ≈ 60 MB
+// parsed — a desktop view at z≈9 spans ~30 blocks plus the ring; 16 blocks
+// thrashed), 15 min TTL so a new peer generation is picked up; size on the
 // inflight page under ne_fidx.srtm_blk.
 var (
-	neFidxSrtmBlk         = newNeFidxSrtmBlkLRU(256, 15*time.Minute)
+	neFidxSrtmBlk         = newNeFidxSrtmBlkLRU(768, 15*time.Minute)
 	neFidxSrtmBlkHits     atomic.Int64
 	neFidxSrtmBlkFetches  atomic.Int64
 	neFidxSrtmBlkFallback atomic.Int64 // v2 bodies that failed their id checksum (re-asked with ids=1)
@@ -1508,6 +1509,14 @@ func (l *neFidxSrtmBlkLRU) get(k string) (*neFidxSrtm, bool) {
 		}
 	}
 	return e.v, true
+}
+
+// has — is the bin parsed and live? Does not touch the LRU order.
+func (l *neFidxSrtmBlkLRU) has(k string) bool {
+	l.mu.Lock()
+	e := l.m[k]
+	l.mu.Unlock()
+	return e != nil && time.Since(e.at) <= l.ttl
 }
 
 func (l *neFidxSrtmBlkLRU) put(k string, v *neFidxSrtm) {
@@ -2130,8 +2139,19 @@ func neFidxPoolWorker() {
 		}
 		var pick [2]int
 		var best int64 = -1
+		cached := false
 		for k, st := range neFidxPoolQ {
-			// newest stamp first; equal stamps → by block, then bin, so one peer block is used up before the next
+			// a bin whose peer block is already parsed (any stamp, not stale) beats every other: the block is
+			// consumed whole before the next one is fetched. Before this the newest stamp won outright, and a
+			// view of 30 blocks over a 16-block cache refetched every block 3–6 times (210 fetches for 72
+			// blocks, 600 MB from the peer, 2026-11-04). Then newest stamp; equal stamps → by block, then bin.
+			c := neFidxSrtmBlk.has(fmt.Sprintf("%d/%d", k[0], k[1])) && time.Since(time.Unix(0, st)) <= time.Minute
+			if c != cached {
+				if c {
+					best, pick, cached = st, k, true
+				}
+				continue
+			}
 			if st > best || (st == best && (k[0]>>2 < pick[0]>>2 || (k[0]>>2 == pick[0]>>2 && (k[1]>>2 < pick[1]>>2 || (k[1]>>2 == pick[1]>>2 && (k[0] < pick[0] || (k[0] == pick[0] && k[1] < pick[1]))))))) {
 				best, pick = st, k
 			}

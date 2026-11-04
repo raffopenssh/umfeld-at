@@ -2154,8 +2154,10 @@ function rdLine(){var r=hiSum('rd');if(!r)return'<div class="nt mut rd">roads <i
 
 
 function hiStatus(){tD.classList.toggle('busy',hi.left>0);gvBusy();hiLegend();if(!hi.on){tN.classList.remove('n');return}if(!hi.left&&!hi.under&&!hiUnderMiss(hiLOD())){dbgLog('under-lod cull missed, catching up');hiCull()}/* the last in-flight tile may end on a path without a cull (dropped, replaced, failed) — never leave the stack painted */clearTimeout(hi.st);
- var sm=hiSum(),n=sm?sm.n:0,s=hi.left>0?'loading'+(n?' \u00b7 '+kfmt(n)+' cells':''):kfmt(n)+' cells \u00b7 '+((performance.now()-hi.t0)/1000).toFixed(1)+' s';tN.innerHTML=hi.left>0?esc(s)+ldots():esc(s);tN.classList.add('n');
- if(!hi.left)hi.st=setTimeout(function(){tN.classList.remove('n')},4500)}
+ var sm=hiSum(),n=sm?sm.n:0,fp=typeof fltProg==='function'?fltProg():null,s=hi.left>0?'loading'+(n?' \u00b7 '+kfmt(n)+' cells':''):kfmt(n)+' cells \u00b7 '+((performance.now()-hi.t0)/1000).toFixed(1)+' s';
+ /* the filter index builds server-side, bin by bin (0.025°), after the tiles are in: the note stays up and counts the bins instead of leaving the funnel pulsing alone (docs/ne-filter.md §12) */
+ if(fp&&!hi.left)s=fp;else if(fp)s+=' \u00b7 '+fp;tN.innerHTML=hi.left>0||fp?esc(s)+ldots():esc(s);tN.classList.add('n');
+ if(!hi.left&&!fp)hi.st=setTimeout(function(){tN.classList.remove('n')},4500)}
 function kfmt(n){return n>=1000?(n/1000).toFixed(n<10000?1:0)+'\u202fk':String(n)}
 function hiOn(){if(hi.on||!proj||W/vb.w<HI_MIN)return;if(!picked&&!floating())setHTML(PH+'<div class="lg12"></div>');hi.on=true;hi.n=0;hi.left=0;if(typeof fvSync==='function')setTimeout(fvSync,0);hi.t0=performance.now();hi.a=window.AbortController?new AbortController():{signal:undefined,abort:function(){}};hiLayer();hi.g.classList.remove('out');svg.classList.add('hi');ZMAX=HI_ZMAX;tD.setAttribute('aria-pressed','true');tD.title='back to the overview';veilSync();
  pause(0);tour.on=false;hiView();setHash();ixGet();

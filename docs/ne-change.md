@@ -314,18 +314,25 @@ steers revisits — it does not touch the baseline, the confirm rule or any stor
 - `obs_on_index[] = {kg, obs_at, has_view, view_source, bbox}` — KGs whose observed layer was
   validated against the index epoch's cell set: re-post NEO1 built on `GET /contrib/api/v1/ne/{kg}/declared`
   (`has_view`), or NEC1+NEO1. `totals.kgs_no_log`, `totals.kgs_obs_on_index`.
-- `obs_missing[] = {kg, view_n, obs_n, missing_n, extra_n, view_source, obs_at, obs_declared_source, bbox}` —
+- `obs_missing[] = {kg, view_n, obs_n, missing_n, extra_n, blank_n, view_source, obs_at, obs_declared_source, bbox}` —
   **is the observed layer complete?** The NEO1 cell set was validated against the declared layer of
   its POST day; the declared *view* (§4b) moves afterwards — a re-baseline, the bevdirect v0.3.6
   edge-cell fix, another observer's edge cells. `missing_n` = view cells without an observed row,
   `extra_n` = observed rows for cells the view no longer holds (an edge-cell drift of a few cells
   per KG; the cells themselves follow the BEV KG polygons in the tiles — a declared/observed set that is
-  narrower than a generalised administrative outline is not a gap). Re-post NEO1 built on
-  `GET {kg}/declared`; most missing first. Computed by its own background pass (`ne_obs_complete.go`:
+  narrower than a generalised administrative outline is not a gap). `blank_n` = observed rows that
+  observe nothing (`obs_lu` all 0, `h_mean` nodata, no flight year): the NEO1 header's
+  `view_rekey{filled}` — the observed-layer peer ran its pipeline on the index-epoch product
+  (`product_cells_n`) and padded the view's extra cells with nodata rows instead of observing them
+  (80002 Imst: 23 269 of 380 837 rows, 2026-11-04; 2 782 KGs, 1.13 M cells nationally). They paint
+  as grey "unknown" in rectangular blocks under `v=obs`, veil every filter term, and count as
+  unobserved here. Re-post NEO1 with the pipeline run on **every** cell of `GET {kg}/declared`;
+  most missing + blank first. Computed by its own background pass (`ne_obs_complete.go`:
   one merge of the two sorted id lists per KG, memoised per (view identity, obs digest), ~20 ms per
   KG, whole universe ≈ 2.5 min on first pass then seconds, every 3 h, yields to tile renders) — a
-  snapshot, `obs_complete{pass_at, kgs_no_obs, kgs_obs_missing, cells_obs_missing, cells_obs_extra}`
-  rides on the answer; `totals.kgs_obs_missing`, `totals.cells_obs_missing`; `ne_obs_complete`
+  snapshot, `obs_complete{pass_at, kgs_no_obs, kgs_obs_missing, cells_obs_missing, cells_obs_extra, kgs_obs_blank, cells_obs_blank}`
+  rides on the answer; `totals.kgs_obs_missing`, `totals.cells_obs_missing`, `totals.kgs_obs_blank`,
+  `totals.cells_obs_blank`; `ne_obs_complete`
   line on the debug inflight page.
 - `?limit=` (default 100, max 8000 ≥ the universe; all five lists), `?all=1` = the whole list,
   `?kind=no_log,stale` = only those lists; `?observer=<name>` is the per-peer view: drops pending

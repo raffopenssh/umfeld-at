@@ -32,6 +32,7 @@ type neObsCompleteRow struct {
 	ObsN       int    `json:"obs_n"`
 	MissingN   int    `json:"missing_n"`
 	ExtraN     int    `json:"extra_n"`
+	BlankN     int    `json:"blank_n"` // observed rows that observe nothing: obs_lu all zero, h_mean nodata, no flight — placeholders the peer's view_rekey filled in for view cells its pipeline never ran on (80002: 23 269 of 380 837, 2026-11-04)
 	ViewSrc    string `json:"view_source"`
 	ObsAt      string `json:"obs_at"`
 	ObsDecl    string `json:"obs_declared_source,omitempty"`
@@ -49,6 +50,7 @@ var neObsComplete struct {
 	computed                             int // rows (re)computed in the last pass
 	kgsNoObs                             int
 	kgsMissing, cellsMissing, cellsExtra int
+	kgsBlank, cellsBlank                 int
 }
 
 const neObsCompleteEvery = 3 * time.Hour
@@ -89,6 +91,16 @@ func neObsCompareKG(kg string) *neObsCompleteRow {
 	rb := l.RowBytes
 	nv, no := v.CellsN(), len(obs)/rb
 	row := &neObsCompleteRow{KG: kg, ViewN: nv, ObsN: no, ViewSrc: v.Source, ObsAt: e.Obs.BuiltAt, ObsDecl: e.Obs.DeclaredSource, identity: ident, computedAt: time.Now()}
+	rec := ""
+	if h := k.layerHeader("obs"); h != nil {
+		rec, _ = h["record"].(string)
+	}
+	lay := neObsLayout(neObsFields(k), rec)
+	for j := 0; lay != nil && j < no && lay.rowBytes == rb; j++ {
+		if neObsRowBlank(obs[j*rb:(j+1)*rb], lay) {
+			row.BlankN++
+		}
+	}
 	i, j := 0, 0
 	for i < nv && j < no {
 		a := binary.LittleEndian.Uint64(v.Rows[i*neLURowBytes:])
@@ -123,7 +135,7 @@ func neObsCompletePass() {
 	for _, b := range kgBoxSnapshot() {
 		boxes[b.code] = fmt.Sprintf("%.4f,%.4f,%.4f,%.4f", b.minLon, b.minLat, b.maxLon, b.maxLat)
 	}
-	var noObs, kgsMissing, cellsMissing, cellsExtra, computed int
+	var noObs, kgsMissing, cellsMissing, cellsExtra, kgsBlank, cellsBlank, computed int
 	seen := map[string]bool{}
 	for _, kg := range neStore.kgCodes() {
 		neRenderYield()
@@ -145,6 +157,10 @@ func neObsCompletePass() {
 		}
 		cellsMissing += r.MissingN
 		cellsExtra += r.ExtraN
+		if r.BlankN > 0 {
+			kgsBlank++
+		}
+		cellsBlank += r.BlankN
 	}
 	neObsComplete.mu.Lock()
 	for kg := range neObsComplete.rows {
@@ -154,6 +170,7 @@ func neObsCompletePass() {
 	}
 	neObsComplete.passAt, neObsComplete.passMS, neObsComplete.passes = time.Now(), time.Since(t0).Milliseconds(), neObsComplete.passes+1
 	neObsComplete.kgsNoObs, neObsComplete.kgsMissing, neObsComplete.cellsMissing, neObsComplete.cellsExtra, neObsComplete.computed = noObs, kgsMissing, cellsMissing, cellsExtra, computed
+	neObsComplete.kgsBlank, neObsComplete.cellsBlank = kgsBlank, cellsBlank
 	neObsComplete.mu.Unlock()
 }
 
@@ -167,20 +184,40 @@ func neObsCompleteLoop() {
 	}
 }
 
-// neObsMissingRows — the snapshot's KGs with missing cells, most missing first
-// (ties by code). Copies, safe to hand out.
+// neObsRowBlank — an observed row that observes nothing: every obs_lu share 0,
+// h_mean nodata (255) and no flight year. A real cell of bare rock still has a
+// height and a flight; these rows are the padding a peer's view_rekey writes
+// for view cells it never ran its pipeline on.
+func neObsRowBlank(row []byte, lay *neObsLayoutT) bool {
+	for _, b := range row[lay.luOff : lay.luOff+9] {
+		if b != 0 {
+			return false
+		}
+	}
+	if lay.hMean >= 0 && row[lay.hMean] != 255 {
+		return false
+	}
+	if lay.flight >= 0 && row[lay.flight] != 0 {
+		return false
+	}
+	return true
+}
+
+// neObsMissingRows — the snapshot's KGs with missing or blank cells, most
+// (missing + blank) first (ties by code). Copies, safe to hand out.
 func neObsMissingRows() []neObsCompleteRow {
 	neObsComplete.mu.Lock()
 	out := make([]neObsCompleteRow, 0, 64)
 	for _, r := range neObsComplete.rows {
-		if r.MissingN > 0 {
+		if r.MissingN > 0 || r.BlankN > 0 {
 			out = append(out, *r)
 		}
 	}
 	neObsComplete.mu.Unlock()
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].MissingN != out[j].MissingN {
-			return out[i].MissingN > out[j].MissingN
+		a, b := out[i].MissingN+out[i].BlankN, out[j].MissingN+out[j].BlankN
+		if a != b {
+			return a > b
 		}
 		return out[i].KG < out[j].KG
 	})
@@ -197,5 +234,6 @@ func NEObsCompleteStats() map[string]interface{} {
 	}
 	return map[string]interface{}{"rows": len(neObsComplete.rows), "kgs_no_obs": neObsComplete.kgsNoObs, "kgs_obs_missing": neObsComplete.kgsMissing,
 		"cells_obs_missing": neObsComplete.cellsMissing, "cells_obs_extra": neObsComplete.cellsExtra,
+		"kgs_obs_blank": neObsComplete.kgsBlank, "cells_obs_blank": neObsComplete.cellsBlank,
 		"pass_at": at, "pass_ms": neObsComplete.passMS, "passes": neObsComplete.passes, "computed_last_pass": neObsComplete.computed, "every_s": int(neObsCompleteEvery.Seconds())}
 }

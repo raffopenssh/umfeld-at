@@ -48,6 +48,16 @@ that pixel, never more; adjacent cells merge as the screen would merge them; the
 hl=1 and an eighth of a pixel (a faint tint after the downscale) at hl=8, so style and growth fade
 continuously with the zoom — the sparse `ht=40..50` and the dense `ht=35..45` read the same way.
 
+(12) **Cold view: progress + block-first builds** (2026-11-04): a desktop view at z≈9 asks ~440 bins
+(≈ 30 peer blocks); the pool builds ~0.7 s a bin, 3 at a time, so the first open of a region is minutes,
+not seconds. Two fixes. The status note (`tN`, the same one that counts tiles) now reads `filter · indexing
+310 of 440 bins …` while any veil tile reports `pend>0` (`fltProg()`, summed from `X-NE-Tile bins=/pend=`
+over the tiles in view; `hiStatus` keeps the note up until the last bin lands) — before, only the funnel
+pulsed. And the pool worker prefers a queued bin whose peer block is already parsed over the newest
+stamp (`neFidxSrtmBlk.has`), consuming a block whole before the next fetch; with newest-first over a
+16-block cache a 72-block session fetched 210 blocks (600 MB from the peer). The block cache grew to
+48 blocks. What remains is the build itself (~0.7 s/bin on two cores): a region is slow once, then disk.
+
 (9) **The veil in QGIS and in the row** (2026-11-03): `f=` on `/ne/mvt/{z}/{x}/{y}.pbf`, `mvt.json`
 and `/ne/pmtiles` (or the `;f=` of a `share=`) renders only matching cells (res 12) / hexagons with ≥ 1
 match (aggregates over the matching cells, `n_all`, `match_pct`; res 7–9 from the sample, `approx`) —
@@ -411,7 +421,7 @@ a peer never ships Austria, never re-POSTs, never sees a per-reader request. Bot
 the shape (aligned 0.025° bins, `format=bin`, sorted H3 ids, strong ETag, immutable per release) —
 we ask each for **extra columns on the existing endpoint**.
 Both peers answer a whole **0.1° block** (16 bins) in one body (`&block=1`: subsidy peer → `neSubLRU`,
-observed-layer peer → `NEXB` container, `neFidxSrtmBlk` RAM cache 256 bins / 15 min, single flight per
+observed-layer peer → `NEXB` container, `neFidxSrtmBlk` RAM cache 768 bins (48 blocks, ≈ 60 MB) / 15 min, single flight per
 block); a bin miss fetches its block once, the 15 sibling bins of the same view then build without a
 peer request (≈ 80 ms a bin). Same bytes on the wire as 16 single bins, 1/16 of the requests, no disk. A missing column is `255/65535` (*unknown*,
 never matches), so the filter ships before they do and degrades to "no data" chips, never to errors.

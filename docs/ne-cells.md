@@ -97,8 +97,9 @@ there yet.
 d=json.load(sys.stdin); print(d['kgs_obs_on_index'], 'obs on index;', sum(1 for e in d['kgs'].values() if (e.get('declared') or {}).get('source','').startswith('index')), 'declared = lu')"`
 (the lists peers work off: `revisit.no_log`, `revisit.obs_on_index`).
 "Is the observed layer complete?" → `curl -s -H "Authorization: Bearer $TOK" '<private>/api/v1/ne/revisit?kind=obs_missing&limit=5'`
-→ `obs_complete{kgs_no_obs, kgs_obs_missing, cells_obs_missing, cells_obs_extra, pass_at}` + the worst
-KGs (`missing_n` = cells of today's declared view without an observed row; `docs/ne-change.md` §5b).
+→ `obs_complete{kgs_no_obs, kgs_obs_missing, cells_obs_missing, cells_obs_extra, kgs_obs_blank, cells_obs_blank, pass_at}` + the worst
+KGs (`missing_n` = cells of today's declared view without an observed row, `blank_n` = observed rows that
+observe nothing — the peer's `view_rekey` padding, they paint grey "unknown" in rectangular blocks; `docs/ne-change.md` §5b).
 ```
 TOK=<a private token>
 curl -s -H "Authorization: Bearer $TOK" localhost:8000<private>/api/v1/ne/reports | python3 -m json.tool | less
