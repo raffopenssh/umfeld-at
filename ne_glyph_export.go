@@ -45,12 +45,12 @@ var XBINS=48;function xViewBins(b){var d=typeof FB!=='undefined'?FB:0.025,i0=Mat
 function xUnit(){var h=unitHash();if(h)return{q:'share='+encodeURIComponent('#'+h),show:'?share=<b>#'+esc(decodeURIComponent(h))+'</b>',n:'this unit',view:false};
  var b=xViewBox(),f=xF(),bs=b.map(function(v){return v.toFixed(4)}).join(',');
  return{q:'bbox='+bs+(f?'&f='+f:''),show:'?bbox=<b>'+bs+'</b>'+(f?'&amp;f=<b>'+esc(decodeURIComponent(f))+'</b>':''),n:'the current view',view:true,approx:xViewBins(b)>XBINS}}
-function xBase(){var u=xUnit();return u?location.origin+'/api/v1/ne/stats/unit?'+u.q:''}
+function xBase(){var u=xUnit();return u?pubOrigin()+'/api/v1/ne/stats/unit?'+u.q:''}
 function xURL(fmt,extra){var b=xBase();if(!b)return '';return xK(b+'&format='+fmt+'&src=glyph'+(extra||''))}
 /* the active filter (the hash's ;f=) rides on every QGIS URL: tiles and archives then hold only the matching cells, like the veil.
    < > | are percent-encoded (mail clients and messengers stop linkifying at them; the server unescapes) */
 function xF(){var t=curHash().replace(/^#/,'').split(';');for(var i=0;i<t.length;i++)if(/^f=/.test(t[i])&&t[i].length>2)return linkSafe(t[i].slice(2).replace(/\+/g,'%2B'));return ''}
-function xMVT(){var f=xF();return xK(location.origin+'/api/v1/ne/mvt/{z}/{x}/{y}.pbf'+(f?'?f='+f:''))}
+function xMVT(){var f=xF();return xK(pubOrigin()+'/api/v1/ne/mvt/{z}/{x}/{y}.pbf'+(f?'?f='+f:''))}
 /* current view as a lon/lat box (the SVG viewBox), its km² and a size estimate for a z 9–14 archive (~0.17 MB/km², measured) */
 function xViewBox(){var a=lonlat(vb.x,vb.y),b=lonlat(vb.x+vb.w,vb.y+vb.h);return[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])]}
 function xViewKm2(b){var la=(b[1]+b[3])/2*Math.PI/180;return (b[2]-b[0])*111.32*Math.cos(la)*(b[3]-b[1])*110.57}
@@ -60,7 +60,7 @@ function xArchT(){var h=unitHash(),u=h?h.split(';')[0]:'';if(sel&&/^kg=/.test(u)
  if(/^h3=/.test(u))return{box:[0,0,0,0],u:u,n:'this cell'};return{box:xViewBox(),u:'',n:'the current view'}}
 function xArchMB(t){return Math.max(0.1,xViewKm2(t.box)*0.17)}
 /* maxz 14 = every cell (z 9–14, ≤ XKM2 km²); maxz 11 = the overview from the national table, any area up to all of Austria (docs/qgis-layer.md) */
-function xArch(t,maxz){var f=xF();return xK(location.origin+'/api/v1/ne/pmtiles?'+(t.u?'share='+encodeURIComponent('#'+t.u+(f?';f='+f:'')):'bbox='+t.box.map(function(v){return v.toFixed(4)}).join(',')+(f?'&f='+f:''))+'&maxz='+(maxz||14)+'&src=glyph')}
+function xArch(t,maxz){var f=xF();return xK(pubOrigin()+'/api/v1/ne/pmtiles?'+(t.u?'share='+encodeURIComponent('#'+t.u+(f?';f='+f:'')):'bbox='+t.box.map(function(v){return v.toFixed(4)}).join(',')+(f?'&f='+f:''))+'&maxz='+(maxz||14)+'&src=glyph')}
 function xCopy(s,msg){var done=function(ok){showHint(ok?msg:s)};if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(s).then(function(){done(true)},function(){done(fallback(s))});else done(fallback(s))}
 function xMenu(){var u=xUnit(),t=xArchT(),mb=xArchMB(t),s='';
  if(u)s+='<div class="fm"><span class="lb">export</span><a href="'+esc(xURL('json'))+'" target="_blank" rel="noopener" data-f="json" title="'+u.n+' as JSON">JSON</a><a href="'+esc(xURL('csv','&download=1'))+'" download data-f="csv" title="'+u.n+' as CSV">CSV</a><a href="'+esc(xURL('flat'))+'" target="_blank" rel="noopener" data-f="flat" title="'+u.n+', one flat row">flat</a><button type="button" data-a="sheet" title="copy an =IMPORTDATA() formula for Google Sheets">Sheets</button>'+(u.view?'<span class="off" title="no KG, Gemeinde, cell or point picked: the table covers the cells in view'+(xF()?', matching the filter':'')+(u.approx?' \u2014 estimated from the national 1-in-49 sample (the view spans more than '+XBINS+' bins of 0.025\u00b0); zoom in for cell-exact figures':'')+'">'+(u.approx?'\u2248 ':'')+'the view</span>':'')+'</div>';

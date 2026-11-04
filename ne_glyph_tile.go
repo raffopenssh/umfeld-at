@@ -161,8 +161,12 @@ func neGlyphOverlayPalette(view string) color.Palette {
 	for _, a := range [3]uint8{120, 205, 255} {
 		for st := 0; st < neGlyphAgeSteps; st++ {
 			age := 1 - float64(st)/float64(neGlyphAgeSteps-1)
-			mix := func(v, m uint8) uint8 { return uint8(math.Round(float64(v)*age + float64(m)*(1-age))) }
-			p = append(p, color.NRGBA{mix(c[0], neGlyphAshRGB[0]), mix(c[1], neGlyphAshRGB[1]), mix(c[2], neGlyphAshRGB[2]), uint8(math.Round(float64(a) * (0.18 + 0.82*age)))})
+			// the floor keeps an old mark legible on the ground (hillshade, veil): never more than
+			// half-way to ash, never under half the tone's alpha — the age reads in the shade, not in
+			// whether the mark is there at all (a young record ashes everything within weeks: neGlyphAgeScale)
+			k := 0.5 + 0.5*age
+			mix := func(v, m uint8) uint8 { return uint8(math.Round(float64(v)*k + float64(m)*(1-k))) }
+			p = append(p, color.NRGBA{mix(c[0], neGlyphAshRGB[0]), mix(c[1], neGlyphAshRGB[1]), mix(c[2], neGlyphAshRGB[2]), uint8(math.Round(float64(a) * (0.5 + 0.5*age)))})
 		}
 	}
 	return p
@@ -284,6 +288,8 @@ type neGlyphTileMeta struct {
 	treeHist [5]int // v=obs: cells by tallest tree: <5 · 5–15 · 15–25 · 25–35 · 35+ m
 	conf     int
 	cand     int
+	flt      *neFltMatcher // v=chg&f=: the filter as a cell test (ne_glyph_flt_match.go)
+	hl       int           // v=chg&hl=: marks grown to the screen's pixel (neChgGrow)
 	dlu      [9]int64
 	first    string // v=chg: earliest / latest digest timestamp among the painted cells (day)
 	last     string
@@ -323,6 +329,9 @@ func (m *neGlyphTileMeta) String(ms int64, view string) string {
 		}
 		if !m.win.zero() {
 			s += ";win=" + m.win.String()
+		}
+		if m.flt != nil {
+			s += fmt.Sprintf(";fout=%d;fpend=%d", m.flt.Out, m.flt.Pending)
 		}
 	case "sub", "subc":
 		s += m.sub.String()
@@ -415,8 +424,25 @@ func neGlyphTileRenderWin(lod neGlyphLOD, i, j int, view string, raw bool, win n
 // inner hexagon get coverage anti-aliasing, which a paletted tile cannot carry. Asked by the client
 // with ss=2 when a tile px covers ≥ 2 device px (LOD 0/1 near full zoom, docs/ne-filter.md §12).
 func neGlyphTileRenderSS(lod neGlyphLOD, i, j int, view string, raw bool, win neChangeWin, ss int) ([]byte, neGlyphTileMeta) {
+	return neGlyphTileRenderF(lod, i, j, view, raw, win, ss, nil)
+}
+
+// neGlyphTileRenderF — flt: on a change tile, paint only the cells the filter matches (pending bins show;
+// ne_glyph_flt_match.go). The page puts the layer above the veil then, like the tree rings.
+func neGlyphTileRenderF(lod neGlyphLOD, i, j int, view string, raw bool, win neChangeWin, ss int, flt *neFiltExpr) ([]byte, neGlyphTileMeta) {
+	return neGlyphTileRenderFH(lod, i, j, view, raw, win, ss, flt, 1)
+}
+
+// neGlyphTileRenderFH — hl: on a change tile, the client's downscale factor — the marks are grown to it (neChgGrow).
+func neGlyphTileRenderFH(lod neGlyphLOD, i, j int, view string, raw bool, win neChangeWin, ss int, flt *neFiltExpr, hl int) ([]byte, neGlyphTileMeta) {
 	var m neGlyphTileMeta
 	m.win = win
+	if view == "chg" && hl > 1 {
+		m.hl = hl
+	}
+	if view == "chg" && flt != nil {
+		m.flt = neFltMatcherFor(flt, time.Now().UnixNano())
+	}
 	g, w, s, e, n, ok := neGlyphTileGeomOf(lod, i, j)
 	if !ok {
 		return nil, m
@@ -517,6 +543,9 @@ func neGlyphTileRenderSS(lod neGlyphLOD, i, j int, view string, raw bool, win ne
 		seen := map[uint64]bool{}
 		head := neGlyphHead(win)
 		full, gone := neGlyphAgeScale(head)
+		if win.zero() {
+			full, gone = math.Inf(1), math.Inf(1) // no window: every change at full tone (the page ages only inside a window, tlAge)
+		}
 		for _, kg := range kgs {
 			c := neChangeGet(kg)
 			if c == nil {
@@ -539,6 +568,9 @@ func neGlyphTileRenderSS(lod neGlyphLOD, i, j int, view string, raw bool, win ne
 					continue
 				}
 				seen[id] = true
+				if m.flt != nil && m.flt.match(id, lon, lat) == 0 {
+					continue
+				}
 				if f := cu.FirstAt; len(f) >= 10 {
 					if f = f[:10]; m.first == "" || f < m.first {
 						m.first = f
@@ -566,6 +598,9 @@ func neGlyphTileRenderSS(lod neGlyphLOD, i, j int, view string, raw bool, win ne
 				}
 				neFillPoly(pimg, poly[:np], neGlyphChgIdx(ci, neGlyphAge(at, head, full, gone)))
 			}
+		}
+		if m.hl > 1 && m.conf+m.cand > 0 {
+			neChgGrow(pimg, m.hl)
 		}
 	default:
 		res := neCollect(nil, ids, []string{"lu"}, &neReq{public: true, format: "bin", bevFirst: true})
@@ -934,6 +969,18 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	var fltExpr *neFiltExpr
 	fltHL := 1
 	fltSP := 0.0 // vec=1&sp=<device px per tile px>: the vector veil (ne_glyph_flt_vec.go), LOD 0/1 only
+	var chgExpr *neFiltExpr // v=chg&f=: only the matching cells' change (ne_glyph_flt_match.go)
+	chgHL := 1              // v=chg&hl=: the client's downscale factor (1..16), the marks grown to the screen's pixel
+	if view == "chg" {
+		if q.Get("f") != "" {
+			if fe := neFiltParse(q.Get("f")); len(fe.Groups) > 0 || fe.K > 1 {
+				chgExpr = fe
+			}
+		}
+		if v, err := strconv.Atoi(q.Get("hl")); err == nil && v >= 1 && v <= 16 {
+			chgHL = v
+		}
+	}
 	if view == "flt" {
 		if v, err := strconv.Atoi(q.Get("hl")); err == nil && v >= 1 && v <= 16 {
 			fltHL = v
@@ -980,6 +1027,13 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	}
 	if !win.zero() {
 		key += "/t=" + win.String()
+	}
+	if chgExpr != nil {
+		tw, ts, te, tn := neGlyphTileBox(L, i, j)
+		key += "/f=" + chgExpr.Canonical() + "/" + neFidxBoxState(tw, ts, te, tn)
+	}
+	if chgHL > 1 {
+		key += "/hl" + strconv.Itoa(chgHL)
 	}
 	if ss > 1 {
 		key += "/ss" + strconv.Itoa(ss)
@@ -1091,7 +1145,7 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(pngb)
 		return
 	}
-	pngb, m := neGlyphTileRenderSS(L, i, j, view, raw, win, ss)
+	pngb, m := neGlyphTileRenderFH(L, i, j, view, raw, win, ss, chgExpr, chgHL)
 	if pngb == nil && m.sub.down {
 		// the subsidy peer is down: no picture, the legend says so
 		w.Header().Set("Cache-Control", "no-store")
@@ -1110,7 +1164,9 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	meta := m.String(time.Since(t0).Milliseconds(), view)
-	if len(m.pending) == 0 {
+	if m.flt != nil && m.flt.Pending > 0 {
+		w.Header().Set("Cache-Control", "no-store") // bins still building: the client asks again on the next move
+	} else if len(m.pending) == 0 {
 		neGlyphTileLRU.put(key, neGlyphTileJoin(meta, pngb))
 	} else {
 		w.Header().Set("Cache-Control", "public, max-age=60")
