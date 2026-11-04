@@ -944,6 +944,8 @@ func neCollect(kIDs []uint64, ids []uint64, layers []string, rq *neReq) *neResul
 		logged []uint64 // res-10 chunks the log is authoritative for (cells absent there are not read from bev/lu)
 		obs    []byte
 		obsRB  int
+		// cursors of neFindRowFrom: the run's ids ascend, every layer is walked once
+		pChg, pBev, pLu, pObs int
 	}
 	var hrs []hitRows
 	for i := 0; i < len(ids); {
@@ -999,7 +1001,8 @@ func neCollect(kIDs []uint64, ids []uint64, layers []string, rq *neReq) *neResul
 			var bestShare, supShare uint8
 			var supKG string
 			var kgs map[string]uint8
-			for _, hr := range hrs {
+			for hi := range hrs {
+				hr := &hrs[hi]
 				// declared row: with bevFirst the newest confirmed chunk-log
 				// version (peers' reports), then the peer's posted bevdirect build
 				// (the cell set the obs rows were validated against), the index
@@ -1007,25 +1010,26 @@ func neCollect(kIDs []uint64, ids []uint64, layers []string, rq *neReq) *neResul
 				// Inside a logged res-10 chunk the log's cell set is authoritative:
 				// a bev/lu row there is only a fallback flagged superseded, used
 				// when no KG's view holds the cell (ne_change_declared.go).
-				row := neFindRow(hr.chg, neLURowBytes, id)
+				logRow := neFindRowFrom(hr.chg, neLURowBytes, id, &hr.pChg)
+				row := logRow
 				if row != nil {
 					// log rows carry zero register bytes: take them from the stored row
-					if old := neFindRow(hr.bev, hr.bevRB, id); old == nil {
-						row = neRowWithRegister(row, neFindRow(hr.lu, hr.luRB, id))
+					if old := neFindRowFrom(hr.bev, hr.bevRB, id, &hr.pBev); old == nil {
+						row = neRowWithRegister(row, neFindRowFrom(hr.lu, hr.luRB, id, &hr.pLu))
 					} else {
 						row = neRowWithRegister(row, old)
 					}
 				}
 				if row == nil {
-					row = neFindRow(hr.bev, hr.bevRB, id)
+					row = neFindRowFrom(hr.bev, hr.bevRB, id, &hr.pBev)
 				}
 				if row == nil {
-					row = neFindRow(hr.lu, hr.luRB, id)
+					row = neFindRowFrom(hr.lu, hr.luRB, id, &hr.pLu)
 				}
 				if row == nil {
 					continue
 				}
-				if hr.chg != nil && neFindRow(hr.chg, neLURowBytes, id) == nil && neLoggedHas(hr.logged, id) {
+				if hr.chg != nil && logRow == nil && neLoggedHas(hr.logged, id) {
 					if sup == nil || row[8] > supShare {
 						sup, supShare, supKG = row, row[8], hr.kg.KG
 					}
@@ -1059,11 +1063,12 @@ func neCollect(kIDs []uint64, ids []uint64, layers []string, rq *neReq) *neResul
 			}
 			if wantObs {
 				var orow []byte
-				for _, hr := range hrs {
+				for hi := range hrs {
+					hr := &hrs[hi]
 					if hr.obs == nil {
 						continue
 					}
-					if r := neFindRow(hr.obs, hr.obsRB, id); r != nil {
+					if r := neFindRowFrom(hr.obs, hr.obsRB, id, &hr.pObs); r != nil {
 						orow = r
 						if res.obsFlds == nil {
 							res.obsFlds = neObsFields(hr.kg)

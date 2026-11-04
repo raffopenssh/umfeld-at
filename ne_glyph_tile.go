@@ -334,6 +334,7 @@ type neGlyphTileGeom struct {
 	lod    neGlyphLOD
 	x0, y0 float64
 	pw, ph int
+	cells  *neGlyphTileCells // the tile's cell geometry when a cell-painting view set it (ne_glyph_geom.go)
 }
 
 func neGlyphTileGeomOf(lod neGlyphLOD, i, j int) (g neGlyphTileGeom, w, s, e, n float64, ok bool) {
@@ -367,6 +368,11 @@ func neGlyphFltBleed(lod neGlyphLOD) float64 {
 
 // poly — the cell's hexagon in tile pixels (+ centroid); false when H3 fails.
 func (g *neGlyphTileGeom) poly(id uint64, poly *[8][2]float64) (np int, cx, cy float64, ok bool) {
+	if g.cells != nil {
+		if k := g.cells.find(id); k >= 0 {
+			return g.cells.poly(g, k, poly)
+		}
+	}
 	bd, err := h3.Cell(id).Boundary()
 	if err != nil || len(bd) < 3 {
 		return 0, 0, 0, false
@@ -404,16 +410,19 @@ func neGlyphTileRenderWin(lod neGlyphLOD, i, j int, view string, raw bool, win n
 	}
 	kgs := KGCodesInBBoxMem(w, s, e, n)
 	m.pending = nePendingKGs(kgs)
-	const padDeg = 0.0005 // cells whose centre sits just across the edge still paint their half of the seam
 	// The cell list is only enumerated for the views that paint every cell
-	// (base, obs, tree, dif). A LOD-2 tile holds ~280 k res-12 cells and the
-	// H3 polygon fill alone costs ~0.2 s — the overlays (chg, sub, subc, rd)
-	// paint from their own sources and report n=0 (the page reads n from the
-	// base tile only).
+	// (base, obs, tree, dif); it comes with the cell geometry from the
+	// per-tile cache (ne_glyph_geom.go) so that base, obs and dif of one tile
+	// share the H3 work. The overlays (chg, sub, subc, rd) paint from their
+	// own sources and report n=0 (the page reads n from the base tile only).
 	var ids []uint64
 	switch view {
 	case "", "obs", "tree", "dif":
-		ids = neBBoxCells(w-padDeg, s-padDeg, e+padDeg, n+padDeg)
+		if g.cells = neGlyphTileCellsGet(lod, i, j); g.cells != nil {
+			ids = g.cells.ids
+		} else {
+			ids = neBBoxCells(w-neGlyphGeomPad, s-neGlyphGeomPad, e+neGlyphGeomPad, n+neGlyphGeomPad)
+		}
 	}
 	var img image.Image
 	var poly [8][2]float64
@@ -500,7 +509,7 @@ func neGlyphTileRenderWin(lod neGlyphLOD, i, j int, view string, raw bool, win n
 					continue
 				}
 				lon, lat := neCellCentre(id)
-				if lon < w-padDeg || lon > e+padDeg || lat < s-padDeg || lat > n+padDeg {
+				if lon < w-neGlyphGeomPad || lon > e+neGlyphGeomPad || lat < s-neGlyphGeomPad || lat > n+neGlyphGeomPad {
 					continue
 				}
 				np, _, _, ok := g.poly(id, &poly)

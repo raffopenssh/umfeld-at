@@ -82,10 +82,10 @@ func main() {
 
 	// Revisit-hint memo (api_ne_revisit.go): the first compute walks the
 	// derived change files + reports cold (~10 s); warm it off the request path.
-	neNatStart()        // national cell table behind the tiles' low zooms (ne_mvt_nat.go)
-	neTreeHRestore()    // tree mode survives a restart (marker in data/ne_fidx)
-	go neTreeHLoop()    // hourly probe: ask the observed-layer peer for apex height lists once it serves them prebuilt (ne_tree_h.go)
-	go neFidxWarmLoop() // filter index: prebuild the bins behind recent near tiles (ne_glyph_fidx.go)
+	neNatStart()                                         // national cell table behind the tiles' low zooms (ne_mvt_nat.go)
+	neTreeHRestore()                                     // tree mode survives a restart (marker in data/ne_fidx)
+	go neTreeHLoop()                                     // hourly probe: ask the observed-layer peer for apex height lists once it serves them prebuilt (ne_tree_h.go)
+	go func() { neFidxPurgeEmpty(); neFidxWarmLoop() }() // filter index: prebuild the bins behind recent near tiles (ne_glyph_fidx.go)
 	go func() {
 		time.Sleep(20 * time.Second)
 		// change over time (the glyph's time strip, /ne/glyph/passes): the

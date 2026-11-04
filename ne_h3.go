@@ -106,6 +106,14 @@ func neBBoxChunks(w, s, e, n float64) []uint64 {
 // every chunk + one cgo centre call per cell": a 0.02° box is ~11 k cells,
 // so that was 11 k cgo round-trips (≈30 % of the request CPU) per answer.
 func neBBoxCells(w, s, e, n float64) []uint64 {
+	// children of a res-10 cover tested on their centre: the same set as
+	// polygonToCells at res 12, at a fifth of the cost (ne_glyph_geom.go)
+	ids, _ := neBoxCellsCentres(w, s, e, n)
+	return ids
+}
+
+// neBBoxCellsPoly — the reference enumeration (polygonToCells at res 12); tests only.
+func neBBoxCellsPoly(w, s, e, n float64) []uint64 {
 	poly := h3.GeoPolygon{GeoLoop: h3.GeoLoop{
 		h3.NewLatLng(s, w), h3.NewLatLng(n, w), h3.NewLatLng(n, e), h3.NewLatLng(s, e),
 	}}

@@ -82,6 +82,7 @@ func RegisterDebugAPI(mux *http.ServeMux) {
 			"ne_glyph_admin":   neGlyphAdminStats(), // ne_glyph_admin.go: admin rings (once) + outline memo (bounded)
 			"osm_remote_grid":  RemoteGridStats(),   // osm_remote_grid.go: 250 m remoteness bytes for the roads ink (fixed, ~3 MB)
 			"ne_glyph_tiles":   NEGlyphTileStats(),  // ne_glyph_tile.go: rendered res-12 PNG tiles (LRU, 24 MB)
+			"ne_glyph_geom":    NEGlyphGeomStats(),  // ne_glyph_geom.go: per-tile cell list + centres (LRU 96 MB)
 			"ne_passes":        nePassMemoSize(),    // ne_change_passes.go: per-KG pass tables (≤ 512) + national memo age
 			"ne_glyph_sub":     NEGlyphSubStats(),   // ne_glyph_sub.go: INVEKOS H3 bins (LRU 8 MB) + .poly outline bins (LRU 24 MB), 24 h TTL
 			"ne_fidx":          NEFidxStats(),       // ne_glyph_fidx.go: filter index bins (LRU 48 MB + disk 2 GB)

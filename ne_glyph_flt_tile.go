@@ -19,6 +19,9 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"time"
+
+	"github.com/uber/h3-go/v4"
 )
 
 // palette index 1 = veil, 2 = hairline, 3/4 = half/quarter veil (the feathered edge, neFltFeather); `th=d` = the dark theme's page colour.
@@ -260,14 +263,21 @@ func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, 
 	cx0, cy0 := neGlyphProj(w, n)
 	cx1, cy1 := neGlyphProj(e, s)
 	strokes := g.lod.px >= 40
+	stamp := time.Now().UnixNano()
 	var poly [6][2]float64
 	polyS := poly[:]
 	for bi := bi0; bi <= bi1; bi++ {
 		for bj := bj0; bj <= bj1; bj++ {
 			m.bins++
-			raw, _, err := neFidxGet(bi, bj)
-			if err != nil {
+			raw, _, ok := neFidxPeek(bi, bj, stamp)
+			if !ok {
+				// still building: this bin is painted from the national sample (res-10 faces) and the
+				// client asks again — the user keeps the map, the veil sharpens as the bins land
 				m.pending++
+				neFltPaintSample(img, g, bi, bj, expr, pad, x0, y0, x1, y1, cx0, cy0, cx1, cy1, m)
+				continue
+			}
+			if raw == nil {
 				continue
 			}
 			b, err := neFidxDecode(raw)
@@ -351,4 +361,65 @@ func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, 
 		return nil
 	}
 	return buf.Bytes()
+}
+
+// neFltPaintSample — a bin that has no index yet, painted from the national 1-in-49 sample (ne_mvt_samp.go):
+// every sample row whose centre lies in the bin stands for its res-10 parent (49 cells); the parent's face is
+// veiled when the row fails the expression. The same approximation the mid band shows (docs/ne-filter.md §8),
+// one level finer; the counts (×49) join n / match so the readout has a figure while the bins build.
+func neFltPaintSample(img *image.Paletted, g *neGlyphTileGeom, bi, bj int, expr *neFiltExpr, pad, x0, y0, x1, y1, cx0, cy0, cx1, cy1 float64, m *neGlyphFltMeta) {
+	sp := neSampGet()
+	if sp == nil {
+		return
+	}
+	mask := sp.mask(expr)
+	w, s, e, n := neFidxBox(bi, bj)
+	px := g.lod.px
+	var poly [6][2]float64
+	for _, k := range sp.rowsNear(w, s, e, n) {
+		id := sp.id(k)
+		lon, lat := neCellCentre(id)
+		if lon < w || lon >= e || lat < s || lat >= n {
+			continue
+		}
+		fx, fy := neGlyphProj(lon, lat)
+		if fx < x0 || fx > x1 || fy < y0 || fy > y1 {
+			continue
+		}
+		hit := k < len(mask) && mask[k] != 0
+		if fx >= cx0 && fx < cx1 && fy >= cy0 && fy < cy1 {
+			m.n += 49
+			if hit {
+				m.match += 49
+			}
+		}
+		if hit {
+			continue
+		}
+		p10, err := h3.Cell(id).Parent(10)
+		if err != nil {
+			continue
+		}
+		bd, err := p10.Boundary()
+		if err != nil || len(bd) != 6 {
+			continue
+		}
+		cxp, cyp := (fx-g.x0)*px, (fy-g.y0)*px
+		for v := 0; v < 6; v++ {
+			vx, vy := neGlyphProj(bd[v].Lng, bd[v].Lat)
+			dx, dy := (vx-g.x0)*px-cxp, (vy-g.y0)*px-cyp
+			if dx > 0 {
+				dx += pad
+			} else {
+				dx -= pad
+			}
+			if dy > 0 {
+				dy += pad
+			} else {
+				dy -= pad
+			}
+			poly[v] = [2]float64{cxp + dx, cyp + dy}
+		}
+		neFillPoly(img, poly[:], 1)
+	}
 }

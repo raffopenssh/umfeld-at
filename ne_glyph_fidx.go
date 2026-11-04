@@ -47,6 +47,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -101,6 +102,7 @@ func NEFidxStats() map[string]interface{} {
 	m["tree_h"] = NETreeHStats()
 	m["srtm_blk"] = neFidxSrtmBlk.stats()
 	m["warm"] = neFidxWarmStats()
+	m["pool"] = neFidxPoolStats()
 	return m
 }
 
@@ -230,7 +232,11 @@ func neFidxClusterFilter(b *neFidxBin, m []uint8, kmin int) {
 
 // cell — the H3 id of ordinal k (cgo; used by the agent endpoint only).
 func (b *neFidxBin) cell(origin h3.Cell, k int) (uint64, bool) {
-	c, err := h3.LocalIJToCell(origin, h3.CoordIJ{I: int(b.IJ[2*k]), J: int(b.IJ[2*k+1])})
+	oij, err := h3.CellToLocalIJ(origin, origin)
+	if err != nil {
+		return 0, false
+	}
+	c, err := h3.LocalIJToCell(origin, h3.CoordIJ{I: int(b.IJ[2*k]) + oij.I, J: int(b.IJ[2*k+1]) + oij.J})
 	if err != nil {
 		return 0, false
 	}
@@ -467,8 +473,10 @@ func neFidxGet(i, j int) ([]byte, string, error) {
 		c.b = b
 		return b, st, nil
 	}
+	neFidxBuildSem <- struct{}{} // a pool slot: builds never outnumber the workers, whoever asks
 	t0 := time.Now()
 	bin, err := neFidxBuild(i, j, st)
+	<-neFidxBuildSem
 	if err != nil {
 		c.err = err
 		return nil, st, err
@@ -616,11 +624,22 @@ func neFidxBuild(i, j int, st string) (*neFidxBin, error) {
 	if err != nil {
 		return nil, err
 	}
+	// H3 local IJ is anchored at the origin's base cell, not at the origin: the origin itself can sit
+	// at (19200, 38832). The bin stores IJ relative to the origin (int16 in the layout, `cell` adds
+	// the offset back) — otherwise whole regions (Vorarlberg, Tyrol west) came out as empty bins.
+	oij, err := h3.CellToLocalIJ(origin, origin)
+	if err != nil {
+		return nil, err
+	}
 	cells := make([]neFidxCell, 0, len(res.ids))
 	for k, id := range res.ids {
 		lon, lat := neCellCentre(id)
 		ij, err := h3.CellToLocalIJ(origin, h3.Cell(id))
-		if err != nil || ij.I < -30000 || ij.I > 30000 || ij.J < -30000 || ij.J > 30000 {
+		if err != nil {
+			continue
+		}
+		ij.I, ij.J = ij.I-oij.I, ij.J-oij.J
+		if ij.I < -30000 || ij.I > 30000 || ij.J < -30000 || ij.J > 30000 {
 			continue
 		}
 		c := neFidxCell{id: id, i: int32(ij.I), j: int32(ij.J), lon: lon, lat: lat, lu: res.lu[k]}
@@ -1470,7 +1489,23 @@ func (l *neFidxSrtmBlkLRU) get(k string) (*neFidxSrtm, bool) {
 	}
 	if time.Since(e.at) > l.ttl {
 		delete(l.m, k)
+		for p := range l.order {
+			if l.order[p] == k {
+				l.order = append(l.order[:p], l.order[p+1:]...)
+				break
+			}
+		}
 		return nil, false
+	}
+	// a hit moves the bin to the back: the cache is LRU, not FIFO — a block in use is not the first to go
+	for p := len(l.order) - 1; p >= 0; p-- {
+		if l.order[p] == k {
+			if p < len(l.order)-1 {
+				copy(l.order[p:], l.order[p+1:])
+				l.order[len(l.order)-1] = k
+			}
+			break
+		}
 	}
 	return e.v, true
 }
@@ -1483,7 +1518,9 @@ func (l *neFidxSrtmBlkLRU) put(k string, v *neFidxSrtm) {
 	}
 	l.m[k] = &neFidxSrtmBlkEnt{v: v, at: time.Now()}
 	for len(l.order) > l.cap {
-		delete(l.m, l.order[0])
+		if _, live := l.m[l.order[0]]; live {
+			delete(l.m, l.order[0])
+		}
 		l.order = l.order[1:]
 	}
 }
@@ -2026,4 +2063,166 @@ func handleNEGlyphFilterJS(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	_, _ = w.Write(neGlyphFilterJS)
+}
+
+// ── build pool ───────────────────────────────────────────────────────────────
+//
+// Every bin build runs on one of neFidxPoolN workers (NumCPU+1: one is usually
+// waiting on the observed-layer peer while the others compute), newest request
+// first, bins of one 0.1° block adjacent — so a peer block is consumed whole
+// right after it lands (no refetch of a block the FIFO cache dropped) and the
+// box never runs 20 tile renders × 16 builds at once. The veil tile does not
+// wait for a build: `neFidxPeek` answers from the LRU / disk or queues the bin
+// and reports it pending (the tile paints that bin from the national sample
+// and is re-asked by the client, docs/ne-filter.md §11). Direct readers
+// (`/glyph/fidx`, `/ne/filter`) still block in neFidxGet, but the build itself
+// takes a pool slot (neFidxBuildSem), so the CPU bound holds for every path.
+
+var (
+	neFidxPoolN = func() int {
+		n := runtime.NumCPU() + 1
+		if n < 2 {
+			n = 2
+		}
+		return n
+	}()
+	neFidxPoolMu   sync.Mutex
+	neFidxPoolCond = sync.NewCond(&neFidxPoolMu)
+	neFidxPoolQ    = map[[2]int]int64{} // bin → request stamp (ns); the newest is built first
+	neFidxPoolBusy int
+	neFidxPoolDone atomic.Int64
+	neFidxPoolSkip atomic.Int64 // queued bins nobody asked for in the last minute
+	neFidxBuildSem = make(chan struct{}, neFidxPoolN)
+	neFidxPoolOnce sync.Once
+	neFidxPoolFail = map[[2]int]time.Time{} // bins whose build failed: not pending for 5 min (a tile would ask forever)
+)
+
+const neFidxPoolMax = 4096
+
+func neFidxPoolStart() {
+	neFidxPoolOnce.Do(func() {
+		for n := 0; n < neFidxPoolN; n++ {
+			go neFidxPoolWorker()
+		}
+	})
+}
+
+// neFidxQueue — ask for a bin to be built in the background; stamp orders the queue (newest first).
+func neFidxQueue(i, j int, stamp int64) {
+	neFidxPoolStart()
+	neFidxPoolMu.Lock()
+	if old, ok := neFidxPoolQ[[2]int{i, j}]; ok {
+		if stamp > old {
+			neFidxPoolQ[[2]int{i, j}] = stamp
+		}
+	} else if len(neFidxPoolQ) < neFidxPoolMax {
+		neFidxPoolQ[[2]int{i, j}] = stamp
+	}
+	neFidxPoolMu.Unlock()
+	neFidxPoolCond.Signal()
+}
+
+func neFidxPoolWorker() {
+	for {
+		neFidxPoolMu.Lock()
+		for len(neFidxPoolQ) == 0 {
+			neFidxPoolCond.Wait()
+		}
+		var pick [2]int
+		var best int64 = -1
+		for k, st := range neFidxPoolQ {
+			// newest stamp first; equal stamps → by block, then bin, so one peer block is used up before the next
+			if st > best || (st == best && (k[0]>>2 < pick[0]>>2 || (k[0]>>2 == pick[0]>>2 && (k[1]>>2 < pick[1]>>2 || (k[1]>>2 == pick[1]>>2 && (k[0] < pick[0] || (k[0] == pick[0] && k[1] < pick[1]))))))) {
+				best, pick = st, k
+			}
+		}
+		delete(neFidxPoolQ, pick)
+		stale := time.Since(time.Unix(0, best)) > time.Minute
+		if !stale {
+			neFidxPoolBusy++
+		}
+		neFidxPoolMu.Unlock()
+		if stale {
+			neFidxPoolSkip.Add(1)
+			continue
+		}
+		if _, _, err := neFidxGet(pick[0], pick[1]); err != nil {
+			log.Printf("fidx pool %d/%d: %v", pick[0], pick[1], err)
+			neFidxPoolMu.Lock()
+			if len(neFidxPoolFail) > 1024 {
+				neFidxPoolFail = map[[2]int]time.Time{}
+			}
+			neFidxPoolFail[pick] = time.Now()
+			neFidxPoolMu.Unlock()
+		}
+		neFidxPoolDone.Add(1)
+		neFidxPoolMu.Lock()
+		neFidxPoolBusy--
+		neFidxPoolMu.Unlock()
+	}
+}
+
+func neFidxPoolStats() map[string]interface{} {
+	neFidxPoolMu.Lock()
+	q, b := len(neFidxPoolQ), neFidxPoolBusy
+	neFidxPoolMu.Unlock()
+	return map[string]interface{}{"workers": neFidxPoolN, "queued": q, "busy": b, "done": neFidxPoolDone.Load(), "stale_skipped": neFidxPoolSkip.Load()}
+}
+
+// neFidxPeek — the bin from the LRU or disk, never built here: a miss queues
+// the build (stamp = the request's time) and returns ok=false. A bin outside
+// Austria or one whose build failed lately is ok with nil bytes (nothing to paint, nothing pending).
+func neFidxPeek(i, j int, stamp int64) ([]byte, string, bool) {
+	if bw, bs, be, bn := neFidxBox(i, j); be < 9.4 || bw > 17.3 || bn < 46.3 || bs > 49.1 {
+		return nil, "", true
+	}
+	neFidxPoolMu.Lock()
+	failed := time.Since(neFidxPoolFail[[2]int{i, j}]) < 5*time.Minute
+	neFidxPoolMu.Unlock()
+	if failed {
+		return nil, "", true
+	}
+	st := neFidxState(i, j)
+	key := fmt.Sprintf("%d/%d/%s", i, j, st)
+	if b, ok := neFidxLRU.get(key); ok {
+		return b, st, true
+	}
+	if b := neFidxDiskRead(st, i, j); b != nil {
+		neFidxDiskHits.Add(1)
+		neFidxLRU.put(key, b)
+		return b, st, true
+	}
+	neFidxQueue(i, j, stamp)
+	return nil, st, false
+}
+
+// neFidxPurgeEmpty — one-off at start: bins written before the IJ-offset fix
+// (H3 local IJ anchored at the base cell) came out with N = 0 wherever the
+// origin's own coordinates exceeded the int16 range — whole western regions.
+// Every N = 0 bin on disk is dropped once (`.purged-v1` marks the pass); a
+// truly empty bin is rebuilt in milliseconds when asked.
+func neFidxPurgeEmpty() {
+	mark := filepath.Join(neFidxDiskDir, ".purged-v1")
+	if _, err := os.Stat(mark); err == nil {
+		return
+	}
+	n, dropped := 0, 0
+	_ = filepath.WalkDir(neFidxDiskDir, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(p, ".zst") {
+			return nil
+		}
+		n++
+		z, err := os.ReadFile(p)
+		if err != nil {
+			return nil
+		}
+		b, err := neFidxZDec.DecodeAll(z, nil)
+		if err != nil || len(b) < 15 || binary.LittleEndian.Uint32(b[7:]) == 0 {
+			_ = os.Remove(p)
+			dropped++
+		}
+		return nil
+	})
+	_ = os.WriteFile(mark, []byte(time.Now().Format(time.RFC3339)+"\n"), 0o644)
+	log.Printf("fidx purge: %d bins scanned, %d empty dropped", n, dropped)
 }

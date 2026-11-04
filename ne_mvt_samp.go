@@ -203,7 +203,21 @@ var (
 	neSampOnce    sync.Once
 	// fold9 per canonical expression: one byte per res-9 parent (≤ 7 matching samples) — 0.8 MB each, ≤ 16 MB
 	neSampFoldLRU = newNELRU(16 << 20)
+	// the full row mask per canonical expression (5.6 MB each): the veil tile paints bins that are still
+	// building from it (ne_glyph_flt_tile.go neFltPaintSample) — ≤ 8 expressions
+	neSampMaskLRU = newNELRU(48 << 20)
 )
+
+// mask — the full row mask for e, cached per state + canonical form.
+func (s *neSamp) mask(e *neFiltExpr) []uint8 {
+	key := s.Hdr.State + "/" + e.Canonical()
+	if b, ok := neSampMaskLRU.get(key); ok && len(b) == s.Hdr.N {
+		return b
+	}
+	m := s.eval(e)
+	neSampMaskLRU.put(key, m)
+	return m
+}
 
 func neSampPath() string { return filepath.Join(nePMTDir, "samp.bin") }
 
@@ -231,6 +245,7 @@ func neSampSet(s *neSamp) {
 	neSampCur = s
 	neSampMu.Unlock()
 	neSampFoldLRU.dropPrefix("")
+	neSampMaskLRU.dropPrefix("")
 	if old != nil && old.data != nil {
 		// readers hold the slices for a request at most; release the old image a little later
 		go func(b []byte) { time.Sleep(2 * time.Minute); syscall.Munmap(b) }(old.data)

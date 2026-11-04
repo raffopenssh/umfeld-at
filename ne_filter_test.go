@@ -699,16 +699,7 @@ func TestNEFilterEndpoints(t *testing.T) {
 	// membership is decided on the exact cell centre: anchor the IJ lattice on a real res-12 cell inside the bin
 	oc, _ := h3.LatLngToCell(h3.LatLng{Lat: b.Hdr.BBox[1] + 8*dl, Lng: b.Hdr.BBox[0] + 8*dl}, 12)
 	b.Hdr.Origin = neCellHex(uint64(oc))
-	oij, _ := h3.CellToLocalIJ(oc, oc) // local IJ is anchored on the base cell, not the origin: offset the lattice
-	for k := range b.IJ {
-		if k%2 == 0 {
-			b.IJ[k] += int32(oij.I)
-		} else {
-			b.IJ[k] += int32(oij.J)
-		}
-	}
-	oi, oj := float64(oij.I), float64(oij.J)
-	b.Hdr.A = []float64{x0 - oi*(xi-x0) - oj*(xj-x0), xi - x0, xj - x0, y0 - oi*(yi-y0) - oj*(yj-y0), yi - y0, yj - y0}
+	// bin IJ is relative to the origin (neFidxBuild subtracts the base-cell anchor; `cell` adds it back)
 	neFidxLRU.put(fmt.Sprintf("%d/%d/%s", i, j, st), b.encode("all"))
 	defer neFidxLRU.dropPrefix(fmt.Sprintf("%d/%d/", i, j))
 	rr = get("/api/v1/ne/filter?bbox=16.300,48.200,16.325,48.225&f=d=geb,bogus")

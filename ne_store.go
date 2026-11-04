@@ -486,6 +486,36 @@ func neFindRow(rows []byte, rb int, id uint64) []byte {
 	return nil
 }
 
+// neFindRowFrom — neFindRow for a caller walking ids in ascending order: the
+// search starts at *pos (the previous hit) and gallops forward, so a run of
+// sorted ids costs O(n) instead of a full binary search per id. Falls back to
+// the whole range when the id lies behind the cursor.
+func neFindRowFrom(rows []byte, rb int, id uint64, pos *int) []byte {
+	if rb <= 0 || len(rows) == 0 {
+		return nil
+	}
+	n := len(rows) / rb
+	lo := *pos
+	if lo < 0 || lo >= n || neRowID(rows, lo, rb) > id {
+		lo = 0
+	}
+	hi, step := lo, 1
+	for hi < n && neRowID(rows, hi, rb) < id {
+		lo = hi + 1
+		hi += step
+		step <<= 1
+	}
+	if hi > n {
+		hi = n
+	}
+	k := lo + sort.Search(hi-lo, func(q int) bool { return neRowID(rows, lo+q, rb) >= id })
+	*pos = k
+	if k < n && neRowID(rows, k, rb) == id {
+		return rows[k*rb : (k+1)*rb]
+	}
+	return nil
+}
+
 // ── input parsing ──────────────────────────────────────────────────────────
 
 // neInput — a verified input section: rows + K rows + verbatim header.
