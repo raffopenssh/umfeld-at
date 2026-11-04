@@ -394,6 +394,18 @@ func neClientIP(r *http.Request) string {
 
 // neRateAllow — O(1), no queue; sweeps idle buckets when the map grows.
 func neRateAllow(ip string, now time.Time) (bool, int) {
+	return neRateAllowN(ip, now, neRatePerSec, neRateBurst)
+}
+
+// neGlyphRatePerSec / neGlyphRateBurst — the landing glyph's own tile bucket (key ip+"#g"): one
+// full-resolution view asks ~40 tiles × 3–4 layers in a burst, which blew the 60-token API bucket
+// (7 of 120 tiles got 429 and stayed blank, 2026-11-04). The render pool bounds the CPU anyway.
+const (
+	neGlyphRatePerSec = 40.0
+	neGlyphRateBurst  = 400.0
+)
+
+func neRateAllowN(ip string, now time.Time, perSec, burst float64) (bool, int) {
 	neRateMu.Lock()
 	defer neRateMu.Unlock()
 	b := neRateBuckets[ip]
@@ -405,16 +417,16 @@ func neRateAllow(ip string, now time.Time) (bool, int) {
 				}
 			}
 		}
-		b = &neBucketT{tokens: neRateBurst, last: now}
+		b = &neBucketT{tokens: burst, last: now}
 		neRateBuckets[ip] = b
 	}
-	b.tokens = math.Min(neRateBurst, b.tokens+now.Sub(b.last).Seconds()*neRatePerSec)
+	b.tokens = math.Min(burst, b.tokens+now.Sub(b.last).Seconds()*perSec)
 	b.last = now
 	if b.tokens >= 1 {
 		b.tokens--
 		return true, 0
 	}
-	return false, int(math.Ceil((1 - b.tokens) / neRatePerSec))
+	return false, int(math.Ceil((1 - b.tokens) / perSec))
 }
 
 // neReadGate — any tier; rate-limited per IP.
@@ -424,10 +436,15 @@ func neReadGate(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 	ok, wait := neRateAllow(ip, time.Now())
+	msg := "rate limit: 20 requests/s per client (burst 60)"
+	if strings.Contains(r.URL.Path, "/ne/glyph/") {
+		ok, wait = neRateAllowN(ip+"#g", time.Now(), neGlyphRatePerSec, neGlyphRateBurst)
+		msg = "rate limit: 40 glyph tiles/s per client (burst 400)"
+	}
 	if !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(max(wait, 1)))
 		w.Header().Set("Cache-Control", "no-store")
-		apiError(w, "rate limit: 20 requests/s per client (burst 60)", http.StatusTooManyRequests)
+		apiError(w, msg, http.StatusTooManyRequests)
 		return false
 	}
 	return true

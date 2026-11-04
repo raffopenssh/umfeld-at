@@ -57,6 +57,10 @@ pulsed. And the pool worker prefers a queued bin whose peer block is already par
 stamp (`neFidxSrtmBlk.has`), consuming a block whole before the next fetch; with newest-first over a
 16-block cache a 72-block session fetched 210 blocks (600 MB from the peer). The block cache grew to
 48 blocks. What remains is the build itself (~0.7 s/bin on two cores): a region is slow once, then disk.
+Later the same day the note was cut to what is left — `filter · indexing · 130 bins left …`, then
+`filter · 7 tiles left …` when every bin is in but a tile has not landed (`1188 of 1188 bins +7 tiles`
+said nothing); those 7 were 429s from the API bucket that nothing re-asked — see ne-glyph.md
+*Nothing failed is cached for good* (`hiRetry`, the glyph's own tile bucket).
 
 (9) **The veil in QGIS and in the row** (2026-11-03): `f=` on `/ne/mvt/{z}/{x}/{y}.pbf`, `mvt.json`
 and `/ne/pmtiles` (or the `;f=` of a `share=`) renders only matching cells (res 12) / hexagons with ≥ 1

@@ -215,7 +215,11 @@ retries on your next move*, `figure.glyph.offline` is set, and every card gets o
 (`offTxt`). A pick whose cell doc never came shows `offCard()` (`pk.t='off'`, coordinates + the row).
 Nothing failed is cached for good: `hiTile`/`hiApex` drop a failed tile (`hiDrop`, `hi.bad[key]` backoff
 `NET_TTL` 2.5 s, ≤ 400 keys), `obsC`/`chgC` null entries are re-asked after `NET_TTL`, `kgOut` forgets
-a 5xx, relief forgets a failed tile. **The interaction is the retry**: `netTouch()` (`hiView`, `pinAt`)
+a 5xx, relief forgets a failed tile. **The interaction is the retry** — and for the stack's own tiles
+also a timer: `hiRetry(key, err)` re-runs `hiView(true)` after `Retry-After` (429) or a 3 s + 1.5 s·n
+back-off, ≤ `HI_RETRY` 6 times per key (`hi.badN`, cleared when the key lands or on `hiOff`). Before
+that, 7 of 120 tiles that got 429 from the API bucket stayed blank behind `… +7 tiles` until the
+reader panned (2026-11-04); the glyph now has its own bucket (`neGlyphRateBurst` 400). `netTouch()` (`hiView`, `pinAt`)
 drops marks older than `NET_TTL` — whatever the move needs is asked again and re-marks itself if it
 fails; a success clears its origin group (`netGroup`: own origin / observed peer / subsidies / other peer); a mark
 nobody re-asked fades after 12 s (`netPrune`). `jsonOf(r)` turns a non-OK answer into a rejection so a
