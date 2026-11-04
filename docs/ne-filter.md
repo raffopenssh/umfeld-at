@@ -664,3 +664,28 @@ has none either). Its `at` row for `ht` reads *tallest 50 m · 4 apices · 3 in 
 returns raw 0.5 m bounds and `apKeep` compares `round(2·height_m)`, so a 34.8 m apex stays with its matching cell.
 `neFiltApexRange` (the readout's tree figure) spans `ht` and `htmax` terms. Tests: `TestNEFiltTreeLists`,
 `TestNEFidxTreeHTail` (th plane), the reference evaluator and the JS parity bin carry lists.
+
+## 12. The veil near full zoom — vector tile, supersampled picture, two-layer ring (2026-11-04)
+
+At LOD 0/1 close to full zoom the browser upscales a tile px to several device px (z=900 on a 2× display:
+~3.4 for LOD 1); the raster veil's hexagon edges became staircases and its hairline a blurred band.
+
+- **Vector veil** `v=flt&vec=1&sp=<device px per tile px>` (`ne_glyph_flt_vec.go`): the same bins, counts
+  and cache key family, but the answer is `image/svg+xml` (`;svg=1` in the meta) — one even-odd path = the sheet
+  minus the union outline of the matching clusters (edges shared by two matching cells cancel, across bin borders
+  too via a ±1 snap-cell search), painted OVER an accent stroke of width `2/sp` on the same outline: the sheet
+  covers the outer half, one device px of the wald green (`neGlyphGroupRGB[4]`, dark theme `#6ebe8c`) remains
+  inside every hole, on the cell colour, no feather, no halo. A tile whose outline exceeds `neFltVecMaxEdges`
+  falls back to the raster render unnoticed. Client: `fltDP(lod)` = device px per tile px from the real svg width ×
+  DPR, `fltSP` (powers of √2, 1.41..8, 0 = raster), `fltQ`/`fltKV` add `vec/sp` to the query and the key.
+- **Supersampled base / obs tile** `ss=2` (`neGlyphTileRenderSS`, LOD 0/1 only): the paletted picture is painted
+  at 2× and box-filtered into an NRGBA PNG of the usual size (`neGlyphDownsampleN`, flat 2×2 blocks copied
+  straight) — coverage anti-aliasing on cell edges and the inner hexagon of the second group. Cost measured on the
+  2-core VM: +~10 ms filter, 65–90 ms warm render, 110–220 KB per LOD-1 tile (vs 30–60 KB paletted) — accepted,
+  it only happens when `fltDP ≥ 1.6` (`hiSS`); a tile already on screen is re-fetched in place (`hiResample`:
+  same `<image>`, href swapped after decode, never back down). `ss=3` exists (185 ms, 275 KB) and is not asked for.
+- **Ring** (`.cur` / `.hov`): two paths — a glow twin `.cur.g` / `.hov.g` (`curTwin` observer mirrors `d` and
+  class; a `<use>` clone would lose `vector-effect` in Blink) in the wald green, 4.5 px, opacity ~.3, under the
+  crisp 1.25 px white line; both `non-scaling-stroke`, the `drop-shadow` only under `@media(hover:hover)`.
+- Trees overlay: a tree term still switches it on (`fltTreeAuto`); once the reader switched it off by hand
+  (`hi.treeOff`, set by a non-quiet `setTree(false)` while a filter is on, cleared with the filter) it stays off.
