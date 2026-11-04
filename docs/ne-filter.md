@@ -659,7 +659,7 @@ block a user last needed with the tree set under a 6 s deadline; two fast answer
 mode on — `neFidxState` gains `;th`, so bins rebuild with lists on their next use (disk blobs of the old state age
 out under the 2 GB cap) and the sample URL changes (next national pass, peer ETag moves). A tree-set fetch slower
 than 8 s or failing in service switches the mode off for an hour (the block is re-asked with the prebuilt set at
-once). The mode **survives a restart** (marker `data/ne_fidx/tree_h.on`, `neTreeHRestore` in main — a deploy would otherwise drop the lists for two probes and flip every bin's state twice). `NE_TREE_H=0|1` pins it. Inflight: `ne_fidx.tree_h {on, pinned, probes, probe_ok, off_until}`. Tests
+once). The mode **survives a restart** (marker `data/ne_fidx/tree_h.on`, `neTreeHRestore` in main — a deploy would otherwise drop the lists for two probes and flip every bin's state twice). `NE_TREE_H=0|1` pins it. While the mode is off, a bin already built **with** the lists (state `;th`) is served as is from the LRU / disk (`neFidxGetTH` in `neFidxGet` / `neFidxPeek`): a superset, nothing is read that is not there — and the other way round the veil (`neFidxPeek` only) paints the whole-cell bin while the `;th` build is queued (`neFidxGetNoTH`; `ht` is then the `tree_h_max` floor until the next poll) — so a flip never leaves the veil `pending` for a minute per view (it used to invalidate every bin on each flip). Inflight: `ne_fidx.tree_h {on, pinned, probes, probe_ok, off_until}`. Tests
 `TestNETreeHCount`, `TestNEFiltApexRange`, `TestNEFidxTreeHTail`, `TestNEFidxBlockParseRagged`.
 
 ## 9a. `ht` = a tree of that height, not the tallest (2026-11-04)

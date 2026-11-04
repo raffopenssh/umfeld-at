@@ -29,7 +29,8 @@ export async function run(o) {
   o = o || {};
   const G = window.neGlyph;
   if (!G) return 'FAIL no window.neGlyph — run on the landing page /';
-  const R = { t0: Date.now(), ok: 0, fail: 0, lines: [], ms: {}, warn: [] };
+  const R = { t0: Date.now(), ok: 0, fail: 0, lines: [], ms: {}, warn: [], states: [], sections: [] };
+  let secT = performance.now(); const section = (name) => { const now = performance.now(); R.sections.push([name, Math.round(now - secT)]); secT = now; };
   const seed = o.seed == null ? (Date.now() % 100000) : o.seed;
   const rnd = mulberry(seed);
   const SET = o.settle || 20000;
@@ -50,7 +51,7 @@ export async function run(o) {
     if (extra) await sleep(extra);
     lat('settle', performance.now() - t); return G.state();
   };
-  const go = async (h) => { const t = performance.now(); await G.go(h); const s = await settle(); lat('go', performance.now() - t); return s; };
+  const go = async (h) => { const t = performance.now(); await G.go(h); const t1 = performance.now(); const s = await settle(); lat('go', performance.now() - t); R.states.push([h, Math.round(t1 - t), Math.round(performance.now() - t1)]); return s; };
 
   /* ── 1. server side: overview JSON, KG index, DOM dots ─────────────────────────── */
   const gj = await fetchJ('/api/v1/ne/glyph', 'glyph');
@@ -93,6 +94,7 @@ export async function run(o) {
   const sub = await fetchJ('/api/v1/ne/glyph/sub', 'sub'); subUp = sub.s === 200 && sub.j && !!sub.j.bio;
   want('sub.200|peer-down', sub.s === 200 || sub.s === 502 || sub.s === 503 || sub.s === 504, sub.s); if (!subUp) R.warn.push('subsidy peer down (' + sub.s + ') — sub tile checks relaxed');
 
+  section('server');
   /* ── 2. pick spots: KGs that hold cells, plus one change and one observed res-7 cell ── */
   const heldCodes = Array.from(new Set(C.filter(c => c[2] > 0 && c[8] >= 0).map(c => D.kg_codes[c[8]])));
   const pick = (arr) => arr.length ? arr[Math.floor(rnd() * arr.length)] : null;
@@ -106,6 +108,7 @@ export async function run(o) {
   /* every view of one tile agrees on the cell count and paints a PNG */
   if (obsCell) { const [lon, lt] = G.lonlat(obsCell[0], obsCell[1]); for (const lod of [0, 1, 2]) { const L = [0.025, 0.01, 0.1][lod], i = Math.floor(lon / L), j = Math.floor(lt / L); const ts = {}; for (const v of ['', 'obs', 'tree', 'chg', 'sub', 'subc']) ts[v] = await fetchTile(lod, i, j, v); const n0 = +ts[''].m.n; want(`tile lod${lod} views agree`, ['', 'obs', 'tree', 'chg'].every(v => ts[v].s === 200 && ts[v].png && ts[v].w === ts[''].w && ts[v].h === ts[''].h) && ['obs', 'tree'].every(v => +ts[v].m.n === n0) && ['chg', 'sub', 'subc'].every(v => !+ts[v].m.n || +ts[v].m.n >= n0) /* base/obs/tree: held rows; chg/sub/subc: n=0 by design (the page reads n off the base tile; their own counts are chg= and sub=) — parseMeta yields strings, so coerce before the falsy test */ && ts.chg.m.chg !== undefined && ['sub', 'subc'].every(v => ts[v].s !== 200 || ts[v].m.sub !== undefined) && ['sub', 'subc'].every(v => (ts[v].s === 200 && ts[v].png) || (ts[v].s === 204 && ts[v].m.down === '1')), Object.fromEntries(Object.entries(ts).map(([v, t]) => [v || 'base', [t.s, t.m.n, t.w + 'x' + t.h, t.png]]))); } }
 
+  section('xlayer');
   /* ── 4. states per spot, through share links ───────────────────────────────────── */
   const h0 = location.hash;
   for (let r = 0; r < rounds; r++) {
@@ -183,7 +186,7 @@ export async function run(o) {
         /* the funnel is a switch: off keeps the expression (f=off:<expr> in the link, no veil, row hidden), on brings it back; a link with f=off: lands held */
         s = await go(`#kg=${kg};full;z=20;f=steep`); await fw(); const fb0 = document.querySelector('.gt-flt'); fb0.click(); await sleep(500); F = G.filter();
         want(P + 'filter funnel off = held', !F.f && F.held === 'sl>=20' && !F.open && fb0.classList.contains('held') && /;f=off:sl>=20(;|$)/.test(decodeURIComponent(location.hash)) && !document.querySelector('svg.glyph').classList.contains('v-flt'), { f: F.f, held: F.held, hash: location.hash });
-        fb0.click(); await fw(); F = G.filter(); want(P + 'filter funnel on = back', F.f === 'sl>=20' && !F.held && F.open && /;f=sl>=20(;|$)/.test(decodeURIComponent(location.hash)), { f: F.f, hash: location.hash });
+        fb0.click(); for (let i = 0; i < 20 && !/;f=sl>=20(;|$)/.test(decodeURIComponent(location.hash)); i++) await sleep(100); await fw(); F = G.filter(); want(P + 'filter funnel on = back', F.f === 'sl>=20' && !F.held && F.open && /;f=sl>=20(;|$)/.test(decodeURIComponent(location.hash)), { f: F.f, hash: location.hash });
         s = await go(`#kg=${kg};full;z=20;f=off:sl>=20`); await sleep(600); F = G.filter(); want(P + 'filter link f=off: lands held', !F.f && F.held === 'sl>=20' && !F.open, { f: F.f, held: F.held });
         G.filter(''); await settle();
       }
@@ -204,7 +207,7 @@ export async function run(o) {
         s = await go(`#kg=${kg};full;subsidy;z=20`); for (const z of [200, 400, 200, 20]) { s = await go(`#kg=${kg};full;subsidy;z=${z}`); await layers(P + 'sub walk/' + z, s, { view: '', lod: z >= 300 ? 1 : z >= 110 ? 0 : 2, sub: true }); }
       }
       /* the whole matrix at lod 1 */
-      if (o.matrix !== false) { const r = await matrix(kg, { settle: SET, _want: want, P, lods: [1], trees: o.trees, relief: o.relief, subsidy: o.subsidy, ortho: o.ortho, roads: o.roads }); if (typeof r === 'string') R.lines.push(r); }
+      section(P + 'states'); if (o.matrix !== false) { const r = await matrix(kg, { settle: SET, _want: want, P, lods: [1], trees: o.trees, relief: o.relief, subsidy: o.subsidy, ortho: o.ortho, roads: o.roads, _states: R.states }); if (typeof r === 'string') R.lines.push(r); section(P + 'matrix'); }
       /* coarse full res (lod 2) at z=20 */
       s = await go(`#kg=${kg};full;z=20`); await layers(P + 'declared/20', s, { view: '', lod: 2 });
       /* pin a cell: client ↔ server agree on the cell under a lon/lat; card names it */
@@ -230,10 +233,10 @@ export async function run(o) {
       G.trees(false); G.change(false); if (o.subsidy !== false) { G.subsidy(true); G.change(true); G.view(''); G.change(false); G.change(true); G.change(false); s = await settle(); await layers(P + 'rapid sub', s, { view: '', lod: s.lod, sub: true }); G.subsidy(false); }
       /* budget stress: a walk at lod 1 across > HI_KEEP tiles of three views — eviction must hold the budget, left must come back to 0,
          nothing may paint under the lod in use, no JS error (this is the "phone freezes after a while" path, docs/ne-glyph.md §paint budget) */
-      if (o.stress !== false) { const r = await stress(kg, { settle: SET, _want: want, P }); if (typeof r === 'string') R.lines.push(r); }
+      section(P + 'interact'); if (o.stress !== false) { const r = await stress(kg, { settle: SET, _want: want, P }); if (typeof r === 'string') R.lines.push(r); section(P + 'stress'); }
     }
   }
-  if (o.offline !== false) { const r = await offline(null, { settle: SET, _want: want, _warn: R.warn }); if (typeof r === 'string') R.lines.push(r); }
+  if (o.offline !== false) { const r = await offline(null, { settle: SET, _want: want, _warn: R.warn }); if (typeof r === 'string') R.lines.push(r); section('offline'); }
   await G.go(h0 || '#');
   return finish();
 
@@ -242,7 +245,11 @@ export async function run(o) {
     const q = (a, p) => { if (!a || !a.length) return 0; const b = a.slice().sort((x, y) => x - y); return Math.round(b[Math.min(b.length - 1, Math.floor(b.length * p))]); };
     const lt = Object.keys(R.ms).map(k => `${k} p50/max ${q(R.ms[k], .5)}/${q(R.ms[k], 1)}ms n${R.ms[k].length}`).join(' · ');
     const head = `glyph soak ${R.fail ? 'FAIL' : 'PASS'} ${R.ok + R.fail} checks, ${R.fail} failed · ${((Date.now() - R.t0) / 1000).toFixed(0)}s · seed ${seed} · as_of ${D ? D.as_of : '?'} · ${lt}` + (R.warn.length ? ' · warn: ' + R.warn.join('; ') : '');
-    const out = [head].concat(R.lines).join('\n');
+    /* per-state latency table (go = applyHash + settled(), settle = the soak's extra wait): slowest first, then the section spans */
+    const tab = R.states.slice().sort((a, b) => (b[1] + b[2]) - (a[1] + a[2])).slice(0, o.table || 12).map(st => `  ${String(st[1] + st[2]).padStart(6)}ms  go ${st[1]} + settle ${st[2]}  ${st[0]}`);
+    if (tab.length) tab.unshift(`latency · ${R.states.length} states, sum ${Math.round(R.states.reduce((a, st) => a + st[1] + st[2], 0) / 1000)}s · slowest:`);
+    if (R.sections.length) tab.push('sections: ' + R.sections.map(x => `${x[0]} ${(x[1] / 1000).toFixed(1)}s`).join(' · '));
+    const out = [head].concat(R.lines, tab).join('\n');
     window.neGlyphSoak = window.neGlyphSoak || {}; window.neGlyphSoak.last = R; window.neGlyphSoak.text = out;
     return out;
   }
@@ -384,9 +391,10 @@ export async function matrix(kg, o) {
     const h = '#kg=' + kg + (c.v ? ';v=' + c.v : '') + (c.change ? ';change' : '') + (c.diff ? ';diff' : '') + (c.sub ? ';subsidy' : '') + (c.trees ? ';trees' : '') + (c.relief ? ';relief' : '') + (c.ortho ? ';ortho' : '') + (c.roads ? ';roads' : '') + ';full;z=' + Z[c.lod];
     const name = P + (c.v || 'declared') + (c.change ? '+change' : '') + (c.diff ? '+diff' : '') + (c.sub ? '+subsidy' : '') + (c.trees ? '+trees' : '') + (c.relief ? '+relief' : '') + (c.ortho ? '+photo' : '') + (c.roads ? '+roads' : '') + '/' + Z[c.lod];
     if (G.logReset) G.logReset();
-    await G.go(h); await sleep(150); let s = await G.settled(SET);
+    const tg = performance.now(); await G.go(h); await sleep(150); let s = await G.settled(SET);
     const until = Date.now() + SET; while ((s.reliefLeft > 0 || s.orthoLeft > 0 || (s.subsidy && !s.subsidyLoaded && subUp)) && Date.now() < until) { await sleep(150); s = G.state(); }
-    const f0 = R.fail; layersOf({ want, G, subUp, warn: R.warn }, name, s, { view: c.v, change: c.change, diff: c.diff, sub: c.sub, trees: c.trees, relief: c.relief, ortho: c.ortho, roads: c.roads, lod: c.lod });
+    if (o._states) o._states.push([h, Math.round(performance.now() - tg), 0]);
+    const f0 = R.fail; await layersOf({ want, G, subUp, warn: R.warn }, name, s, { view: c.v, change: c.change, diff: c.diff, sub: c.sub, trees: c.trees, relief: c.relief, ortho: c.ortho, roads: c.roads, lod: c.lod });
     const L = G.log ? G.log() : { errors: [] }; want(name + ' no js errors', L.errors.length === 0, L.errors.map(x => x.m + ' @' + x.at));
     if (o.verbose && R.fail === f0) R.lines.push('ok ' + name); n++;
   }
@@ -459,7 +467,7 @@ export async function check(hash, o) {
   if (G.logReset) G.logReset();
   await G.go(hash); await sleep(200); let s = await G.settled(o.settle || 20000);
   const until = Date.now() + (o.settle || 20000); while ((s.reliefLeft > 0 || s.orthoLeft > 0 || (s.subsidy && !s.subsidyLoaded && subUp)) && Date.now() < until) { await sleep(150); s = G.state(); }
-  layersOf({ want, G, subUp, warn: R.warn }, 'state', s, e);
+  await layersOf({ want, G, subUp, warn: R.warn }, 'state', s, e);
   const L = G.log ? G.log() : { errors: [], fetch: {} };
   want('no js errors', L.errors.length === 0, L.errors.map(x => x.m + ' @' + x.at));
   const bad = {}; for (const c in L.fetch) for (const k in L.fetch[c]) if (k !== '200' && k !== 'abort' && !(c === 'tile' && k === '204' && !subUp) && !(c === 'relief' && k === '204') && !(c === 'ortho' && k === '404')) bad[c + ':' + k] = L.fetch[c][k];

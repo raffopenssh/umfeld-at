@@ -120,7 +120,7 @@ const (
 	neGlyphChgHaloA    = 90
 )
 
-var neGlyphTileLRU = newNELRU(24 << 20) // ~24 MB ≈ 150–300 tiles
+var neGlyphTileLRU = newNELRU(64 << 20) // ~64 MB ≈ 400–800 tiles: a wide lod-2 view with change + filter + subsidy on asks ~700 tiles, 24 MB thrashed (every revisit re-rendered at ~1 s a tile)
 
 // neGlyphTilePalette — transparent + 9 groups × 4 shades + unknown.
 func neGlyphTilePalette() color.Palette {

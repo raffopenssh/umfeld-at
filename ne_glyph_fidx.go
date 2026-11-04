@@ -418,11 +418,14 @@ func neFidxBox(i, j int) (w, s, e, n float64) {
 // neFidxState — sha256[:12] over everything the bin reads: the declared/obs
 // state of every KG it touches, the subsidy release, the srtm cells epoch,
 // the layout version.
-func neFidxState(i, j int) string {
+func neFidxState(i, j int) string { return neFidxStateTHx(i, j, neFidxStateTH()) }
+
+// neFidxStateTHx — the state with a given tree-height suffix ("" | ";th").
+func neFidxStateTHx(i, j int, th string) string {
 	w, s, e, n := neFidxBox(i, j)
 	h := sha256.New()
 	h.Write([]byte("nfx" + strconv.Itoa(neFidxVer) + ";" + neGlyphTileState(KGCodesInBBoxMem(w-neFidxHaloDeg, s-neFidxHaloDeg, e+neFidxHaloDeg, n+neFidxHaloDeg), true)))
-	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch() + neFidxStateTH()))
+	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch() + th))
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
@@ -450,6 +453,9 @@ func neFidxGet(i, j int) ([]byte, string, error) {
 	key := fmt.Sprintf("%d/%d/%s", i, j, st)
 	if b, ok := neFidxLRU.get(key); ok {
 		return b, st, nil
+	}
+	if b, stT := neFidxGetTH(i, j, st); b != nil {
+		return b, stT, nil
 	}
 	neFidxMu.Lock()
 	if c := neFidxFlight[key]; c != nil {
@@ -2213,8 +2219,62 @@ func neFidxPeek(i, j int, stamp int64) ([]byte, string, bool) {
 		neFidxLRU.put(key, b)
 		return b, st, true
 	}
+	if b, stT := neFidxGetTH(i, j, st); b != nil {
+		return b, stT, true
+	}
 	neFidxQueue(i, j, stamp)
+	if b, stP := neFidxGetNoTH(i, j, st); b != nil {
+		return b, stP, true // stale-while-revalidate: the whole-cell bin paints now, the apex lists land on the next poll
+	}
 	return nil, st, false
+}
+
+// neFidxGetNoTH — tree-height mode just came on: the bin built WITHOUT the apex
+// lists still answers everything but `ht` cell-exactly (`ht` falls back to the
+// `tree_h_max` floor, ne-filter.md §9a). Served from the LRU / disk while the
+// `;th` build is queued, so a flip never leaves the veil pending for a minute.
+func neFidxGetNoTH(i, j int, st string) ([]byte, string) {
+	if neFidxStateTH() == "" {
+		return nil, ""
+	}
+	stP := neFidxStateTHx(i, j, "")
+	if stP == st {
+		return nil, ""
+	}
+	keyP := fmt.Sprintf("%d/%d/%s", i, j, stP)
+	if b, ok := neFidxLRU.get(keyP); ok {
+		return b, stP
+	}
+	if b := neFidxDiskRead(stP, i, j); b != nil {
+		neFidxDiskHits.Add(1)
+		neFidxLRU.put(keyP, b)
+		return b, stP
+	}
+	return nil, ""
+}
+
+// neFidxGetTH — tree-height mode off (a slow peer fetch parks it for an hour,
+// ne_tree_h.go): a bin built WITH the apex lists is a superset and stays valid
+// — serve it from the LRU / disk instead of rebuilding every bin twice per flap
+// (the apex column is simply not read). nil when mode is on or no such bin.
+func neFidxGetTH(i, j int, st string) ([]byte, string) {
+	if neFidxStateTH() != "" {
+		return nil, ""
+	}
+	stT := neFidxStateTHx(i, j, ";th")
+	if stT == st {
+		return nil, ""
+	}
+	keyT := fmt.Sprintf("%d/%d/%s", i, j, stT)
+	if b, ok := neFidxLRU.get(keyT); ok {
+		return b, stT
+	}
+	if b := neFidxDiskRead(stT, i, j); b != nil {
+		neFidxDiskHits.Add(1)
+		neFidxLRU.put(keyT, b)
+		return b, stT
+	}
+	return nil, ""
 }
 
 // neFidxPurgeEmpty — one-off at start: bins written before the IJ-offset fix
