@@ -3,11 +3,12 @@ package main
 // The filter veil as a glyph tile — `v=flt&f=<expr>` at every LOD, painted here
 // from the fidx bins exactly like the declared / observed / subsidy tiles
 // (docs/ne-filter.md §9): one PNG per LOD box (palette: transparent · veil ·
-// accent hairline), ~5–30 KB on the wire instead of 16 × 0.4 MB bins to the
-// phone, cached per canonical expression + bin state in the tile LRU, driven
-// by the same hiTile / hiCull / hiEvict path as every other view. Cells that
-// fail the expression get the veil; the outer boundary of matching clusters
-// gets the hairline at LOD 0/1 (sub-pixel at LOD 2). Meta: n (cells), match,
+// accent hairline · page colour · border ink), ~5–30 KB on the wire instead of
+// 16 × 0.4 MB bins to the phone, cached per canonical expression + bin state in
+// the tile LRU, driven by the same hiTile / hiCull / hiEvict path as every other
+// view. The sheet is veil, the matching cells are cut out of it, the outer
+// boundary of matching clusters gets the hairline at LOD 0/1 (sub-pixel at
+// LOD 2), and the state border is painted in (ne_glyph_border.go). Meta: n (cells), match,
 // trees (apices of the matching cells — inside the height term when the bins carry apex lists, ne_tree_h.go; tx = cells counted from a list), bins, pending (bins that failed to build — the tile is served no-store and
 // asked again on the next move).
 
@@ -25,6 +26,8 @@ import (
 )
 
 // palette index 1 = veil, 2 = hairline, 3/4 = half/quarter veil (the feathered edge, neFltFeather); `th=d` = the dark theme's page colour.
+// The veil is opaque in the bitmap; the page puts the opacity on the <g> that holds the tiles (so the tiles' bleed
+// overlaps never double up — a translucent veil twice is a visible lighter band along every tile edge).
 func neGlyphFltPalette(dark bool) color.Palette {
 	veil := color.RGBA{255, 255, 255, 255}
 	acc := color.RGBA{40, 110, 70, 230}
@@ -34,7 +37,16 @@ func neGlyphFltPalette(dark bool) color.Palette {
 	}
 	half := color.RGBA{veil.R / 2, veil.G / 2, veil.B / 2, 128}
 	quarter := color.RGBA{veil.R / 4, veil.G / 4, veil.B / 4, 64}
-	return color.Palette{color.RGBA{0, 0, 0, 0}, veil, acc, half, quarter}
+	// 5..7 = the state border (ne_glyph_border.go): the page colour on the far side (the landing page's --bg),
+	// the border ink and its soft edge (premultiplied)
+	page := color.RGBA{251, 251, 248, 255}
+	ink := color.RGBA{54, 58, 54, 225}
+	if dark {
+		page = color.RGBA{17, 19, 18, 255}
+		ink = color.RGBA{170, 176, 170, 210}
+	}
+	inkHalf := color.RGBA{ink.R / 2, ink.G / 2, ink.B / 2, ink.A / 2}
+	return color.Palette{color.RGBA{0, 0, 0, 0}, veil, acc, half, quarter, page, ink, inkHalf}
 }
 
 // neFltMinR — hole radius in tile px that makes a matching cell at least one screen pixel wide once the client has
@@ -68,48 +80,7 @@ func neFltGrow(img *image.Paletted, r float64) {
 			}
 		}
 	}
-	min := func(a, b int32) int32 {
-		if a < b {
-			return a
-		}
-		return b
-	}
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			v := d[y*w+x]
-			if x > 0 {
-				v = min(v, d[y*w+x-1]+3)
-			}
-			if y > 0 {
-				v = min(v, d[(y-1)*w+x]+3)
-				if x > 0 {
-					v = min(v, d[(y-1)*w+x-1]+4)
-				}
-				if x+1 < w {
-					v = min(v, d[(y-1)*w+x+1]+4)
-				}
-			}
-			d[y*w+x] = v
-		}
-	}
-	for y := h - 1; y >= 0; y-- {
-		for x := w - 1; x >= 0; x-- {
-			v := d[y*w+x]
-			if x+1 < w {
-				v = min(v, d[y*w+x+1]+3)
-			}
-			if y+1 < h {
-				v = min(v, d[(y+1)*w+x]+3)
-				if x+1 < w {
-					v = min(v, d[(y+1)*w+x+1]+4)
-				}
-				if x > 0 {
-					v = min(v, d[(y+1)*w+x-1]+4)
-				}
-			}
-			d[y*w+x] = v
-		}
-	}
+	neChamfer(d, w, h)
 	// … and one tile pixel of the accent hairline around the grown hole: at hl=1 a crisp 1-px ring (what the LOD 0/1
 	// strokes draw), at hl=8 an eighth of a screen pixel — the client's downscale averages it into a faint tint,
 	// so the ring fades with the zoom as continuously as the growth does; the hole itself never gains area from it
@@ -246,6 +217,12 @@ func neLineIdx(img *image.Paletted, xa, ya, xb, yb float64, ci uint8) {
 // hl: the client's downscale factor (screen px per tile px, 1..16) — sizes the minimum hole (neFltMinR).
 func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, dark bool, hl int, m *neGlyphFltMeta) []byte {
 	img := image.NewPaletted(image.Rect(0, 0, g.pw, g.ph), neGlyphFltPalette(dark))
+	// the whole sheet is veil; the matching cells are cut out of it — a cell the index does not know is veiled,
+	// never a gap; the far side of the state border is covered client-side (fltBorder) so the country's edge is
+	// the border line, not the hexagon stairs of the border cells
+	for i := range img.Pix {
+		img.Pix[i] = 1
+	}
 	px := g.lod.px
 	// the bins of the box plus the neighbours the ring reaches into: a tile paints every cell whose centre lies in its
 	// picture + mg, including the neighbours' — so two tiles' rings carry the same cells and the browser's resampled
@@ -254,7 +231,7 @@ func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, 
 	ring := (neGlyphFltBleed(g.lod)/px + mg) * 0.00115
 	bi0, bi1 := int(math.Floor((w-ring)/neFidxBinDeg+1e-9)), int(math.Floor((e+ring)/neFidxBinDeg-1e-9))
 	bj0, bj1 := int(math.Floor((s-ring)/neFidxBinDeg+1e-9)), int(math.Floor((n+ring)/neFidxBinDeg-1e-9))
-	pad := 0.6 // px: grown so neighbours fuse into one sheet and sub-pixel cells still mark
+	pad := 0.6 // px: the holes grown so neighbouring matches fuse and a sub-pixel match still marks
 	// cells whose centre lies up to a hexagon outside the picture (incl. its bleed ring) are painted too, so the ring is a
 	// full sheet and two tiles' rings overlap without a seam (a res-12 hexagon spans ≈ 0.11 frame units: 0.1° ≈ 87 units)
 	x0, y0 := g.x0-mg, g.y0-mg
@@ -318,15 +295,15 @@ func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, 
 						}
 					}
 				}
-				if mask[k] != 0 {
-					any = true
+				if mask[k] == 0 {
 					continue
 				}
+				any = true
 				cx, cy := (fx-g.x0)*px, (fy-g.y0)*px
 				for v := 0; v < 6; v++ {
 					poly[v] = [2]float64{cx + hx[v], cy + hy[v]}
 				}
-				neFillPoly(img, polyS, 1)
+				neFillPoly(img, polyS, 0)
 			}
 			if !strokes || !any {
 				continue
@@ -365,7 +342,7 @@ func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, 
 
 // neFltPaintSample — a bin that has no index yet, painted from the national 1-in-49 sample (ne_mvt_samp.go):
 // every sample row whose centre lies in the bin stands for its res-10 parent (49 cells); the parent's face is
-// veiled when the row fails the expression. The same approximation the mid band shows (docs/ne-filter.md §8),
+// cut out of the veil when the row passes the expression. The same approximation the mid band shows (docs/ne-filter.md §8),
 // one level finer; the counts (×49) join n / match so the readout has a figure while the bins build.
 func neFltPaintSample(img *image.Paletted, g *neGlyphTileGeom, bi, bj int, expr *neFiltExpr, pad, x0, y0, x1, y1, cx0, cy0, cx1, cy1 float64, m *neGlyphFltMeta) {
 	sp := neSampGet()
@@ -393,7 +370,7 @@ func neFltPaintSample(img *image.Paletted, g *neGlyphTileGeom, bi, bj int, expr 
 				m.match += 49
 			}
 		}
-		if hit {
+		if !hit {
 			continue
 		}
 		p10, err := h3.Cell(id).Parent(10)
@@ -420,6 +397,6 @@ func neFltPaintSample(img *image.Paletted, g *neGlyphTileGeom, bi, bj int, expr 
 			}
 			poly[v] = [2]float64{cxp + dx, cyp + dy}
 		}
-		neFillPoly(img, poly[:], 1)
+		neFillPoly(img, poly[:], 0)
 	}
 }
