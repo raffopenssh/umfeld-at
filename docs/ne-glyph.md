@@ -256,6 +256,11 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   else 160 tiles ≈ 1.1 MP each; `mem.keep`): `hiEvict` evicts **off-screen tiles only**, oldest first,
   so a tile on screen is never dropped and re-fetched; `mem.evicted` counts, `dbg` logs `evict n`.
   A tile evicted while its fetch is in flight still releases `hi.left` (was a leak → busy forever).
+- **Load fold** (`lf`, `LF_N=12`, `lfSync` from `gvBusy`): from 12 pending pieces (tiles + relief + photo) the card
+  folds to its header — not a fold the reader made, not while the reader is in the card — and once nothing is pending
+  for 450 ms it unfolds in the reduced mode (`setOpen(false)` first); the chevron ends the automatic part; `;min`
+  is not written to the hash while the fold is automatic. The res-9 veil sheet stays until **every** exact veil tile
+  of the view is in (`fv9Hold`), one swap at the end instead of lifting tile by tile.
 - **Downscaled tiles far out** (`ds=2|4|8`, `hiDS(lod)` from `fltDP`: a tile px covering ≤ ½ / ¼ / ⅛ device px;
   the server box-filters the finished tile with `neGlyphTileDownsample`, LRU key `/ds4`, tile key `~s4`): at the
   lowest full-res zoom a LOD-2 tile was drawn at a twentieth of its size, and a tall phone (412×915 @ 3×) needs

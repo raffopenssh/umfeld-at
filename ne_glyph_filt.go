@@ -166,7 +166,9 @@ function fvOn(){return fltActive()&&fltFar()}
    exact tile of the view has landed yet (no blank frame on the way in; the first exact bins replace it); the fetched box is padded, so a pan
    repaints nothing (the viewBox scales the paths), only a new padded box re-fetches (client cache of the last 8 boxes) */
 var fv9={k:'',d:null,ld:null,g:null,t:0,pk:'',cache:{},order:[]};function fv9On(){return fltActive()&&hi.on}
-function fv9Show(){if(!fv9.g)return;var s=fltSum(),on=fv9On()&&!!fv9.d&&!s.bins;fv9.g.style.display=on?'':'none';return on}
+/* the sheet stays until EVERY exact veil tile of the view is in (not the first one): the exact tiles land one by one under it, and the swap is a single step at the end — the sheet lifting as each tile came was the flicker of the last seconds of a load */
+function fv9Hold(){if(typeof hiWant!=='function'||!hi.on)return false;var L=hiLOD(),w=hiWant(L);for(var i=0;i<w.length;i++){var e=hi.tiles[fltKey(w[i].k)];if(!e||!e.ok)return true}return false}
+function fv9Show(){if(!fv9.g)return;var s=fltSum(),on=fv9On()&&!!fv9.d&&(!s.bins||fv9Hold());fv9.g.style.display=on?'':'none';return on}
 function fv9Key(){var a=lonlat(vb.x,vb.y+vb.h),b=lonlat(vb.x+vb.w,vb.y),p=.05;return[Math.floor(a[0]/p)*p-p,Math.floor(a[1]/p)*p-p,Math.ceil(b[0]/p)*p+p,Math.ceil(b[1]/p)*p+p].map(function(v){return v.toFixed(2)}).join(',')}
 function fv9Sync(){clearTimeout(fv9.t);if(!fv9On()){if(fv9.g)fv9.g.innerHTML='';fv9.d=null;fv9.k='';fv9.pk='';return}fv9.t=setTimeout(fv9Load,fv9.d?120:0)}
 function fv9Put(k,d){fv9.cache[k]=d;fv9.order.push(k);while(fv9.order.length>8)delete fv9.cache[fv9.order.shift()]}
