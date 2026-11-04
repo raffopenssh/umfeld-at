@@ -36,6 +36,7 @@
 package main
 
 import (
+	"runtime"
 	"bytes"
 	"crypto/sha256"
 	_ "embed"
@@ -420,6 +421,7 @@ func neGlyphTileRenderWin(lod neGlyphLOD, i, j int, view string, raw bool, win n
 	case "", "obs", "tree", "dif":
 		if g.cells = neGlyphTileCellsGet(lod, i, j); g.cells != nil {
 			ids = g.cells.ids
+			neGlyphGeomPrewarmAround(lod, i, j)
 		} else {
 			ids = neBBoxCells(w-neGlyphGeomPad, s-neGlyphGeomPad, e+neGlyphGeomPad, n+neGlyphGeomPad)
 		}
@@ -809,6 +811,10 @@ func neFillPoly(img *image.Paletted, p [][2]float64, ci uint8) {
 }
 
 // handleNEGlyphTile — GET /api/v1/ne/glyph/tile?lod=&i=&j=
+// neGlyphRenderGate — see handleNEGlyphTile; size = NumCPU (ne_glyph_geom.go
+// prewarm and the fidx pool run beside it, so the cores are shared, not doubled).
+var neGlyphRenderGate = make(chan struct{}, runtime.NumCPU())
+
 func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	if err := neGlyphLoadFrame(); err != nil {
 		apiError(w, "glyph frame unavailable", 503)
@@ -906,6 +912,25 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-NE-Notice", NENotice())
 	if b, ok := neGlyphTileLRU.get(key); ok {
 		// cached: n + ms + pending ride in a tiny trailer header
+		meta, pngb := neGlyphTileSplit(b)
+		w.Header().Set("X-NE-Tile", meta)
+		w.Header().Set("Content-Length", strconv.Itoa(len(pngb)))
+		_, _ = w.Write(pngb)
+		return
+	}
+	// render gate: at most NumCPU tiles render at once, the rest wait in request
+	// order (channel waiters are FIFO). The page asks centre-first, so the
+	// reader sees the middle tiles after one render time instead of every tile
+	// after all of them (9 tiles on 2 cores: first picture 0.4 s, not 4 s). A
+	// request the browser abandoned (pan) leaves the queue without rendering;
+	// a tile that was rendered meanwhile is served from the LRU after the wait.
+	select {
+	case neGlyphRenderGate <- struct{}{}:
+	case <-r.Context().Done():
+		return
+	}
+	defer func() { <-neGlyphRenderGate }()
+	if b, ok := neGlyphTileLRU.get(key); ok {
 		meta, pngb := neGlyphTileSplit(b)
 		w.Header().Set("X-NE-Tile", meta)
 		w.Header().Set("Content-Length", strconv.Itoa(len(pngb)))

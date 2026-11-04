@@ -12,7 +12,7 @@
 // the H3 hexagon rotates and scales by far less than a tile pixel. Cells the
 // cache does not know (the subsidy painter's own ids) take the exact cgo path.
 //
-// Bound: neGlyphGeomLRU, 96 MB (~20 LOD-2 tiles; 16 bytes per cell). Size line:
+// Bound: neGlyphGeomLRU, 192 MB (~40 LOD-2 tiles, a 5×5 ring around a full-res viewport; 16 bytes per cell). Size line:
 // `ne_glyph_geom` on the private inflight endpoint. Singleflight per tile.
 package main
 
@@ -22,6 +22,7 @@ import (
 	"math"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/uber/h3-go/v4"
 )
@@ -44,7 +45,7 @@ var (
 	neGlyphGeomLL                                      = list.New()
 	neGlyphGeomItems                                   = map[string]*list.Element{}
 	neGlyphGeomSize                                    int64
-	neGlyphGeomMax                                     int64 = 96 << 20
+	neGlyphGeomMax                                     int64 = 192 << 20
 	neGlyphGeomFly                                           = map[string]chan struct{}{}
 	neGlyphGeomHits, neGlyphGeomMiss, neGlyphGeomBuilt int64
 )
@@ -100,7 +101,8 @@ func NEGlyphGeomStats() map[string]interface{} {
 	neGlyphGeomMu.Lock()
 	defer neGlyphGeomMu.Unlock()
 	return map[string]interface{}{"entries": neGlyphGeomLL.Len(), "bytes": neGlyphGeomSize, "max_bytes": neGlyphGeomMax,
-		"hits": neGlyphGeomHits, "misses": neGlyphGeomMiss, "built": neGlyphGeomBuilt, "inflight": len(neGlyphGeomFly)}
+		"hits": neGlyphGeomHits, "misses": neGlyphGeomMiss, "built": neGlyphGeomBuilt, "inflight": len(neGlyphGeomFly),
+		"prewarm": map[string]interface{}{"queued": neGlyphGeomPreQLen(), "built": atomic.LoadInt64(&neGlyphGeomPreDone), "skipped": atomic.LoadInt64(&neGlyphGeomPreSkip)}}
 }
 
 // neGlyphHexOffsets — the six vertex offsets of the cell under (lon, lat), in
@@ -235,4 +237,93 @@ func neBoxCellsCentres(w, s, e, n float64) ([]uint64, []float64) {
 		ids[k], cs[2*k], cs[2*k+1] = c.id, c.lon, c.lat
 	}
 	return ids, cs
+}
+
+// ── prewarm ────────────────────────────────────────────────────────────────
+//
+// Every full-res (LOD 2) tile request queues the 8 tiles around it; one
+// background worker builds the geometry for those not yet cached, newest
+// request first, so a pan lands on warm tiles. One worker only (the machine
+// has few cores and the live requests come first); the queue is bounded and
+// deduplicated. Stats under inflight ne_glyph_geom.prewarm.
+
+var (
+	neGlyphGeomPreMu   sync.Mutex
+	neGlyphGeomPreQ    [][3]int // lod index, i, j; newest last
+	neGlyphGeomPreSet  = map[[3]int]bool{}
+	neGlyphGeomPreCh   = make(chan struct{}, 1)
+	neGlyphGeomPreOnce sync.Once
+	neGlyphGeomPreDone int64
+	neGlyphGeomPreSkip int64
+)
+
+const neGlyphGeomPreQMax = 64
+
+// neGlyphGeomPrewarmAround — queue the ring-1 neighbours of tile (lod, i, j).
+func neGlyphGeomPrewarmAround(lod neGlyphLOD, i, j int) {
+	li := lodIndex(lod)
+	if li != 2 {
+		return // LOD 0/1 geometry builds in ~20 ms, not worth a queue
+	}
+	neGlyphGeomPreOnce.Do(func() { go neGlyphGeomPreWorker() })
+	neGlyphGeomPreMu.Lock()
+	for dj := 1; dj >= -1; dj-- {
+		for di := -1; di <= 1; di++ {
+			if di == 0 && dj == 0 {
+				continue
+			}
+			k := [3]int{li, i + di, j + dj}
+			if neGlyphGeomPreSet[k] {
+				continue
+			}
+			w, s, e, n := neGlyphTileBox(lod, k[1], k[2])
+			if e < 9.4 || w > 17.3 || n < 46.3 || s > 49.1 {
+				continue
+			}
+			neGlyphGeomPreSet[k] = true
+			neGlyphGeomPreQ = append(neGlyphGeomPreQ, k)
+		}
+	}
+	for len(neGlyphGeomPreQ) > neGlyphGeomPreQMax {
+		delete(neGlyphGeomPreSet, neGlyphGeomPreQ[0])
+		neGlyphGeomPreQ = neGlyphGeomPreQ[1:]
+	}
+	neGlyphGeomPreMu.Unlock()
+	select {
+	case neGlyphGeomPreCh <- struct{}{}:
+	default:
+	}
+}
+
+func neGlyphGeomPreWorker() {
+	for range neGlyphGeomPreCh {
+		for {
+			neGlyphGeomPreMu.Lock()
+			if len(neGlyphGeomPreQ) == 0 {
+				neGlyphGeomPreMu.Unlock()
+				break
+			}
+			k := neGlyphGeomPreQ[len(neGlyphGeomPreQ)-1]
+			neGlyphGeomPreQ = neGlyphGeomPreQ[:len(neGlyphGeomPreQ)-1]
+			delete(neGlyphGeomPreSet, k)
+			neGlyphGeomPreMu.Unlock()
+			key := fmt.Sprintf("%d/%d/%d", k[0], k[1], k[2])
+			neGlyphGeomMu.Lock()
+			_, have := neGlyphGeomItems[key]
+			_, fly := neGlyphGeomFly[key]
+			neGlyphGeomMu.Unlock()
+			if have || fly {
+				atomic.AddInt64(&neGlyphGeomPreSkip, 1)
+				continue
+			}
+			neGlyphTileCellsGet(neGlyphLODs[k[0]], k[1], k[2])
+			atomic.AddInt64(&neGlyphGeomPreDone, 1)
+		}
+	}
+}
+
+func neGlyphGeomPreQLen() int {
+	neGlyphGeomPreMu.Lock()
+	defer neGlyphGeomPreMu.Unlock()
+	return len(neGlyphGeomPreQ)
 }
