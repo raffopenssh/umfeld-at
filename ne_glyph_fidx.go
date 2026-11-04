@@ -2146,6 +2146,7 @@ func neFidxPoolWorker() {
 			neFidxPoolSkip.Add(1)
 			continue
 		}
+		neRenderYield()
 		if _, _, err := neFidxGet(pick[0], pick[1]); err != nil {
 			log.Printf("fidx pool %d/%d: %v", pick[0], pick[1], err)
 			neFidxPoolMu.Lock()

@@ -76,7 +76,12 @@ func neGlyphTileCellsGet(lod neGlyphLOD, i, j int) *neGlyphTileCells {
 		neGlyphGeomFly[key] = ch
 		neGlyphGeomMiss++
 		neGlyphGeomMu.Unlock()
-		v := neGlyphTileCellsBuild(lod, i, j)
+		v := neGlyphGeomDiskRead(lod, i, j)
+		if v == nil {
+			if v = neGlyphTileCellsBuild(lod, i, j); v != nil {
+				go neGlyphGeomDiskWrite(lod, i, j, v)
+			}
+		}
 		neGlyphGeomMu.Lock()
 		delete(neGlyphGeomFly, key)
 		close(ch)
@@ -101,7 +106,7 @@ func NEGlyphGeomStats() map[string]interface{} {
 	neGlyphGeomMu.Lock()
 	defer neGlyphGeomMu.Unlock()
 	return map[string]interface{}{"entries": neGlyphGeomLL.Len(), "bytes": neGlyphGeomSize, "max_bytes": neGlyphGeomMax,
-		"hits": neGlyphGeomHits, "misses": neGlyphGeomMiss, "built": neGlyphGeomBuilt, "inflight": len(neGlyphGeomFly),
+		"hits": neGlyphGeomHits, "misses": neGlyphGeomMiss, "built": neGlyphGeomBuilt, "inflight": len(neGlyphGeomFly), "disk": neGlyphGeomDiskStats(),
 		"prewarm": map[string]interface{}{"queued": neGlyphGeomPreQLen(), "built": atomic.LoadInt64(&neGlyphGeomPreDone), "skipped": atomic.LoadInt64(&neGlyphGeomPreSkip)}}
 }
 
@@ -316,6 +321,7 @@ func neGlyphGeomPreWorker() {
 				atomic.AddInt64(&neGlyphGeomPreSkip, 1)
 				continue
 			}
+			neRenderYield()
 			neGlyphTileCellsGet(neGlyphLODs[k[0]], k[1], k[2])
 			atomic.AddInt64(&neGlyphGeomPreDone, 1)
 		}

@@ -36,7 +36,6 @@
 package main
 
 import (
-	"runtime"
 	"bytes"
 	"crypto/sha256"
 	_ "embed"
@@ -48,6 +47,7 @@ import (
 	"image/png"
 	"math"
 	"net/http"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -814,6 +814,17 @@ func neFillPoly(img *image.Paletted, p [][2]float64, ci uint8) {
 // neGlyphRenderGate — see handleNEGlyphTile; size = NumCPU (ne_glyph_geom.go
 // prewarm and the fidx pool run beside it, so the cores are shared, not doubled).
 var neGlyphRenderGate = make(chan struct{}, runtime.NumCPU())
+
+// neRenderYield — background builders (geometry prewarm, fidx pool) call this
+// before each unit of work: while every render slot is busy they wait, so a
+// reader's tiles get the cores first (two cores: a prewarm beside two
+// renders would stretch each by a third). Bounded wait — a long render queue
+// must not starve the builders.
+func neRenderYield() {
+	for k := 0; k < 40 && len(neGlyphRenderGate) == cap(neGlyphRenderGate); k++ {
+		time.Sleep(25 * time.Millisecond)
+	}
+}
 
 func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	if err := neGlyphLoadFrame(); err != nil {

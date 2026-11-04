@@ -119,3 +119,20 @@ func TestNEFindRowFrom(t *testing.T) {
 		t.Fatal("behind the cursor")
 	}
 }
+
+// TestNEGlyphGeomDiskRoundTrip — the on-disk tile decodes bit-identical.
+func TestNEGlyphGeomDiskRoundTrip(t *testing.T) {
+	src := neGlyphTileCellsBuild(neGlyphLODs[1], 400, 1900)
+	if src == nil || len(src.ids) == 0 {
+		t.Skip("no cells")
+	}
+	got, ok := neGlyphGeomDecode(neGlyphGeomEncode(src))
+	if !ok || len(got.ids) != len(src.ids) || got.x0 != src.x0 || got.fh != src.fh || got.off != src.off {
+		t.Fatalf("round trip header/len mismatch")
+	}
+	for k := range src.ids {
+		if got.ids[k] != src.ids[k] || got.c[2*k] != src.c[2*k] || got.c[2*k+1] != src.c[2*k+1] {
+			t.Fatalf("cell %d differs", k)
+		}
+	}
+}
