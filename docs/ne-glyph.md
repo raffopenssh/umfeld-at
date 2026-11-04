@@ -162,8 +162,13 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   Wheel zoom is coalesced per frame (`whl`/`wheelFlush`): deltas of one frame are summed, one
   `zoomAt` per rAF, events older than 250 ms dropped — slow office PCs otherwise replay a stale
   backlog after the hand stopped or reversed, which looked like inverted zoom.
+- **Card buttons** (`.glyph-tip`, right of the header): dock toggle `.glyph-dk` (desktop; `;below`), minimiser
+  `.glyph-mn` (phones/touch and docked desktop cards; `;min`; folds to the header line, header or chevron unfolds,
+  undocking unfolds), × `.glyph-x` (`dismiss`). The × must always be visible feedback: floating → the card slides
+  away; docked → `hide()` folds whatever is on the sheet to the one-line placeholder `PH` with the `setHTML`
+  height animation, even when the caller (`hiUnpin`, `apUnpin`) nulled `picked` before `hide()`.
 - **Share links**: `curHash()` writes `kg= cell= h3= q= v= change diff[=raw] full nofull trees relief ortho[=op] roads[=op] subsidy screen
-  at= open below card= export`; `applyHash()` parses the same (regex per token, unknown token → ignore
+  at= open min below card= export`; `applyHash()` parses the same (regex per token, unknown token → ignore
   all) and applies in order `autoSet → setView → setTree → setRelief → setOrthoOp/setOrtho → setRoadsOp/setRoads → setSub → fs → open → dock`.
   **Auto full res on a link** (`hiLand` in `applyHash`): a bare `#kg=`/`#adm=`/`#pt=` switches once the fly
   has landed (`W/vb.w ≥ HI_MIN`, `auto.by`), `;z=`/`;at=` beyond `ZMAX0` lift `ZMAX` and switch (`deep`, same
