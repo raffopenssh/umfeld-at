@@ -848,9 +848,16 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	// downscale factor (1..16: screen px per tile px) — a matching cell is grown to one screen pixel at least
 	var fltExpr *neFiltExpr
 	fltHL := 1
+	fltSP := 0.0 // vec=1&sp=<device px per tile px>: the vector veil (ne_glyph_flt_vec.go), LOD 0/1 only
 	if view == "flt" {
 		if v, err := strconv.Atoi(q.Get("hl")); err == nil && v >= 1 && v <= 16 {
 			fltHL = v
+		}
+		if q.Get("vec") == "1" && lod != 2 {
+			fltSP = 1
+			if v, err := strconv.ParseFloat(q.Get("sp"), 64); err == nil && v >= 1 && v <= 8 {
+				fltSP = math.Round(v*4) / 4
+			}
 		}
 		fe := neFiltParse(q.Get("f"))
 		if len(fe.Groups) == 0 && fe.K <= 1 {
@@ -897,6 +904,9 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	if view == "flt" {
 		tw, ts, te, tn := neGlyphTileBox(L, i, j)
 		key += "/" + fltExpr.Canonical() + "/" + q.Get("th") + strconv.Itoa(fltHL) + "/" + neFidxBoxState(tw, ts, te, tn)
+		if fltSP > 0 {
+			key += "/v" + strconv.FormatFloat(fltSP, 'f', 2, 64)
+		}
 	} else if view == "rd" {
 		// static OSM extract: no cell state in the key
 		w.Header().Set("X-Data-Attribution", "(c) OpenStreetMap contributors (ODbL) - roads + rail")
@@ -924,6 +934,9 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	if b, ok := neGlyphTileLRU.get(key); ok {
 		// cached: n + ms + pending ride in a tiny trailer header
 		meta, pngb := neGlyphTileSplit(b)
+		if strings.Contains(meta, ";svg=1") {
+			w.Header().Set("Content-Type", "image/svg+xml")
+		}
 		w.Header().Set("X-NE-Tile", meta)
 		w.Header().Set("Content-Length", strconv.Itoa(len(pngb)))
 		_, _ = w.Write(pngb)
@@ -943,6 +956,9 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	defer func() { <-neGlyphRenderGate }()
 	if b, ok := neGlyphTileLRU.get(key); ok {
 		meta, pngb := neGlyphTileSplit(b)
+		if strings.Contains(meta, ";svg=1") {
+			w.Header().Set("Content-Type", "image/svg+xml")
+		}
 		w.Header().Set("X-NE-Tile", meta)
 		w.Header().Set("Content-Length", strconv.Itoa(len(pngb)))
 		_, _ = w.Write(pngb)
@@ -956,12 +972,27 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var fm neGlyphFltMeta
-		pngb := neGlyphFltRender(&g, tw, ts, te, tn, fltExpr, q.Get("th") == "d", fltHL, &fm)
+		var pngb []byte
+		svg := false
+		if fltSP > 0 {
+			pngb = neGlyphFltRenderVec(&g, tw, ts, te, tn, fltExpr, q.Get("th") == "d", fltSP, &fm)
+			svg = pngb != nil
+			if !svg {
+				fm = neGlyphFltMeta{} // too dense for a vector outline: the raster render, counted afresh
+			}
+		}
+		if pngb == nil {
+			pngb = neGlyphFltRender(&g, tw, ts, te, tn, fltExpr, q.Get("th") == "d", fltHL, &fm)
+		}
 		if pngb == nil {
 			apiError(w, "tile render failed", 500)
 			return
 		}
 		meta := "n=" + strconv.Itoa(fm.n) + ";ms=" + strconv.FormatInt(time.Since(t0).Milliseconds(), 10) + ";" + fm.String()
+		if svg {
+			meta += ";svg=1"
+			w.Header().Set("Content-Type", "image/svg+xml")
+		}
 		if fm.pending == 0 {
 			neGlyphTileLRU.put(key, neGlyphTileJoin(meta, pngb))
 		} else {
