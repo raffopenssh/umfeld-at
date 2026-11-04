@@ -90,16 +90,18 @@ func (f *neFltMatcher) match(id uint64, lon, lat float64) uint8 {
 	return 0
 }
 
-// neChgGrow — a change mark is one res-12 cell: at LOD 2, and at LOD 0/1 zoomed out, it is narrower than a
-// screen pixel and the client's downscale averages it away. hl is the client's downscale factor (screen px per
-// tile px, like the veil's, ne_glyph_flt_tile.go neFltMinR): every painted pixel is grown to radius r = hl·0.9
-// tile px — a mark becomes ~2 screen px wide, never more, and the growth fades continuously with zoom (hl 16 → 1).
+// neChgGrow — a change mark is one res-12 cell: at LOD 2 two tile px wide, and at LOD 0/1 zoomed out the
+// client's downscale averages it away. hl is the client's downscale factor (tile px per screen px, like the
+// veil's, ne_glyph_flt_tile.go neFltMinR): every painted pixel is grown to radius r = hl·2.2 tile px, so a
+// mark reads like a tree ring — ~5 screen px across with a dark 1-screen-px rim (neGlyphIdxChgHalo) — at any
+// zoom; the growth fades with the zoom (hl 16 → 1) and at LOD 0/1 stops once a cell is wider than a pixel (hl 1).
 // Chamfer distance transform with label propagation, so a grown pixel takes the tone and age of its nearest mark.
 func neChgGrow(img *image.Paletted, hl int) {
-	if hl <= 1 {
+	if hl < 1 {
 		return
 	}
-	r := int32(math.Round(float64(hl) * 0.9 * 3)) // ×3: chamfer units
+	r := int32(math.Round(float64(hl) * 2.2 * 3)) // ×3: chamfer units
+	rh := r + int32(math.Round(float64(hl)*1.0*3)) // the rim outside
 	w, h := img.Rect.Dx(), img.Rect.Dy()
 	pix := img.Pix
 	const inf = 1 << 30
@@ -157,8 +159,13 @@ func neChgGrow(img *image.Paletted, hl int) {
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			o := y*w + x
-			if pix[y*img.Stride+x] == 0 && d[o] <= r {
+			if pix[y*img.Stride+x] != 0 {
+				continue
+			}
+			if d[o] <= r {
 				pix[y*img.Stride+x] = lab[o]
+			} else if d[o] <= rh {
+				pix[y*img.Stride+x] = neGlyphIdxChgHalo
 			}
 		}
 	}

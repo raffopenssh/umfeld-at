@@ -116,6 +116,8 @@ const (
 	neGlyphAgeFull     = 45.0
 	neGlyphAgeGone     = 365.0
 	neGlyphIdxObs      = 1 // v=obs
+	neGlyphIdxChgHalo  = 1 + 3*neGlyphAgeSteps // v=chg: the dark rim around a grown mark (neChgGrow)
+	neGlyphChgHaloA    = 90
 )
 
 var neGlyphTileLRU = newNELRU(24 << 20) // ~24 MB ≈ 150–300 tiles
@@ -169,6 +171,8 @@ func neGlyphOverlayPalette(view string) color.Palette {
 			p = append(p, color.NRGBA{mix(c[0], neGlyphAshRGB[0]), mix(c[1], neGlyphAshRGB[1]), mix(c[2], neGlyphAshRGB[2]), uint8(math.Round(float64(a) * (0.5 + 0.5*age)))})
 		}
 	}
+	// the halo of a grown mark (neChgGrow): the tree rings' dark rim, so a mark reads on relief, photo and veil
+	p = append(p, color.NRGBA{0, 0, 0, neGlyphChgHaloA})
 	return p
 }
 
@@ -437,7 +441,11 @@ func neGlyphTileRenderF(lod neGlyphLOD, i, j int, view string, raw bool, win neC
 func neGlyphTileRenderFH(lod neGlyphLOD, i, j int, view string, raw bool, win neChangeWin, ss int, flt *neFiltExpr, hl int) ([]byte, neGlyphTileMeta) {
 	var m neGlyphTileMeta
 	m.win = win
-	if view == "chg" && hl > 1 {
+	if view == "chg" && (hl > 1 || lod.px <= 10) {
+		// LOD 2 paints a res-12 cell two tile px wide: grown at every zoom (hl ≥ 1); the near LODs only once downscaled
+		if hl < 1 {
+			hl = 1
+		}
 		m.hl = hl
 	}
 	if view == "chg" && flt != nil {
@@ -599,7 +607,7 @@ func neGlyphTileRenderFH(lod neGlyphLOD, i, j int, view string, raw bool, win ne
 				neFillPoly(pimg, poly[:np], neGlyphChgIdx(ci, neGlyphAge(at, head, full, gone)))
 			}
 		}
-		if m.hl > 1 && m.conf+m.cand > 0 {
+		if m.hl >= 1 && m.conf+m.cand > 0 {
 			neChgGrow(pimg, m.hl)
 		}
 	default:
