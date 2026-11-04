@@ -39,6 +39,15 @@ the res-7 card gets a "filter n % of the cells" row, and the funnel button dims 
 bare `sl>=15`). Cached in `neGlyphTileLRU` under table state + canonical form, `max-age` 1 h, 503 without the
 table. Test `TestNEFnatEval`. Debug: `?dbgveil` + `window.__fv(lon,lat)` (`docs/ne-glyph.md` §Agent toolkit).
 
+(10) **Every match shows at every zoom** (2026-11-04): the veil tile carries `hl=` = screen px per tile px
+the client downscales it by (`fltHL(lod)` = `LOD px × 10 / (W/vb.w)`, integer 1..16, in the tile key so a
+step refetches the LOD's tiles). The server grows every matching hole to one screen pixel at least
+(`neFltMinR` = hl/2 tile px, chamfer distance transform `neFltGrow`, O(pixels)) and rings it with one tile
+pixel of the accent hairline. Nothing is toggled and nothing inflates: a cell narrower than a pixel becomes
+that pixel, never more; adjacent cells merge as the screen would merge them; the ring is a crisp 1 px at
+hl=1 and an eighth of a pixel (a faint tint after the downscale) at hl=8, so style and growth fade
+continuously with the zoom — the sparse `ht=40..50` and the dense `ht=35..45` read the same way.
+
 (9) **The veil in QGIS and in the row** (2026-11-03): `f=` on `/ne/mvt/{z}/{x}/{y}.pbf`, `mvt.json`
 and `/ne/pmtiles` (or the `;f=` of a `share=`) renders only matching cells (res 12) / hexagons with ≥ 1
 match (aggregates over the matching cells, `n_all`, `match_pct`; res 7–9 from the sample, `approx`) —

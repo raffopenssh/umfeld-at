@@ -818,9 +818,14 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 		apiError(w, "v=obs|tree|chg|sub|subc|dif|rd|flt", 400)
 		return
 	}
-	// v=flt: the filter veil (ne_glyph_flt_tile.go) — f= the expression, th=d the dark theme
+	// v=flt: the filter veil (ne_glyph_flt_tile.go) — f= the expression, th=d the dark theme, hl= the client's
+	// downscale factor (1..16: screen px per tile px) — a matching cell is grown to one screen pixel at least
 	var fltExpr *neFiltExpr
+	fltHL := 1
 	if view == "flt" {
+		if v, err := strconv.Atoi(q.Get("hl")); err == nil && v >= 1 && v <= 16 {
+			fltHL = v
+		}
 		fe := neFiltParse(q.Get("f"))
 		if len(fe.Groups) == 0 && fe.K <= 1 {
 			apiError(w, "v=flt needs f=<expr> (grammar: /api/v1/ne/filter/fields)", 400)
@@ -865,7 +870,7 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	}
 	if view == "flt" {
 		tw, ts, te, tn := neGlyphTileBox(L, i, j)
-		key += "/" + fltExpr.Canonical() + "/" + q.Get("th") + "/" + neFidxBoxState(tw, ts, te, tn)
+		key += "/" + fltExpr.Canonical() + "/" + q.Get("th") + strconv.Itoa(fltHL) + "/" + neFidxBoxState(tw, ts, te, tn)
 	} else if view == "rd" {
 		// static OSM extract: no cell state in the key
 		w.Header().Set("X-Data-Attribution", "(c) OpenStreetMap contributors (ODbL) - roads + rail")
@@ -906,7 +911,7 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var fm neGlyphFltMeta
-		pngb := neGlyphFltRender(&g, tw, ts, te, tn, fltExpr, q.Get("th") == "d", &fm)
+		pngb := neGlyphFltRender(&g, tw, ts, te, tn, fltExpr, q.Get("th") == "d", fltHL, &fm)
 		if pngb == nil {
 			apiError(w, "tile render failed", 500)
 			return

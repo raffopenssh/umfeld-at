@@ -34,6 +34,98 @@ func neGlyphFltPalette(dark bool) color.Palette {
 	return color.Palette{color.RGBA{0, 0, 0, 0}, veil, acc, half, quarter}
 }
 
+// neFltMinR — hole radius in tile px that makes a matching cell at least one screen pixel wide once the client has
+// downscaled the tile by hl (screen px per tile px, 1..16): the picture then shows every match at the resolution the
+// screen has — a cell narrower than a pixel becomes that pixel, never more — and the growth fades continuously with
+// zoom (hl 16 → 1) instead of switching a style on. At hl=1 nothing grows.
+func neFltMinR(hl int) float64 {
+	if hl <= 1 {
+		return 0
+	}
+	return float64(hl) / 2
+}
+
+// neFltGrow — grow every hole (matching cell, palette 0) to radius r: a chamfer (3-4) distance transform from the
+// holes over the whole picture — O(pixels), independent of how many cells match — then every veil pixel within r
+// joins the hole. Adjacent cells merge as they would on screen anyway; the hairline (2) stays.
+func neFltGrow(img *image.Paletted, r float64) {
+	if r < 0 {
+		r = 0
+	}
+	w, h := img.Rect.Dx(), img.Rect.Dy()
+	pix := img.Pix
+	const inf = 1 << 30
+	d := make([]int32, w*h)
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			if pix[y*img.Stride+x] == 0 {
+				d[y*w+x] = 0
+			} else {
+				d[y*w+x] = inf
+			}
+		}
+	}
+	min := func(a, b int32) int32 {
+		if a < b {
+			return a
+		}
+		return b
+	}
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			v := d[y*w+x]
+			if x > 0 {
+				v = min(v, d[y*w+x-1]+3)
+			}
+			if y > 0 {
+				v = min(v, d[(y-1)*w+x]+3)
+				if x > 0 {
+					v = min(v, d[(y-1)*w+x-1]+4)
+				}
+				if x+1 < w {
+					v = min(v, d[(y-1)*w+x+1]+4)
+				}
+			}
+			d[y*w+x] = v
+		}
+	}
+	for y := h - 1; y >= 0; y-- {
+		for x := w - 1; x >= 0; x-- {
+			v := d[y*w+x]
+			if x+1 < w {
+				v = min(v, d[y*w+x+1]+3)
+			}
+			if y+1 < h {
+				v = min(v, d[(y+1)*w+x]+3)
+				if x+1 < w {
+					v = min(v, d[(y+1)*w+x+1]+4)
+				}
+				if x > 0 {
+					v = min(v, d[(y+1)*w+x-1]+4)
+				}
+			}
+			d[y*w+x] = v
+		}
+	}
+	// … and one tile pixel of the accent hairline around the grown hole: at hl=1 a crisp 1-px ring (what the LOD 0/1
+	// strokes draw), at hl=8 an eighth of a screen pixel — the client's downscale averages it into a faint tint,
+	// so the ring fades with the zoom as continuously as the growth does; the hole itself never gains area from it
+	r1 := int32(math.Round(r * 3))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			o := y*img.Stride + x
+			if pix[o] != 1 {
+				continue
+			}
+			if v := d[y*w+x]; v <= r1 {
+				pix[o] = 0
+			} else if v <= r1+3 {
+				pix[o] = 2
+			}
+		}
+	}
+}
+
 type neGlyphFltMeta struct {
 	n, match, trees, tx, bins, pending int // tx: matching cells whose trees came from an apex list (= match → the figure is exact, inside the height term if one is set)
 }
@@ -148,7 +240,8 @@ func neLineIdx(img *image.Paletted, xa, ya, xb, yb float64, ci uint8) {
 }
 
 // neGlyphFltRender — the veil tile for one LOD box and expression.
-func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, dark bool, m *neGlyphFltMeta) []byte {
+// hl: the client's downscale factor (screen px per tile px, 1..16) — sizes the minimum hole (neFltMinR).
+func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, dark bool, hl int, m *neGlyphFltMeta) []byte {
 	img := image.NewPaletted(image.Rect(0, 0, g.pw, g.ph), neGlyphFltPalette(dark))
 	px := g.lod.px
 	// the bins of the box plus the neighbours the ring reaches into: a tile paints every cell whose centre lies in its
@@ -250,6 +343,7 @@ func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, 
 			}
 		}
 	}
+	neFltGrow(img, neFltMinR(hl))
 	neFltFeather(img)
 	var buf bytes.Buffer
 	enc := png.Encoder{CompressionLevel: png.DefaultCompression}
