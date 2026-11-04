@@ -1406,9 +1406,13 @@ func neCellChangeWin(id uint64, kgs map[string]uint8, win neChangeWin) map[strin
 		if err != nil {
 			continue
 		}
+		// a border cell may be digested by the neighbouring KG's chunks (its log carries the
+		// cell) while the view's majority KG holds no row for it — look through every KG the
+		// cell touches, as the tile paint and neCellCluster do, else the peek says "none"
+		// under a painted hexagon
 		cu := c.cumWin(d, win)[id]
-		if cu == nil {
-			return nil
+		if cu == nil || (!cu.Confirmed && !cu.Candidate) {
+			continue
 		}
 		out := map[string]interface{}{"since": d.since, "status": "candidate", "from": cu.FromAP, "first_seen": cu.FirstAt, "last_seen": cu.AnyAt}
 		if cu.Confirmed {
