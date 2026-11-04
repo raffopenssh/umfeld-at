@@ -124,6 +124,7 @@ type neSamp struct {
 func (s *neSamp) col(id string) []byte { return s.cols[id] }
 func (s *neSamp) n() int               { return s.Hdr.N }
 func (s *neSamp) sites() []string      { return s.Hdr.N2K }
+func (s *neSamp) treeH() *neTreeH      { return s.th }
 
 // termFn — the n2ks column is a u16 national site index here (a bin's is a
 // u8 into its own list): the catalogue dtype does not apply, so the term is

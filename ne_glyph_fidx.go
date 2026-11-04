@@ -148,7 +148,7 @@ type neFidxHdr struct {
 	BuiltMs int64        `json:"built_ms"`
 	Unk     int          `json:"unk"`
 	ResPx   float64      `json:"res_px"`
-	TH      bool         `json:"th,omitempty"` // the blob carries the apex height list tail (plane all only)
+	TH      bool         `json:"th,omitempty"` // the blob carries the apex height list tail (planes all and th)
 	I, J    int          `json:"-"`
 }
 
@@ -170,6 +170,7 @@ type neFidxBin struct {
 func (b *neFidxBin) col(id string) []byte { return b.Cols[id] }
 func (b *neFidxBin) n() int               { return b.N }
 func (b *neFidxBin) sites() []string      { return b.Hdr.N2K }
+func (b *neFidxBin) treeH() *neTreeH      { return b.TH }
 
 func ijKey(i, j int32) uint32 { return uint32(uint16(i))<<16 | uint32(uint16(j)) }
 
@@ -255,13 +256,14 @@ func neFidxColSize(dt string) int {
 	return 1
 }
 
-// encode — the blob for one plane ("core" | "ext" | "all"); cells must be row-major (j, then i).
+// encode — the blob for one plane ("core" | "ext" | "th" | "all"); cells must be row-major (j, then i).
+// "th" carries no column, only the apex height list tail (the Worker fetches it for a ht term with an upper bound).
 func (b *neFidxBin) encode(plane string) []byte {
 	hdr := b.Hdr
-	hdr.Cols = nil
-	hdr.TH = plane == "all" && b.TH != nil
+	hdr.Cols = []neFidxCol{} // never null: the th plane has no column
+	hdr.TH = (plane == "all" || plane == "th") && b.TH != nil
 	for _, f := range neFiltFields {
-		if plane != "all" && f.Plane != plane {
+		if plane == "th" || (plane != "all" && f.Plane != plane) {
 			continue
 		}
 		if b.Cols[f.ID] == nil {
@@ -1889,8 +1891,8 @@ func handleNEGlyphFidx(w http.ResponseWriter, r *http.Request) {
 	if plane == "" {
 		plane = "core"
 	}
-	if plane != "core" && plane != "ext" && plane != "all" {
-		apiError(w, "p=core|ext|all", 400)
+	if plane != "core" && plane != "ext" && plane != "th" && plane != "all" {
+		apiError(w, "p=core|ext|th|all", 400)
 		return
 	}
 	if bw, bs, be, bn := neFidxBox(i, j); be < 9.4 || bw > 17.3 || bn < 46.3 || bs > 49.1 {

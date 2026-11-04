@@ -166,7 +166,8 @@ A term is `{f, op, a, b}` (range) or `{f, set}` (set/flag).
 | `roof` ★ | set `flat pitched` | dominant roof form | obs peer `roof_dom` |
 | `stor` ★ | count | storeys of the tallest structure | obs peer `stories_max` |
 | **trees / vegetation** | | | |
-| `ht` | m | tallest tree | obs `tree_h_max` |
+| `ht` | m | **a tree of that height in the cell** — any apex of the cell's height list inside the range (§9a; lower bound alone = tallest ≥ a) | obs `tree_h` lists, `tree_h_max` as the floor |
+| `htmax` | m | tallest tree (the `ht` rule before 2026-11-04) | obs `tree_h_max` (virtual field over the `ht` column) |
 | `tn` | count | tree apices in the cell | obs `tree_n` |
 | `canopy` | % | crown cover | obs `crown_frac` |
 | `hc` ★ | m | canopy p90 | obs peer `canopy_h_p90` |
@@ -624,5 +625,33 @@ block a user last needed with the tree set under a 6 s deadline; two fast answer
 mode on — `neFidxState` gains `;th`, so bins rebuild with lists on their next use (disk blobs of the old state age
 out under the 2 GB cap) and the sample URL changes (next national pass, peer ETag moves). A tree-set fetch slower
 than 8 s or failing in service switches the mode off for an hour (the block is re-asked with the prebuilt set at
-once). `NE_TREE_H=0|1` pins it. Inflight: `ne_fidx.tree_h {on, pinned, probes, probe_ok, off_until}`. Tests
+once). The mode **survives a restart** (marker `data/ne_fidx/tree_h.on`, `neTreeHRestore` in main — a deploy would otherwise drop the lists for two probes and flip every bin's state twice). `NE_TREE_H=0|1` pins it. Inflight: `ne_fidx.tree_h {on, pinned, probes, probe_ok, off_until}`. Tests
 `TestNETreeHCount`, `TestNEFiltApexRange`, `TestNEFidxTreeHTail`, `TestNEFidxBlockParseRagged`.
+
+## 9a. `ht` = a tree of that height, not the tallest (2026-11-04)
+
+`ht=35..45` used to mean *the tallest apex of the cell is 35–45 m*: a cell with a 50 m giant and three 40 m
+trees failed it, and the trees overlay (which draws only apices in the window, `fltTreeRange`) showed nothing
+there. Now **`ht` with an upper bound reads the apex height lists of §9**: a cell matches when any apex of its
+list lies in the raw window `[ceil(2·lo), floor(2·hi)]` ∩ [1,254] **or** the `tree_h_max` column itself does (the
+tallest is a tree too, and the only one known where the cell has no apex ≥ 3 m). With only a lower bound (`ht>=20`,
+`tall-trees`, `giants`) the column is exact already (max ≥ a ⇔ some apex ≥ a) and the lists are not consulted;
+`ht=unk` stays the column's nodata. Where a store holds no lists (bin built outside tree mode, sample before the
+next national pass) the rule degrades to the column, i.e. to the old meaning — the same in every store, so a tile,
+the sample, `/ne/filter`, `/ne/stats/unit` and QGIS never disagree with each other for one state.
+
+**`htmax`** (aliases `tallesttree`, `treemax`, `maxtree`) is the old rule, a *virtual* field: `neFiltVirtual`,
+`Col:"ht"` — in `neFiltByID`, the catalogue (`neFiltCatalogue()`: `/filter/fields`, the reference, the Worker's
+`FIELDS`), never in `neFiltFields` (no blob or sample layout moves). `neFiltField.Lists` marks `ht`;
+`neFiltNeedsTH(e)` = a `Lists` term with a finite upper bound. Old links keep working and now say what they
+always read as: `;f=ht=35..45` veils every cell without a 35–45 m apex and draws exactly those apices.
+
+Plumbing: `neFiltTermFn` reads `fd.colID()` and, for a `Lists` term with an upper bound on a store that is a
+`neFiltTreeLists` (`neFidxBin.TH`, `neSamp.th`), compiles the list test; `neFiltMatcher` lets a store compile its
+own terms first (`neFiltTermer` — the sample's u16 `n2ks` column, which the catalogue dtype misread before). The
+Worker fetches a third plane **`p=th`** (the tail alone, no column, same lattice: `encode("th")`) when
+`needsTH(EXPR)` and the bin's core lacks `hasTH`; a `th` answer without lists marks the bin done (the server tile
+has none either). Its `at` row for `ht` reads *tallest 50 m · 4 apices · 3 in range*. The page's `fltTreeRange`
+returns raw 0.5 m bounds and `apKeep` compares `round(2·height_m)`, so a 34.8 m apex stays with its matching cell.
+`neFiltApexRange` (the readout's tree figure) spans `ht` and `htmax` terms. Tests: `TestNEFiltTreeLists`,
+`TestNEFidxTreeHTail` (th plane), the reference evaluator and the JS parity bin carry lists.

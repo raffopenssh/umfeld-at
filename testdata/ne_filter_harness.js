@@ -21,6 +21,12 @@ if (job.bin) {
   out.n = bin.n;
   out.state = bin.hdr.state;
 }
+if (job.th) {
+  const buf = Buffer.from(job.th, 'base64');
+  const t = h.decode(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+  out.th_n = t.n;
+  out.th_len = t.th ? t.th.h.length : -1;
+}
 for (const f of job.exprs) {
   const e = h.parse(f);
   out.exprs.push({ canon: h.canonical(e), words: h.words(e), ignored: e.ignored, incomplete: e.incomplete, ext: h.needsExt(e) });

@@ -82,6 +82,53 @@ func TestNEFidxTreeHTail(t *testing.T) {
 	if c, _ := neFidxDecode(b.encode("core")); c.TH != nil || c.Hdr.TH {
 		t.Fatal("core carries the tail")
 	}
+	// plane th: the tail alone, no column, same lattice
+	th, err := neFidxDecode(b.encode("th"))
+	if err != nil || th.TH == nil || len(th.Cols) != 0 || th.N != b.N || len(th.TH.H) != len(h) || th.TH.n(2) != 2 {
+		t.Fatalf("th plane: %v cols=%d", err, len(th.Cols))
+	}
+}
+
+// TestNEFiltTreeLists — §9a: `ht` with an upper bound is "a tree of that height in
+// the cell" over the apex lists; `htmax` keeps the tallest-tree rule; without
+// lists `ht` falls back to the column; lower bounds agree under every rule.
+func TestNEFiltTreeLists(t *testing.T) {
+	b := &neFidxBin{N: 4, Cols: map[string][]byte{}, IJ: []int32{0, 0, 1, 0, 2, 0, 3, 0}}
+	// cell 0: tallest 50 m with a 40 m apex · cell 1: tallest 40 m alone · cell 2: tallest 50 m, no apex in 35..45 · cell 3: unknown
+	b.Cols["ht"] = []byte{100, 80, 100, 255}
+	b.TH = &neTreeH{Off: []uint32{0, 3, 1 + 3, 2 + 4, 2 + 4}, H: []byte{20, 80, 100, 80, 10, 100}}
+	ev := func(f string) string {
+		m := neFiltEval(b, neFiltParse(f))
+		return fmt.Sprint(m)
+	}
+	for _, c := range []struct{ f, want string }{
+		{"ht=35..45", "[1 1 0 0]"},
+		{"htmax=35..45", "[0 1 0 0]"},
+		{"tallesttree=35..45", "[0 1 0 0]"},
+		{"ht>=45", "[1 0 1 0]"},
+		{"htmax>=45", "[1 0 1 0]"},
+		{"ht<=12", "[1 0 1 0]"}, // the 10 m apex of cell 0 (raw 20) and of cell 2 (raw 10 = 5 m)
+		{"htmax<=12", "[0 0 0 0]"},
+		{"ht=unk", "[0 0 0 1]"},
+		{"htmax=unk", "[0 0 0 1]"},
+		{"ht=35..45|htmax>=50", "[1 1 1 0]"},
+	} {
+		if got := ev(c.f); got != c.want {
+			t.Errorf("%s: %s want %s", c.f, got, c.want)
+		}
+	}
+	if !neFiltNeedsTH(neFiltParse("ht=35..45")) || neFiltNeedsTH(neFiltParse("ht>=20")) || neFiltNeedsTH(neFiltParse("htmax<=10")) || neFiltNeedsTH(neFiltParse("ht=unk")) {
+		t.Error("needsTH: only ht with an upper bound")
+	}
+	// without lists: the column rule for both
+	b.TH = nil
+	if ev("ht=35..45") != "[0 1 0 0]" || ev("ht<=12") != "[0 0 0 0]" {
+		t.Error("no lists: ht must fall back to the tallest-tree column")
+	}
+	// the counter's window spans both spellings
+	if lo, hi, ok := neFiltApexRange(neFiltParse("htmax=35..45")); !ok || lo != 70 || hi != 90 {
+		t.Errorf("apex range over htmax: %d %d %v", lo, hi, ok)
+	}
 }
 
 // TestNEFidxBlockParseRagged — a v2 block with tree_h_n + ragged tree_h over two bins: each bin gets its own slice of the lists.

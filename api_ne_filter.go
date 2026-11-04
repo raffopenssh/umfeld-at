@@ -41,12 +41,12 @@ func handleNEFilterFields(w http.ResponseWriter, r *http.Request) {
 	out := map[string]interface{}{
 		"version": neFidxVer,
 		"grammar": neFilterGrammar,
-		"fields":  neFiltFields,
+		"fields":  neFiltCatalogue(),
 		"words":   neFiltWords,
 		"alias":   neFiltAlias,
 		"presets": presets,
 		"bin_deg": neFidxBinDeg,
-		"index":   "/api/v1/ne/glyph/fidx?i=&j=&p=core|ext|all  (w = i·0.025, s = j·0.025; application/vnd.ne-fidx, see docs/ne-filter.md §3b)",
+		"index":   "/api/v1/ne/glyph/fidx?i=&j=&p=core|ext|th|all  (w = i·0.025, s = j·0.025; application/vnd.ne-fidx, see docs/ne-filter.md §3b; th = the apex height lists ht reads)",
 		"notice":  NENotice(),
 	}
 	if sp := neSampGet(); sp != nil && r.URL.Query().Get("hist") != "0" {

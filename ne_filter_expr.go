@@ -50,6 +50,16 @@ type neFiltField struct {
 	Group   string   `json:"group"`
 	Labels  []string `json:"labels,omitempty"` // member labels, parallel to Members (chips, legend)
 	Halo    bool     `json:"halo,omitempty"`   // cont: bit 7 = the patch touches the halo (≥ 64 for lower bounds, unknown for upper)
+	Col     string   `json:"col,omitempty"`    // virtual field: the stored column it reads (htmax → ht); empty = ID
+	Lists   bool     `json:"lists,omitempty"`  // ht: evaluated over the cell's apex height lists when the store carries them (a tree of that height in the cell, not only the tallest)
+}
+
+// colID — the column a field reads.
+func (fd *neFiltField) colID() string {
+	if fd.Col != "" {
+		return fd.Col
+	}
+	return fd.ID
 }
 
 var neFiltAspect = []string{"n", "ne", "e", "se", "s", "sw", "w", "nw", "flat"}
@@ -69,7 +79,7 @@ var neFiltFields = []neFiltField{
 	{ID: "h", Label: "object height p90", Kind: nfNum, Unit: "m", Plane: "core", Dtype: "u8", Scale: 0.5, Nodata: 255, Min: 0, Max: 60, Source: "srtm h_p90", Group: "object"},
 	{ID: "hmax", Label: "object height max", Kind: nfNum, Unit: "m", Plane: "core", Dtype: "u8", Scale: 0.5, Nodata: 255, Min: 0, Max: 80, Source: "srtm h_max", Group: "object"},
 	{ID: "hb", Label: "tallest structure", Kind: nfNum, Unit: "m", Plane: "core", Dtype: "u8", Scale: 0.5, Nodata: 255, Min: 0, Max: 60, Source: "srtm bld_h_max", Group: "structures"},
-	{ID: "ht", Label: "tallest tree", Kind: nfNum, Unit: "m", Plane: "core", Dtype: "u8", Scale: 0.5, Nodata: 255, Min: 0, Max: 60, Source: "srtm tree_h_max", Group: "trees"},
+	{ID: "ht", Label: "tree height", Kind: nfNum, Unit: "m", Plane: "core", Dtype: "u8", Scale: 0.5, Nodata: 255, Min: 0, Max: 60, Source: "srtm tree_h (every apex ≥ 3 m of the cell; tree_h_max where lists are not held yet)", Group: "trees", Lists: true},
 	{ID: "bn", Label: "structures in the cell", Kind: nfNum, Unit: "", Plane: "core", Dtype: "u8", Scale: 1, Nodata: 255, Min: 0, Max: 20, Source: "srtm obs_bld_n", Group: "structures"},
 	{ID: "bcov", Label: "structure cover", Kind: nfNum, Unit: "%", Plane: "core", Dtype: "u8", Scale: 100.0 / 255, Nodata: 255, Min: 0, Max: 100, Source: "srtm obs_bld_cover", Group: "structures"},
 	{ID: "sl", Label: "slope", Kind: nfNum, Unit: "°", Plane: "core", Dtype: "u8", Scale: 1, Nodata: 255, Min: 0, Max: 70, Source: "srtm slope_mean (obs row, else cells bin)", Group: "terrain"},
@@ -117,6 +127,24 @@ var neFiltFields = []neFiltField{
 	{ID: "rem", Label: "remoteness", Kind: nfNum, Unit: "/100", Plane: "ext", Dtype: "u8", Scale: 1, Nodata: 255, Min: 0, Max: 100, Source: "OSM remoteness grid 250 m (major roads, transit, settlements; docs/osm-proximity.md)", Group: "nearby"},
 }
 
+// neFiltVirtual — fields that read an existing column under another rule
+// (docs/ne-filter.md §9a). Not in neFiltFields: they own no column, so no
+// blob / sample layout changes. Part of the catalogue (/filter/fields, the
+// reference, the Worker) and of neFiltByID.
+var neFiltVirtual = []neFiltField{
+	{ID: "htmax", Label: "tallest tree", Kind: nfNum, Unit: "m", Plane: "core", Dtype: "u8", Scale: 0.5, Nodata: 255, Min: 0, Max: 60, Source: "srtm tree_h_max (the ht rule before 2026-11-04: the cell's tallest apex in the range)", Group: "trees", Col: "ht"},
+}
+
+// neFiltCatalogue — every field a reader may name: the columns + the virtual ones.
+func neFiltCatalogue() []neFiltField {
+	out := make([]neFiltField, 0, len(neFiltFields)+len(neFiltVirtual))
+	out = append(out, neFiltFields...)
+	for _, f := range neFiltVirtual {
+		out = append(out, *neFiltByID[f.ID])
+	}
+	return out
+}
+
 var neFiltGroupLabels = []string{"buildings", "building land", "cropland", "grassland", "forest", "water", "traffic", "alpine", "other"}
 var neFiltSubLabels = []string{"none", "arable", "grassland", "alpine pasture", "vineyard", "permanent crops", "landscape elements", "other"}
 
@@ -138,6 +166,9 @@ var neFiltByID = func() map[string]*neFiltField {
 		}
 		m[f.ID] = f
 	}
+	for i := range neFiltVirtual {
+		m[neFiltVirtual[i].ID] = &neFiltVirtual[i]
+	}
 	return m
 }()
 
@@ -148,7 +179,7 @@ var neFiltByID = func() map[string]*neFiltField {
 var neFiltAlias = map[string]string{
 	"tree": "ht", "trees": "ht", "treeheight": "ht", "height": "h", "slope": "sl", "elevation": "el",
 	"building": "hb", "buildings": "hb", "structure": "hb", "structures": "hb", "canopycover": "canopy", "crown": "canopy",
-	"use": "d", "declared": "d", "observed": "o", "subsidy": "sub", "claim": "sub", "natura": "n2k", "road": "rd", "water": "wat", "remoteness": "rem", "giant": "ht",
+	"use": "d", "declared": "d", "observed": "o", "subsidy": "sub", "claim": "sub", "natura": "n2k", "road": "rd", "water": "wat", "remoteness": "rem", "giant": "ht", "tallesttree": "htmax", "treemax": "htmax", "maxtree": "htmax",
 	"aspect": "as", "orientation": "as", "facing": "as", "exposure": "as", "exposition": "as",
 }
 
@@ -418,6 +449,20 @@ func neFiltNeedsExt(e *neFiltExpr) bool {
 	for _, g := range e.Groups {
 		for _, t := range g {
 			if fd := neFiltByID[t.F]; fd != nil && fd.Plane == "ext" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// neFiltNeedsTH — does the expression need the apex height lists (a `ht`
+// term with an upper bound)? Lower bounds alone are exact on the tallest-tree
+// column: max ≥ a ⇔ some apex ≥ a. The Worker fetches p=th then.
+func neFiltNeedsTH(e *neFiltExpr) bool {
+	for _, g := range e.Groups {
+		for _, t := range g {
+			if fd := neFiltByID[t.F]; fd != nil && fd.Lists && !t.Unk && !math.IsNaN(t.Hi) {
 				return true
 			}
 		}
@@ -874,6 +919,18 @@ type neFiltCols interface {
 	sites() []string
 }
 
+// neFiltTreeLists — a store that holds the per-cell apex height lists (bins
+// in tree mode, the national sample): `ht` reads them (docs/ne-filter.md §9a).
+type neFiltTreeLists interface {
+	treeH() *neTreeH
+}
+
+// neFiltTermer — a store that compiles some terms itself (the sample's u16
+// n2ks column); ok=false hands the term back to neFiltTermFn.
+type neFiltTermer interface {
+	termFn(t neFiltTerm) (func(int) bool, bool)
+}
+
 // rawAt — the raw integer of cell k in a column (dtype-aware).
 func neFiltRaw(fd *neFiltField, c []byte, k int) int {
 	switch fd.Dtype {
@@ -926,7 +983,7 @@ func neFiltTermFn(cols neFiltCols, t neFiltTerm) func(k int) bool {
 	if fd == nil {
 		return func(int) bool { return false }
 	}
-	c := cols.col(fd.ID)
+	c := cols.col(fd.colID())
 	if c == nil {
 		// column not in this bin (plane not loaded / older index): unknown everywhere
 		if t.Unk {
@@ -991,6 +1048,26 @@ func neFiltTermFn(cols neFiltCols, t neFiltTerm) func(k int) bool {
 			return v >= lo && v <= hi
 		}
 	}
+	if fd.Lists && hi != math.MaxInt32 {
+		// ht with an upper bound: a tree of that height in the cell — any apex of the
+		// list inside [lo,hi], or the tallest-tree column itself (the tallest is a tree
+		// too; and the only tree we know where lists are not held / the cell has no
+		// apex ≥ 3 m). Without lists this is the pre-2026-11-04 rule (= htmax).
+		var th *neTreeH
+		if l, ok := cols.(neFiltTreeLists); ok {
+			th = l.treeH()
+		}
+		if th != nil && len(th.Off) == cols.n()+1 {
+			llo, lhi := max(lo, 1), min(hi, 254)
+			return func(k int) bool {
+				v := neFiltRaw(fd, c, k)
+				if v != nd && v >= lo && v <= hi {
+					return true
+				}
+				return th.count(k, llo, lhi) > 0
+			}
+		}
+	}
 	zeroNone := fd.ID == "loss" || fd.ID == "snar" || fd.ID == "snar2" // 0 = none: never a value
 	return func(k int) bool {
 		v := neFiltRaw(fd, c, k)
@@ -1009,8 +1086,15 @@ func neFiltMatcher(cols neFiltCols, e *neFiltExpr) func(int) bool {
 		return func(int) bool { return true }
 	}
 	fns := make([][]func(int) bool, len(e.Groups))
+	own, _ := cols.(neFiltTermer)
 	for gi, g := range e.Groups {
 		for _, t := range g {
+			if own != nil {
+				if f, ok := own.termFn(t); ok {
+					fns[gi] = append(fns[gi], f)
+					continue
+				}
+			}
 			fns[gi] = append(fns[gi], neFiltTermFn(cols, t))
 		}
 	}

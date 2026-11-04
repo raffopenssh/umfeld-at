@@ -1,18 +1,19 @@
 package main
 
 import (
-	"image"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	h3 "github.com/uber/h3-go/v4"
+	"image"
 	"math"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -78,6 +79,26 @@ func newNEFiltTestBin(seed int64) *neFidxBin {
 		}
 		b.Cols[fd.ID] = c
 	}
+	// apex height lists (§9a): the tallest apex is the ht column; below it a few
+	// more, ascending; cells whose tallest is < 3 m (raw 6) or unknown hold none
+	ht := b.Cols["ht"]
+	th := &neTreeH{Off: make([]uint32, b.N+1)}
+	for k := 0; k < b.N; k++ {
+		th.Off[k] = uint32(len(th.H))
+		v := int(ht[k])
+		if v == 255 || v < 6 {
+			continue
+		}
+		var l []byte
+		for q := rng.Intn(6); q > 0; q-- {
+			l = append(l, byte(6+rng.Intn(v-6+1)))
+		}
+		l = append(l, byte(v))
+		sort.Slice(l, func(a, c int) bool { return l[a] < l[c] })
+		th.H = append(th.H, l...)
+	}
+	th.Off[b.N] = uint32(len(th.H))
+	b.TH = th
 	return b
 }
 
@@ -92,7 +113,7 @@ func TestNEFiltParseCanonical(t *testing.T) {
 		{"d=geb+bau+geb", "d=bau+geb", "declared use building land / buildings", 0, false},
 		{" steep , forest ", "sl>=20,d=wald", "slope ≥ 20° (36 %) · declared use forest", 0, false},
 		{"hb=12..30", "hb=12..30", "tallest structure 12–30 m", 0, false},
-		{"hb<=5|ht>=25", "hb<=5|ht>=25", "(tallest structure ≤ 5 m or tallest tree ≥ 25 m)", 0, false},
+		{"hb<=5|ht>=25", "hb<=5|ht>=25", "(tallest structure ≤ 5 m or tree height ≥ 25 m)", 0, false},
 		{"n2k", "n2k", "Natura 2000", 0, false},
 		{"n2k=unk", "n2k=unk", "Natura 2000 unknown", 0, false},
 		{"n2ks=at1304000", "n2ks=AT1304000", "site AT1304000", 0, false},
@@ -118,8 +139,10 @@ func TestNEFiltParseCanonical(t *testing.T) {
 		{"trees", "", "", 1, false},
 		{"d=", "", "", 1, false},
 		{"ht,d=wald", "d=wald", "declared use forest", 1, false},
-		{"ht between 10 and 20", "ht=10..20", "tallest tree 10–20 m", 0, false},
-		{"trees 10 to 20 m", "ht=10..20", "tallest tree 10–20 m", 0, false},
+		{"ht between 10 and 20", "ht=10..20", "tree height 10–20 m", 0, false},
+		{"tallesttree between 10 and 20", "htmax=10..20", "tallest tree 10–20 m", 0, false},
+		{"htmax>=30|ht=35..45", "ht=35..45|htmax>=30", "(tallest tree ≥ 30 m or tree height 35–45 m)", 0, false},
+		{"trees 10 to 20 m", "ht=10..20", "tree height 10–20 m", 0, false},
 		{"slope at least 15 %", "sl>=8.5", "slope ≥ 8.5° (15 %)", 0, false},
 		{"sl=5..15", "sl=5..15", "slope 5–15° (9–27 %)", 0, false},
 		{"sl>15", "sl>=15", "slope ≥ 15° (27 %)", 0, false},
@@ -231,7 +254,7 @@ func TestNEFiltIncomplete(t *testing.T) {
 			t.Errorf("%s: no values line", fd.ID)
 		}
 	}
-	if h := neFilterRefHTML(); !strings.Contains(h, `id="filter-fields"`) || !strings.Contains(h, "tallest tree") || !strings.Contains(h, "tall-trees = ht&gt;=20") {
+	if h := neFilterRefHTML(); !strings.Contains(h, `id="filter-fields"`) || !strings.Contains(h, "tallest tree") || !strings.Contains(h, "<code>htmax</code>") || !strings.Contains(h, "tall-trees = ht&gt;=20") {
 		t.Errorf("reference block incomplete")
 	}
 }
@@ -274,14 +297,14 @@ func neFiltRefEval(b *neFidxBin, e *neFiltExpr) []uint8 {
 			any := false
 			for _, t := range g {
 				fd := neFiltByID[t.F]
-				c := b.Cols[fd.ID]
+				c := b.Cols[fd.colID()]
 				v := neFiltRaw(fd, c, k)
 				nd := v == fd.Nodata
 				var hit bool
 				switch {
 				case t.Unk:
 					hit = nd
-				case nd:
+				case nd && !(fd.Lists && b.TH != nil && !math.IsNaN(t.Hi) && b.TH.Off[k+1] > b.TH.Off[k]):
 					hit = false
 				case t.Flag:
 					hit = v != 0
@@ -305,6 +328,16 @@ func neFiltRefEval(b *neFidxBin, e *neFiltExpr) []uint8 {
 					}
 				default:
 					lo, hi := neFiltBounds(fd, t)
+					if fd.Lists && hi != math.MaxInt32 && b.TH != nil {
+						// a tree of that height in the cell: the tallest (column) or any apex of the list
+						hit = !nd && v >= lo && v <= hi
+						for _, h := range b.TH.H[b.TH.Off[k]:b.TH.Off[k+1]] {
+							if int(h) >= lo && int(h) <= hi {
+								hit = true
+							}
+						}
+						break
+					}
 					if fd.Halo && v&128 != 0 {
 						hit = hi == math.MaxInt32 && lo <= 64
 					} else if (fd.ID == "loss" || fd.ID == "snar" || fd.ID == "snar2") && v == 0 {
@@ -338,6 +371,8 @@ var neFiltTestExprs = []string{
 	"d=wald|o=wald,ht>=15", "osh>=80,d=acker", "bcov>=30,bn>=2", "phen=crop", "roof=flat", "hmax>=40", "sl90>=30", "scov>=50,sub=acker",
 	"h=unk,d=geb", "bogus,d=geb", "k>=3", "hb>=0", "el<=100",
 	"ht", "trees", "d=", "sl>=", "ht<=", "bogus", "ht,d=wald", "k", // incomplete: a field without a value is a nudge, never a filter
+	// tree height over the apex lists (§9a) vs the tallest-tree rule
+	"ht=35..45", "ht<=10", "ht=20", "ht=3..4", "ht=0..2", "ht=unk", "htmax=35..45", "htmax<=10", "htmax>=20", "tallesttree>=30", "treemax=10..20", "ht=35..45|htmax>=50", "ht=10..20,d=wald", "ht<=10,k>=2", "htmax",
 	// human phrasing (neFiltNorm / norm): between, units, slope in percent, compass words and arcs
 	"ht between 10 and 20", "trees 10 to 20 m", "ht 10-20", "ht \u2265 20 m", "slope at least 15 %", "slope under 5\u00b0", "sl=5..15%", "sl between 10% and 20%", "sl>15", "el over 1500",
 	"as northwest to northeast", "as=nw..ne", "as=ne..nw", "aspect north east", "as north and south", "as=300..60", "facing s\u00fcd", "orientation=ost", "as=flat+n", "as=n+ne+e+se+s+sw+w+nw",
@@ -526,9 +561,9 @@ func TestNEFilterJSParity(t *testing.T) {
 	if err != nil {
 		t.Skip("node not installed")
 	}
-	fields := map[string]interface{}{"fields": neFiltFields, "words": neFiltWords}
+	fields := map[string]interface{}{"fields": neFiltCatalogue(), "words": neFiltWords}
 	b := newNEFiltTestBin(11)
-	job := map[string]interface{}{"fields": fields, "exprs": neFiltTestExprs, "bin": base64.StdEncoding.EncodeToString(b.encode("all"))}
+	job := map[string]interface{}{"fields": fields, "exprs": neFiltTestExprs, "bin": base64.StdEncoding.EncodeToString(b.encode("all")), "th": base64.StdEncoding.EncodeToString(b.encode("th"))}
 	jb, _ := json.Marshal(job)
 	cmd := exec.Command(node, "testdata/ne_filter_harness.js", "ne_glyph_filter.js")
 	cmd.Stdin = bytes.NewReader(jb)
@@ -551,12 +586,17 @@ func TestNEFilterJSParity(t *testing.T) {
 			} `json:"incomplete"`
 		} `json:"exprs"`
 		Masks []string `json:"masks"`
+		THN   int      `json:"th_n"`
+		THLen int      `json:"th_len"`
 	}
 	if err := json.Unmarshal(out, &res); err != nil {
 		t.Fatalf("harness output: %v\n%s", err, out)
 	}
 	if res.N != b.N || res.State != b.Hdr.State {
 		t.Fatalf("JS decode: n=%d state=%q", res.N, res.State)
+	}
+	if res.THN != b.N || res.THLen != len(b.TH.H) {
+		t.Fatalf("JS decode of plane th: n=%d lists=%d (want %d, %d)", res.THN, res.THLen, b.N, len(b.TH.H))
 	}
 	for i, f := range neFiltTestExprs {
 		e := neFiltParse(f)
@@ -618,7 +658,7 @@ func TestNEFilterEndpoints(t *testing.T) {
 		Presets []map[string]string
 		Grammar string
 	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &cat); err != nil || len(cat.Fields) != len(neFiltFields) || len(cat.Words) == 0 || len(cat.Presets) == 0 || cat.Grammar == "" {
+	if err := json.Unmarshal(rr.Body.Bytes(), &cat); err != nil || len(cat.Fields) != len(neFiltFields)+len(neFiltVirtual) || len(cat.Words) == 0 || len(cat.Presets) == 0 || cat.Grammar == "" {
 		t.Fatalf("fields payload: %v %d", err, len(cat.Fields))
 	}
 	if rr.Header().Get("Access-Control-Allow-Origin") != "*" {

@@ -27,6 +27,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -105,15 +106,15 @@ func (t *neTreeH) reorder(perm []int) *neTreeH {
 }
 
 // neFiltApexRange — the apex height window of an expression in raw 0.5 m
-// units: the union of its `ht` (tallest tree) terms; ok=false when there is
+// units: the union of its `ht` / `htmax` terms; ok=false when there is
 // none (every apex of a matching cell counts). A bare `ht=unk` yields an empty
 // window.
 func neFiltApexRange(e *neFiltExpr) (lo, hi int, ok bool) {
-	fd := neFiltByID["ht"]
 	lo, hi = math.MaxInt32, math.MinInt32
 	for _, g := range e.Groups {
 		for _, t := range g {
-			if t.F != "ht" {
+			fd := neFiltByID[t.F]
+			if fd == nil || fd.colID() != "ht" {
 				continue
 			}
 			ok = true
@@ -191,6 +192,30 @@ var (
 	neTreeHPinned   = os.Getenv("NE_TREE_H")
 )
 
+// neTreeHMarker — the mode survives a restart: a deploy must not drop the
+// lists for the two probes (≥ 7 min) and flip every bin's state hash twice.
+// The slow-fetch guard still switches it off in service.
+func neTreeHMarker() string { return filepath.Join(neFidxDiskDir, "tree_h.on") }
+
+func neTreeHRestore() {
+	if neTreeHPinned != "" {
+		return
+	}
+	if _, err := os.Stat(neTreeHMarker()); err == nil {
+		neTreeHOn.Store(true)
+		log.Printf("tree_h: on (restored from %s)", neTreeHMarker())
+	}
+}
+
+func neTreeHPersist(on bool) {
+	if on {
+		os.MkdirAll(neFidxDiskDir, 0o755)
+		os.WriteFile(neTreeHMarker(), []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o644)
+		return
+	}
+	os.Remove(neTreeHMarker())
+}
+
 // neTreeHMode — whether bin / sample fetches ask for the tree lists now.
 func neTreeHMode() bool {
 	switch neTreeHPinned {
@@ -216,6 +241,7 @@ func neTreeHSlowFetch(d time.Duration, err error) {
 		return
 	}
 	neTreeHOn.Store(false)
+	neTreeHPersist(false)
 	neTreeHProbeOK.Store(0)
 	neTreeHOffUntil.set(time.Now().Add(neTreeHOffFor))
 	log.Printf("tree_h: fetch took %.1fs (%v) → whole-cell counts for %s", d.Seconds(), err, neTreeHOffFor)
@@ -270,6 +296,7 @@ func neTreeHProbe() {
 		log.Printf("tree_h probe %d/%d: ok in %.1fs (%d/2)", bi, bj, d.Seconds(), n)
 		if n >= 2 {
 			neTreeHOn.Store(true)
+			neTreeHPersist(true)
 			log.Printf("tree_h: on — bins rebuild with apex lists on their next use")
 		}
 		return

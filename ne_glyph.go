@@ -1904,13 +1904,13 @@ window.__ngHi=function(){return hi};
    six 3-megapixel canvases froze a phone for seconds at every zoom step). During a gesture the canvas rides the svg's live transform
    (livePaint); the picked / flagged trees stay svg marks (apMarks) so they keep their hit shape. z-order: trees are the topmost
    overlay anyway, so an element above the svg is the same picture. Under an active filter a tree shows only when its cell matches
-   (e.fm from the Worker, apFilt) and, with a single ht term, only when its own height is in that range (fltTreeRange). */
+   (e.fm from the Worker, apFilt — a cell matches ht when any apex of its height list is in the window) and, with a single ht / htmax term, only when its own height is in that range (fltTreeRange). */
 var apCv=null,apR=0,apN={shown:0,all:0};
 function apCanvas(){if(apCv)return apCv;apCv=document.createElement('canvas');apCv.className='glyph-ap';apCv.setAttribute('aria-hidden','true');svg.parentNode.insertBefore(apCv,svg.nextSibling);return apCv}
 function apVis(){return hi.on&&hi.tree&&hiLOD()!==2&&svg.classList.contains('v-tree')}
 function apSched(){if(!apR)apR=requestAnimationFrame(apDraw)}
 /* does this tree pass the filter? 1 yes · 0 no · 2 not known yet (shown, like an unveiled tile) */
-function apKeep(e,i,a,fa,hr){if(!fa)return 1;if(hr&&(a.height_m<hr[0]||a.height_m>hr[1]))return 0;var fm=e.fm;if(!fm)return 2;return fm[i]}
+function apKeep(e,i,a,fa,hr){if(!fa)return 1;if(hr){var q=Math.round(a.height_m*2);/* 0.5 m units, the quantisation the cell test uses (neFiltBounds): a 34.8 m tree is a 35 m apex in the lists, so it stays with its cell */if(q<hr[0]||q>hr[1])return 0}var fm=e.fm;if(!fm)return 2;return fm[i]}
 function apDraw(){apR=0;var c=apCanvas();if(!apVis()){c.classList.remove('on');apN={shown:0,all:0};return}var r=svg.getBoundingClientRect(),cw=r.width,ch=r.height;if(!cw||!ch)return;
  var dpr=Math.min(2,window.devicePixelRatio||1),cap=Math.sqrt(4e6/Math.max(1,cw*ch*dpr*dpr));if(cap<1)dpr*=cap;var Wc=Math.max(2,Math.round(cw*dpr)),Hc=Math.max(2,Math.round(ch*dpr));if(c.width!==Wc||c.height!==Hc){c.width=Wc;c.height=Hc}
  c.style.width=cw+'px';c.style.height=ch+'px';c.style.left=svg.offsetLeft+'px';c.style.top=svg.offsetTop+'px';c.style.transform=svg.style.transform;
@@ -1927,8 +1927,8 @@ function apFilt(e){if(typeof fltActive!=='function'||!fltActive()||!flt.w||e.fq|
 function apFiltAll(){for(var k in hi.tiles){var e=hi.tiles[k];if(e.v==='apex'&&e.ok)apFilt(e)}apSched()}
 function apFiltDrop(e){if(e.v!=='apex'||!e.fq)return;e.fq=false;e.fm=null;if(flt.w)flt.w.postMessage({t:'pts',k:'apex/'+e.t.k,drop:1})}
 function apFiltMsg(m){var e=hi.tiles[m.k];if(!e||e.v!=='apex')return;e.fm=m.m;apSched()}
-/* the one height range a tree itself must satisfy: every single-term ht group of the canonical expression (an ht inside an OR group only filters by cell) */
-function fltTreeRange(){if(typeof flt==='undefined'||!flt.f)return null;var lo=-Infinity,hi2=Infinity,any=false;flt.f.split(',').forEach(function(g){if(g.indexOf('|')>=0)return;var m=/^ht(>=|<=|=)(.*)$/.exec(g);if(!m)return;var v=m[2];if(v==='unk')return;any=true;if(m[1]==='>=')lo=Math.max(lo,+v);else if(m[1]==='<=')hi2=Math.min(hi2,+v);else{var p=v.indexOf('..');if(p<0){lo=Math.max(lo,+v);hi2=Math.min(hi2,+v)}else{if(v.slice(0,p)!=='')lo=Math.max(lo,+v.slice(0,p));if(v.slice(p+2)!=='')hi2=Math.min(hi2,+v.slice(p+2))}}});return any?[lo,hi2]:null}
+/* the one height range a tree itself must satisfy, in raw 0.5 m units [ceil(lo·2), floor(hi·2)] (= neFiltBounds): every single-term ht / htmax group of the canonical expression (a term inside an OR group only filters by cell). With ht a cell matches when ANY of its apices is in the window (docs/ne-filter.md §9a), so the trees drawn are exactly the apices the readout counts. */
+function fltTreeRange(){if(typeof flt==='undefined'||!flt.f)return null;var lo=-Infinity,hi2=Infinity,any=false;flt.f.split(',').forEach(function(g){if(g.indexOf('|')>=0)return;var m=/^(?:ht|htmax)(>=|<=|=)(.*)$/.exec(g);if(!m)return;var v=m[2];if(v==='unk')return;any=true;if(m[1]==='>=')lo=Math.max(lo,+v);else if(m[1]==='<=')hi2=Math.min(hi2,+v);else{var p=v.indexOf('..');if(p<0){lo=Math.max(lo,+v);hi2=Math.min(hi2,+v)}else{if(v.slice(0,p)!=='')lo=Math.max(lo,+v.slice(0,p));if(v.slice(p+2)!=='')hi2=Math.min(hi2,+v.slice(p+2))}}});if(!any)return null;return[lo===-Infinity?-Infinity:Math.ceil(Math.round(lo*2*1e6)/1e6),hi2===Infinity?Infinity:Math.floor(Math.round(hi2*2*1e6)/1e6)]}
 /* the few trees that are SVG: the picked one and the flagged ones (#ng-tr rings at the crown's size) */
 function apMarks(e){var h='',sel=hi.apx&&hi.apx.a,zr=e.zr||((svg.getBoundingClientRect().width||W)/vb.w),fa=typeof fltActive==='function'&&fltActive()&&!fltFar(),hr=fa?fltTreeRange():null;e.tr.forEach(function(a,i){var cl=a===sel?'sel':a.fl?(apTop(a.fl)==='looks_right'?'ok':'fl'):'';if(!cl)return;if(cl!=='sel'&&!apKeep(e,i,a,fa,hr))return;var rr=Math.max(a.r,7/zr);h+='<use href="#ng-tr" class="'+cl+'" data-i="'+i+'" transform="translate('+a.x.toFixed(3)+' '+a.y.toFixed(3)+') scale('+(rr/3.2).toFixed(5)+')"/>'});e.mk.innerHTML=h;if(sel&&hi.apx.e===e){var u=e.mk.querySelector('use.sel');if(u)hi.apx.el=u}}
 /* open flags on srtm's trees layer inside the tile, matched to the apex nearest their cell (≤ 12 m — a res-12 cell is ~9 m across) */

@@ -45,8 +45,9 @@ func neFilterRefHTML() string {
 	b.WriteString(`<div class="fref-cols">`)
 	var groups []string
 	byGroup := map[string][]*neFiltField{}
-	for i := range neFiltFields {
-		fd := &neFiltFields[i]
+	cat := neFiltCatalogue()
+	for i := range cat {
+		fd := &cat[i]
 		if _, ok := byGroup[fd.Group]; !ok {
 			groups = append(groups, fd.Group)
 		}
