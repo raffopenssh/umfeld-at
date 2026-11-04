@@ -723,3 +723,114 @@ func TestNEChangeCoveragePerChunk(t *testing.T) {
 		t.Fatalf("banned words on /stats: %v", bad)
 	}
 }
+
+// TestNEChangeSourceClass — source-class rule (docs/ne-change.md §5a,
+// 2026-11-04): two consecutive versions of a chunk from different source
+// classes (neBevEquivalentTags) are status "source" — listed, never a
+// candidate, never confirmed, never pending; the later version re-baselines
+// its class and a real change on top of it is a plain candidate again.
+// Equivalent tags (v0.3.3 → v0.3.6) stay one class.
+func TestNEChangeSourceClass(t *testing.T) {
+	env, cleanup := newNEPublicEnv(t)
+	defer cleanup()
+	neChangeLRU = &neChangeLRUT{kgs: map[string]*neChangeKG{}}
+	lu, _ := neSrcRows(t, "63330")
+	order, rows := neTestChunks(t, lu, 2)
+	tc := order[1]
+	post := func(path string, body []byte) (*httptest.ResponseRecorder, map[string]interface{}) {
+		rr := env.do("POST", path, body, "Authorization", "Bearer "+env.tok, "Content-Type", "application/octet-stream")
+		var js map[string]interface{}
+		json.Unmarshal(rr.Body.Bytes(), &js)
+		return rr, js
+	}
+	report := func(rep map[string]interface{}) (*httptest.ResponseRecorder, map[string]interface{}) {
+		b, _ := json.Marshal(rep)
+		return post("/k/api/v1/ne/63330/report", b)
+	}
+	bump := func(src map[uint64][]byte, d byte) map[uint64][]byte {
+		out := map[uint64][]byte{}
+		for k, v := range src {
+			out[k] = append([]byte(nil), v...)
+		}
+		r := out[tc]
+		for i := 0; i+neLURowBytes <= len(r); i += neLURowBytes {
+			if r[i+11]&1 == 0 && r[i+15] >= 2*d && r[i+8] == 255 {
+				r[i+12] += d
+				r[i+15] -= d
+				binary.LittleEndian.PutUint16(r[i+22:], binary.LittleEndian.Uint16(r[i+22:])+1)
+				return out
+			}
+		}
+		t.Skip("no suitable interior cell")
+		return nil
+	}
+	rr, js := report(neTestReport("peer-vm-1", rows, true))
+	if rr.Code != 200 || len(js["want_chunks"].([]interface{})) != 2 {
+		t.Fatalf("baseline: %d %s", rr.Code, rr.Body.String())
+	}
+	if rr, js = post("/k/api/v1/ne/63330/chunks?observer=peer-vm-1", neNECH(rows, order[0], order[1])); rr.Code != 200 || js["stored"].(float64) != 2 {
+		t.Fatalf("baseline rows: %d %s", rr.Code, rr.Body.String())
+	}
+	// an equivalent tag with a moved cell: ordinary candidate
+	v1 := bump(rows, 30)
+	rep := neTestReport("peer-vm-2", v1, true)
+	rep["source"] = "bevdirect@v0.3.6"
+	if rr, js = report(rep); rr.Code != 200 || len(js["want_chunks"].([]interface{})) != 1 {
+		t.Fatalf("equivalent tag: %d %s", rr.Code, rr.Body.String())
+	}
+	rr, js = post("/k/api/v1/ne/63330/chunks?observer=peer-vm-2", neNECH(v1, tc))
+	deltas, _ := js["deltas"].([]interface{})
+	if rr.Code != 200 || len(deltas) != 1 || deltas[0].(map[string]interface{})["status"] != "candidate" {
+		t.Fatalf("equivalent tags must compare: %d %s", rr.Code, rr.Body.String())
+	}
+	// a foreign class on top (another assembler): status source, nothing counted
+	v2 := bump(v1, 30)
+	rep = neTestReport("peer-vm-3", v2, true)
+	rep["source"] = "other@v1.0.0"
+	if rr, js = report(rep); rr.Code != 200 || len(js["want_chunks"].([]interface{})) != 1 {
+		t.Fatalf("foreign class: %d %s", rr.Code, rr.Body.String())
+	}
+	rr, js = post("/k/api/v1/ne/63330/chunks?observer=peer-vm-3", neNECH(v2, tc))
+	deltas, _ = js["deltas"].([]interface{})
+	if rr.Code != 200 || len(deltas) != 1 || deltas[0].(map[string]interface{})["status"] != "source" {
+		t.Fatalf("cross-class delta must be status source: %d %s", rr.Code, rr.Body.String())
+	}
+	sum := js["summary"].(map[string]interface{})
+	qc := sum["qc"].(map[string]interface{})
+	if sum["candidate"].(map[string]interface{})["cells"].(float64) != 1 || qc["cells_source"].(float64) != 1 {
+		t.Fatalf("source pair must not add a candidate (the v0.3.6 one stays): %v", sum)
+	}
+	// another observer of the foreign class re-sights it: still not confirmed
+	rep = neTestReport("peer-vm-4", v2, true)
+	rep["source"] = "other@v1.0.0"
+	if rr, js = report(rep); rr.Code != 200 || js["chunks_confirmed"] == nil {
+		t.Fatalf("re-sighting: %d %s", rr.Code, rr.Body.String())
+	}
+	s, _ := neChangeSummaryOf("63330")
+	if s.Confirmed.Cells != 0 || s.QC.Source != 1 {
+		t.Fatalf("a cross-class pair must never confirm: %+v", s)
+	}
+	rr = env.do("GET", "/k/api/v1/ne/revisit?refresh=1", nil, "Authorization", "Bearer "+env.tok)
+	if rr.Code != 200 || !bytes.Contains(rr.Body.Bytes(), []byte(`"pending_versions":1,`)) || !bytes.Contains(rr.Body.Bytes(), []byte(`"last_observer":"peer-vm-2"`)) {
+		t.Fatalf("revisit must list only the v0.3.6 candidate as pending, never the source version: %d %s", rr.Code, rr.Body.String())
+	}
+	// a real change inside the foreign class is a candidate against its own baseline
+	v3 := bump(v2, 30)
+	rep = neTestReport("peer-vm-5", v3, true)
+	rep["source"] = "other@v1.0.0"
+	if rr, js = report(rep); rr.Code != 200 || len(js["want_chunks"].([]interface{})) != 1 {
+		t.Fatalf("own-class change: %d %s", rr.Code, rr.Body.String())
+	}
+	rr, js = post("/k/api/v1/ne/63330/chunks?observer=peer-vm-5", neNECH(v3, tc))
+	deltas, _ = js["deltas"].([]interface{})
+	if rr.Code != 200 || len(deltas) != 1 || deltas[0].(map[string]interface{})["status"] != "candidate" {
+		t.Fatalf("change within the class: %d %s", rr.Code, rr.Body.String())
+	}
+	rr = env.do("GET", "/api/v1/ne/stats?kg=63330", nil)
+	if rr.Code != 200 || !bytes.Contains(rr.Body.Bytes(), []byte(`"cells_source":`)) {
+		t.Fatalf("stats qc: %d %s", rr.Code, rr.Body.String())
+	}
+	if bad := nePublicBannedWords(rr.Body.String()); len(bad) > 0 {
+		t.Fatalf("banned words on /stats: %v", bad)
+	}
+}

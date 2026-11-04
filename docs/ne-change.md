@@ -269,6 +269,13 @@ the stripped rows — nothing per object, nothing new stored about the source da
   the edge density drops. Found as columns of candidate change along one z15 tile meridian
   (KG 90011: 13 of 16 candidates). Also `coverage`, never jitter/candidate; summary schema 7
   (older derived files recompute). Nationally −572 confirmed, −576 candidate cells on 2026-11-04.
+- **Source class** (`neSourceComparable`, 2026-11-04): two consecutive versions of a chunk whose
+  `source` strings fall in different classes (`neBevEquivalentTags` — every bevdirect tag with
+  byte-equivalent assembly maps to the baseline tag; `index-2026-03`, a bare `bevdirect`, a future
+  tag that changes assembly are each their own class) are status `source`: listed, never
+  cumulated, confirmed or pending — the later version re-baselines its class. The report path
+  always compared per class (`neCoverageComparable`, `since_last`); the chunk log did not. Today's
+  logs hold only v0.3.3…v0.3.6 (one class), so the figure does not move; summary schema 8.
 - **Quantisation floor** (`neQCFloorShare` = 5 % of the cell, ≈ 15 m² at res 12): a delta
   with no structure-count change, no dominant-class flip and every |Δ| below the floor is
   `jitter` — z16 vertex quantisation (~0.6 m) wobbling cell boundaries. One early
@@ -277,8 +284,8 @@ the stripped rows — nothing per object, nothing new stored about the source da
   `summary.qc.cluster_share` = counted cells with ≥ 1 counted neighbour (res-12 ring 1) ÷
   counted cells, rolled up to `/ne/stats` nationally and per filter.
 
-`summary.qc` = `{cells_pipeline, cells_jitter, cells_coverage, cells_clustered, cells_isolated, cluster_share,
-versions_with_tile_hash, versions}`; `summary.qc_by_day` = `{day: {cells_pipeline, cells_jitter, cells_coverage}}`
+`summary.qc` = `{cells_pipeline, cells_jitter, cells_coverage, cells_source, cells_clustered, cells_isolated, cluster_share,
+versions_with_tile_hash, versions}`; `summary.qc_by_day` = `{day: {cells_pipeline, cells_jitter, cells_coverage, cells_source}}`
 keyed like `by_day` (the day the new version arrived) so the landing card can say what QC held back per day
 (summary schema 5; older derived files are recomputed).
 Not yet done (proposal §2, §3, §6, §7): cross-observer reproducibility rate, tag canary,

@@ -521,8 +521,10 @@ Observers: if you assemble cells yourself from the BEV tiles (python package ne_
   tiles covering it, sorted z/x/y} — a digest that flips while its tile hash stays equal is status "pipeline", a Δ below
   the quantisation floor (every |Δ| < 5 % of the cell, no dominant-class flip, no count change) is "jitter", two
   versions of a chunk holding different cell sets (a truncated fetch, two observers' domains — land does not vanish)
-  are "coverage", as is a cell whose land share (register units over the cell) moved ≥ 5 % — a unit clipped at a tile seam; none is candidate nor confirmed. /ne/stats.change.qc reports cells_pipeline, cells_jitter,
-  cells_coverage and cluster_share; qc_by_day{day: {cells_pipeline, cells_jitter, cells_coverage}} says what was held
+  are "coverage", as is a cell whose land share (register units over the cell) moved ≥ 5 % — a unit clipped at a tile seam; two
+  versions built by sources of different classes (bevdirect tags with equivalent assembly form one class) are "source" — the
+  later one re-baselines; none is candidate nor confirmed. /ne/stats.change.qc reports cells_pipeline, cells_jitter,
+  cells_coverage, cells_source and cluster_share; qc_by_day{day: {cells_pipeline, cells_jitter, cells_coverage, cells_source}} says what was held
   back per day (same key as by_day).
 `
 

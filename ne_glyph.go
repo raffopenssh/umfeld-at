@@ -1228,13 +1228,14 @@ function obsHTML(c){var k=ckey(c),d=obsC[k],s='<div class="rw"><span class="lb">
  return s+wait+'</div>'}
 /* the one-line declared summary of the collapsed card */
 function decLine(n,b){if(!n)return'<span class="mut">not digested yet</span>';var re=n-((b||[])[0]||0),o=['<b>'+km2(n)+'</b>',re>0?'<b>'+pct(re,n)+'</b> seen before':'<span class="mut">first sight</span>'];return o.join('<span class="sep"></span>')}
+/* KG code of a row: data cells index kg_codes, area rows carry .kg, tour picks carry the code at [11] (names at [8]) */function codeOf(c){return typeof c[8]==='number'&&data?data.kg_codes[c[8]]:(c.kg||(typeof c[11]==='string'?c[11]:'')||'')}
 function card(c){var n=c[2]||0,nm=(n||c[8]>=0)?(typeof c[8]==='string'?c[8]:(kgs[c[8]]||'')):'',i=nm.indexOf(' \u00b7 '),kg=i>0?nm.slice(0,i):nm,gm=i>0?nm.slice(i+3):'',s='';
- if(nm){var code=typeof c[8]==='number'&&data?data.kg_codes[c[8]]:(c.kg||''),e=ixBy[code];if(code&&!e&&!ix)ixGet().then(function(){if(pk&&pk.t==='cell')recard()});s+='<div class="hd"><b>'+kgLink(kg,code)+'</b><span class="age'+(n&&c[5]<fresh?' n':'')+'">'+(n?(c[5]<fresh?'\u25cf ':'')+ago(c[5]):'<span class="mut">no report yet</span>')+'</span></div>';var sub=e?placeOf(e,code):(gm&&norm(gm)!==norm(kg)?'Gemeinde '+gm:'');if(sub)s+='<div class="sub">'+esc(sub)+'</div>'}
+ if(nm){var code=codeOf(c),e=ixBy[code];if(code&&!e&&!ix)ixGet().then(function(){if(pk&&pk.t==='cell')recard()});s+='<div class="hd"><b>'+kgLink(kg,code)+'</b><span class="age'+(n&&c[5]<fresh?' n':'')+'">'+(n?(c[5]<fresh?'\u25cf ':'')+ago(c[5]):'<span class="mut">no report yet</span>')+'</span></div>';var sub=e?placeOf(e,code):(gm&&norm(gm)!==norm(kg)?'Gemeinde '+gm:'');if(sub)s+='<div class="sub">'+esc(sub)+'</div>'}
  else s+='<div class="hd"><b class="mut">empty cell</b></div>';
  var dec='<div class="rw"><span class="lb">declared</span><span class="vl">'+decLine(n,c[9])+'</span></div>';
  dec+='<div class="dt"><div class="sh"><span>declared <i>survey land use \u00b7 BEV tiles via bevdirect</i></span></div>';
  dec+=(n?'<div class="nt kv"><b>'+km2(n)+'</b> digested<span class="sep"></span>'+fmt(n)+'\u2009/\u2009'+per+' chunks<span class="sep"></span>'+fmt(c[4])+' report'+(c[4]==1?'':'s')+'<span class="sep"></span>'+(c[3]/n).toFixed(1)+'\u00d7 per chunk</div>'+bands(c):'<div class="nt mut">not digested yet</div>')+'</div>';
- var code=typeof c[8]==='number'&&data?data.kg_codes[c[8]]:(c.kg||'');c.kgc=code;
+ var code=codeOf(c);c.kgc=code;
  s+=srcs(dec,obsHTML(c),chgHTML(c));if(subVis()||(typeof fvOn==='function'&&fvOn())){var ix=c.ix!==undefined?c.ix:(c.ix=cells.indexOf(c));if(ix>=0){if(subVis())s+=subDotLine(ix);if(typeof fvDotLine==='function')s+=fvDotLine(ix)}}obsFetch(c);chgFetch(c);return s+hiLegendHTML()}
 /* the three sources in the order the view asks for: the one on the map reads first */
 function srcs(dec,ob,ch){var a={dec:'<div class="src dec">'+dec+'</div>',ob:'<div class="src ob">'+ob+'</div>',chg:'<div class="src chg">'+ch+'</div>'},o=view==='obs'?['ob','dec','chg']:['dec','ob','chg'];if(cg.on){o.splice(o.indexOf('chg'),1);o.unshift('chg')}return a[o[0]]+a[o[1]]+a[o[2]]+offRow()}
@@ -1262,8 +1263,8 @@ function chgHTML(c){var n=c[7]||0,nc=c[10]||0,kg=chgDKey(c),st=kg?chgC[kg]:false
  else if(st===null)s+='<div class="nt">'+offTxt('change')+'</div>';
  else if(st){var f=[];if(cf.cells)f.push('<b>'+fmt(cf.cells)+'</b> confirmed');if(ca.cells)f.push(fmt(ca.cells)+' candidate');if(cf.d_str_n)f.push('structures '+(cf.d_str_n>0?'+':'\u2212')+Math.abs(cf.d_str_n));if(cf.d_str_cover_m2)f.push('structure cover '+ha(cf.d_str_cover_m2));if(st.since)f.push('since '+esc(String(st.since).slice(0,10)));if(st.versions)f.push(fmt(st.versions)+' digests');
   var lead=c.filt||c.kgs?(c.kgn?fmt(c.kgn)+' KGs':'area'):'KG '+esc(kg);s+=(cf.cells?dluBar(cf.d_lu_m2||[],'confirmed \u0394 declared use by group, '+lead):'')+'<div class="nt mut"><span class="it lead">'+lead+'</span> '+(f.length?f.join('<span class="sep"></span>'):'nothing moved between the digests')+'</div>';
-  var q=st.qc;if(q&&(q.cells_pipeline||q.cells_jitter||q.cells_coverage||q.cells_clustered||q.cells_isolated)){var qf=[];if(q.cells_pipeline)qf.push(fmt(q.cells_pipeline)+' pipeline');if(q.cells_jitter)qf.push(fmt(q.cells_jitter)+' jitter');if(q.cells_coverage)qf.push(fmt(q.cells_coverage)+' coverage');var ex=qf.length?qf.join(' + ')+' excluded':'';var cl=[];if(q.cells_clustered)cl.push(fmt(q.cells_clustered)+' clustered');if(q.cells_isolated)cl.push(fmt(q.cells_isolated)+' isolated');
-   s+='<div class="nt mut" title="qc: a delta whose input tile hash did not move is pipeline, one below the quantisation floor is jitter, one between two digests holding different cell sets or land shares is coverage \u2014 none is counted; clustered = counted cells with a counted neighbour"><span class="it lead">qc</span> '+[ex,cl.join(' \u00b7 ')].filter(Boolean).join('<span class="sep"></span>')+(q.versions_with_tile_hash!=null&&q.versions?'<span class="sep"></span>'+pct(q.versions_with_tile_hash,q.versions)+' of digests carry a tile hash':'')+'</div>'}}
+  var q=st.qc;if(q&&(q.cells_pipeline||q.cells_jitter||q.cells_coverage||q.cells_source||q.cells_clustered||q.cells_isolated)){var qf=[];if(q.cells_pipeline)qf.push(fmt(q.cells_pipeline)+' pipeline');if(q.cells_jitter)qf.push(fmt(q.cells_jitter)+' jitter');if(q.cells_coverage)qf.push(fmt(q.cells_coverage)+' coverage');if(q.cells_source)qf.push(fmt(q.cells_source)+' source');var ex=qf.length?qf.join(' + ')+' excluded':'';var cl=[];if(q.cells_clustered)cl.push(fmt(q.cells_clustered)+' clustered');if(q.cells_isolated)cl.push(fmt(q.cells_isolated)+' isolated');
+   s+='<div class="nt mut" title="qc: a delta whose input tile hash did not move is pipeline, one below the quantisation floor is jitter, one between two digests holding different cell sets or land shares is coverage, one between two assembler classes is source \u2014 none is counted; clustered = counted cells with a counted neighbour"><span class="it lead">qc</span> '+[ex,cl.join(' \u00b7 ')].filter(Boolean).join('<span class="sep"></span>')+(q.versions_with_tile_hash!=null&&q.versions?'<span class="sep"></span>'+pct(q.versions_with_tile_hash,q.versions)+' of digests carry a tile hash':'')+'</div>'}}
  else s+='<div class="nt mut">'+(c[2]?'no second digest yet \u2014 nothing to compare':'not digested yet')+'</div>';
  return s+'</div>'}
 var curAt=null;
@@ -2553,10 +2554,12 @@ func neGlyphPicksJSON(g *neGlyph) string {
 			nm = g.KGs[r.KG]
 		}
 		nj, _ := json.Marshal(nm)
-		fmt.Fprintf(&b, "[%d,%d,%d,%d,%d,%.1f,%d,%d,%s,%s", r.X, r.Y, r.Chunks, r.Passes, r.Reports, r.AgeH, o, r.Chg, nj, neGlyphBandsJSON(r.Bands))
-		if r.Cand > 0 {
-			fmt.Fprintf(&b, ",%d", r.Cand)
+		code := ""
+		if r.KG >= 0 && int(r.KG) < len(g.KGCodes) {
+			code = g.KGCodes[r.KG]
 		}
+		// [10] candidates, [11] KG code: the card keys the KG's Δ (/ne/stats?kg=) on it
+		fmt.Fprintf(&b, "[%d,%d,%d,%d,%d,%.1f,%d,%d,%s,%s,%d,%q", r.X, r.Y, r.Chunks, r.Passes, r.Reports, r.AgeH, o, r.Chg, nj, neGlyphBandsJSON(r.Bands), r.Cand, code)
 		b.WriteByte(']')
 	}
 	b.WriteByte(']')

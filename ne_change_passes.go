@@ -240,7 +240,7 @@ func (c *neChangeKG) cumulate(rows []neCellDelta, w neChangeWin) map[uint64]*neC
 	cum := map[uint64]*neCellCum{}
 	for i := range rows {
 		x := &rows[i]
-		if x.Coverage || x.SameInput || x.Jitter {
+		if x.excluded() {
 			continue
 		}
 		if !w.zero() && !w.has(x.Pass, x.At) {

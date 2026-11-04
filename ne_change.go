@@ -686,7 +686,21 @@ type neCellDelta struct {
 	SameInput bool // both versions carry a tile hash and it is equal: the input did not change, the pipeline did
 	Jitter    bool // below the quantisation floor: no dominant-class flip, no structure count change, every Δ < neQCFloorShare of the cell
 	Coverage  bool // the two versions hold different cell SETS (neVersionsCoverage): a fetch/domain difference, not land
+	Source    bool // the two versions come from different source classes (neBevEquivalent): a new assembler, not land
 }
+
+// excluded — a delta that is neither candidate nor confirmed: listed, counted
+// in summary.qc, never cumulated, never pending.
+func (x *neCellDelta) excluded() bool { return x.Coverage || x.SameInput || x.Jitter || x.Source }
+
+// neSourceComparable — two chunk versions are comparable when their source
+// strings fall in one class (neBevEquivalentTags: every bevdirect tag whose
+// assembly is byte-equivalent maps to the baseline tag). A pair across classes
+// — the index epoch vs a bevdirect build, or a future tag that changes the
+// assembly — differs by source noise, not by land use: status "source", the
+// later version re-baselines its class. Same rule the report path applies
+// (neCoverageComparable, since_last per class); the log had none (2026-11-04).
+func neSourceComparable(a, b string) bool { return neBevEquivalent(a) == neBevEquivalent(b) }
 
 // neVersionsCoverage — per-chunk coverage rule (docs/ne-cells.md §coverage,
 // 2026-10-24). A complete build emits a fixed cell set per res-10 chunk: land
@@ -744,6 +758,8 @@ const neQCFloorShare = 0.05
 // neQCStatus — the status string of a delta, QC included.
 func neQCStatus(x *neCellDelta) string {
 	switch {
+	case x.Source:
+		return "source"
 	case x.Coverage:
 		return "coverage"
 	case x.SameInput:
@@ -901,9 +917,10 @@ func (c *neChangeKG) deltasOf() (*neChangeDeltas, error) {
 				if okA && okB && neLandDiffers(a, b) {
 					x.Coverage = true
 				}
+				x.Source = !neSourceComparable(c.entries[vs[i]].Source, c.entries[vs[i+1]].Source)
 				if th := c.entries[vs[i+1]].TileHash; th != "" && th == c.entries[vs[i]].TileHash {
 					x.SameInput = true
-				} else if okA && okB && !x.Coverage {
+				} else if okA && okB && !x.Coverage && !x.Source {
 					x.Jitter = neDeltaJitter(a, b, &x, area)
 				}
 				d.rows = append(d.rows, x)
@@ -932,7 +949,7 @@ func neRowMap(rows []byte) map[uint64][]byte {
 // neChangeSummary — the roll-up of one KG (edge cells counted where kg_share ≥ 128).
 // neChangeSummarySchema — bump when the summary gains fields; a derived file
 // with an older schema is recomputed from the log.
-const neChangeSummarySchema = 7 // 7: per-cell land rule (neLandDiffers) folds into cells_coverage
+const neChangeSummarySchema = 8 // 8: source-class rule (neSourceComparable) → cells_source; 7: per-cell land rule (neLandDiffers) folds into cells_coverage
 
 type neChangeSummary struct {
 	Schema    int                        `json:"schema"`
@@ -970,6 +987,7 @@ type neQCDay struct {
 	Pipeline int `json:"cells_pipeline"`
 	Jitter   int `json:"cells_jitter"`
 	Coverage int `json:"cells_coverage,omitempty"`
+	Source   int `json:"cells_source,omitempty"`
 }
 
 // neChangeQC — quality-control roll-up (docs/ne-qc-proposal.md §1, §4, §5).
@@ -977,6 +995,7 @@ type neChangeQC struct {
 	Pipeline      int     `json:"cells_pipeline"`  // same tile hash on both sides: pipeline, not land
 	Jitter        int     `json:"cells_jitter"`    // below the quantisation floor
 	Coverage      int     `json:"cells_coverage"`  // the chunk's cell set differs between the two versions (neVersionsCoverage) or the cell's land share moved (neLandDiffers): fetch/domain, not land
+	Source        int     `json:"cells_source"`    // the two versions come from different source classes (neSourceComparable): assembler, not land
 	Clustered     int     `json:"cells_clustered"` // counted cells with ≥ 1 counted neighbour (res-12 ring 1)
 	Isolated      int     `json:"cells_isolated"`  // counted cells with none
 	ClusterShare  float64 `json:"cluster_share"`   // clustered / (clustered + isolated); real change clusters, noise scatters
@@ -1111,14 +1130,17 @@ func (c *neChangeKG) summary(d *neChangeDeltas) neChangeSummary {
 		if len(day) >= 10 {
 			day = day[:10]
 		}
-		if x.Coverage || x.SameInput || x.Jitter {
+		if x.excluded() {
 			if s.QCByDay == nil {
 				s.QCByDay = map[string]*neQCDay{}
 			}
 			if s.QCByDay[day] == nil {
 				s.QCByDay[day] = &neQCDay{}
 			}
-			if x.Coverage {
+			if x.Source {
+				s.QC.Source++
+				s.QCByDay[day].Source++
+			} else if x.Coverage {
 				s.QC.Coverage++
 				s.QCByDay[day].Coverage++
 			} else if x.SameInput {
@@ -1180,6 +1202,7 @@ func neQCAdd(t, s *neChangeQC) {
 	t.Pipeline += s.Pipeline
 	t.Jitter += s.Jitter
 	t.Coverage += s.Coverage
+	t.Source += s.Source
 	t.Clustered += s.Clustered
 	t.Isolated += s.Isolated
 	t.WithTileHash += s.WithTileHash
@@ -1317,6 +1340,7 @@ func neChangeNational(force bool) map[string]interface{} {
 				tot.QCByDay[day].Pipeline += q.Pipeline
 				tot.QCByDay[day].Jitter += q.Jitter
 				tot.QCByDay[day].Coverage += q.Coverage
+				tot.QCByDay[day].Source += q.Source
 			}
 		}
 		return map[string]interface{}{"since": tot.Since, "kgs_with_log": kgs, "kgs_with_confirmed_change": kgsConfirmed,
