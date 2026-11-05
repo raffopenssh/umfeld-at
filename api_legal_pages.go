@@ -7,7 +7,8 @@
 // "E-Mail anzeigen" (spam harvesters). The page is still complete for a human. Everything here must describe what the service ACTUALLY does — keep
 // it in step with api.go (request log: no IP), api_ne_public.go (IP only in an
 // in-memory rate-limit bucket), api_feedback.go (free-text feedback is stored
-// and published), ne_glyph.go (localStorage for view prefs, no cookies; locate = Geolocation in the browser only, never sent), and
+// and published; glyph-trace records deleted after 24 h), ne_glyph_warm.go (opened
+// share links: hash without q=/pn=, tile URLs, device class, day — no IP/UA), ne_glyph.go (localStorage for view prefs, no cookies; locate = Geolocation in the browser only, never sent), and
 // the landing page (no third-party fonts/CSS/JS — the only cross-origin
 // traffic is the glyph's live data fetches to {OBS_NAME}, §3/§4
 // below). TestNoExternalAssets (api_no_external_assets_test.go) enforces
@@ -18,7 +19,7 @@ import (
 	"net/http"
 )
 
-const legalStand = "Oktober 2026"
+const legalStand = "November 2026"
 
 // legalPageCSS — same mono look as the docs, kept small.
 const legalPageCSS = `body{font:15px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;max-width:52rem;margin:2rem auto;padding:0 1rem;color:#222;background:#fff}
@@ -100,7 +101,8 @@ Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO.</p>
 <p>Über <code>/api/v1/feedback</code> können Nutzer:innen und automatisierte Agenten freiwillig Rückmeldungen senden (Kategorie, Titel, Text,
 optional Name des sendenden Programms). Diese Einträge werden dauerhaft gespeichert und sind <strong>öffentlich abrufbar</strong>.
 Bitte tragen Sie dort keine personenbezogenen Daten ein. Rechtsgrundlage: Art. 6 Abs. 1 lit. a DSGVO (Einwilligung durch Absenden);
-Löschung auf Anfrage per E-Mail.</p>
+Löschung auf Anfrage per E-Mail. Ausnahme: technische Ladeprotokolle der Karte, die nur mit dem Zusatz <code>?trace</code> in der
+Adresse entstehen (Betriebs-Diagnose, ohne IP und ohne Personendaten), werden nach 24 Stunden automatisch gelöscht.</p>
 <h3>2.4 Peer-Beiträge</h3>
 <p>Partnerdienste (<code>{OBS_NAME}</code>, <code>{MAP_NAME}</code>, <code>{SUB_NAME}</code>) liefern mit Zugangsschlüsseln
 aggregierte Zellstatistiken an. Diese enthalten keine personenbezogenen Daten; gespeichert wird der Name des Partnerdienstes, nicht die Person.</p>
@@ -120,7 +122,11 @@ den Hintergrund gewechselter Tab beendet die Abfrage ebenfalls, solange die Posi
 <p>Diese Website verwendet <strong>keine Cookies</strong> und keine Tracking- oder Analysedienste. Die interaktive Karte merkt sich
 Anzeige-Einstellungen (ein-/ausgeblendete Ebenen, Vollauflösung, die letzten zehn Suchen) im <code>localStorage</code> Ihres Browsers;
 diese Werte verlassen Ihr Gerät nicht und können Sie jederzeit über die Browser-Einstellungen löschen. Geteilte Ansichten stehen als
-Parameter in der Adresszeile (<code>#q=…</code>) und werden nicht serverseitig gespeichert.</p>
+Parameter in der Adresszeile (<code>#q=…</code>). Wird ein solcher Link direkt geöffnet, meldet die Karte einmalig die geöffnete
+Ansicht (ohne Suchbegriff und Ortsnamen) und die Liste der dafür geladenen Kartenkacheln an den Server, damit dieser sie nach einem
+Neustart vorab berechnen kann und der Link schnell bleibt. Gespeichert werden nur Ansicht, Kachelliste, Geräteklasse
+(„Desktop“/„Touch“), Anzahl der Öffnungen und der Tag der letzten Öffnung – keine IP-Adresse, kein Browser, keine Bildschirmgröße,
+keine Uhrzeit; Einträge ohne Öffnung seit 30 Tagen werden verworfen. Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO (Betrieb).</p>
 <p>Wenn Sie in der Karte einen Baum melden (Schaltfläche in der Baumkarte), erzeugt der Browser einmalig eine zufällige Kennung
 (<code>localStorage</code>-Schlüssel <code>neg-rep</code>) und sendet sie als <code>reporter</code> mit der Meldung an {OBS_NAME}
 (siehe 4), damit dort Meldungen derselben Quelle zusammengefasst werden können. Die Kennung enthält keine Geräte- oder Personendaten,

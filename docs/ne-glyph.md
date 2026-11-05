@@ -18,11 +18,12 @@ decisions: `docs/ne-change.md` §6a–6c, time strip + ageing §6e; subsidy laye
 | `ne_glyph.go` `hashTokens` · `applyHash` | SHARE LINK PARSING is lenient by design: tokens are read one by one, every token the page understands applies, the rest is dropped and named once (`showHint` *link: ignored …*, `dbg: hash dropped`) — never the whole link. `hashTokens` normalises `#`, `#!`, `#/` prefixes, a fully percent-encoded hash (`%3B`, `%3D` — messengers do that), `&` as a fallback separator, blank and duplicate tokens (the last wins). Per token: keys case-insensitive, `kg=` pads to 5 digits, `pt=` takes integers and `lat,lon` the wrong way round (swapped when that lands in Austria; outside Austria dropped), `pn=`/`q=` decode `+` and survive bad `%`, `h3=` any case, `adm=` any case, `z=`/`at=` zoom clamped to `HI_ZMAX`, `ortho=`/`roads=` clamped 0.1–1, `t=` malformed drops only `t=`, `v=`/`v=d`/`v=lu` = declared, `f=` incomplete terms are completed, `f=off:<expr>` lands as a held (switched-off) filter (ne-filter.md §1d). `pn` without `pt` is dropped. Only a link with nothing usable returns false. |
 | `ne_glyph_export.go` · `api_ne_stats_unit.go` · `ne_mvt_jobs.go` | EXPORT: the link button is a split control `.gt-kk` = `.gt-k` (copy the share link, unchanged) + `.gt-kx` ▾ (menu `.gt-xm`, a small popover — left-anchored on desktop, right-anchored ≤ 640 px — with two rows and a URL line: EXPORT JSON · CSV (download) · flat · Sheets formula `=IMPORTDATA(…csv)`; QGIS `tiles` (copies the MVT URL) · `PMTiles` (archive link, z 9–14, of the selected KG/area via `share=` or else the current view via `bbox=`; `xArchMB` = km² × 0.17 MB (measured 0.15–0.17) is the size shown in the title); optional key field, localStorage `ne.key`, appended as `&key=`). Every unit entry is a LINK to `/api/v1/ne/stats/unit?share=<unitHash()>&format=…&src=glyph` — `unitHash()` keeps only `kg= h3= adm= pt= f=` of `curHash()`, so the export is the share link rendered by another endpoint (`docs/stats-envelope.md`). **Without a unit the table covers the current view** (`xUnit()` → `bbox=<xViewBox()>[&f=]`, label *the view*; beyond `XBINS`=48 bins of 0.025° the server answers from the national sample and the label reads *≈ the view*). The PMTiles link offers every cell (z 9–14) up to `XKM2`=1 500 km² (the server's `nePMTMaxKm2`), farther out the z ≤ 11 *overview* archive of the view (`maxz=11`, any area); the QGIS row works anywhere, and with a filter on, `xF()` puts `?f=` on the tile URL and `&f=` on a `bbox=` archive (a `share=` archive carries `;f=` already) — QGIS and Excel see the veil (`docs/qgis-layer.md` §Filtered layers, `docs/stats-envelope.md` §6). Open menu = `;export` in the share hash (restored by `applyHash`). `xOpen` measures: when the bar sits in the lower half (full screen, phone keyboard) the menu opens upward (`.gt-kk.up`) and is nudged inside the viewport. Nothing fetches on open; the endpoint counts (`export_gate.go`, line `export_gate` on /debug/inflight). |
 | `ne_glyph_filt.go` · `ne_glyph_fidx.go` · `ne_filter_expr.go` · `ne_glyph_filter.js` · `api_ne_filter.go` | FILTER (`docs/ne-filter.md`): the funnel button `.gt-flt` after the find box + the chip row `.glyph-filt` (`neGlyphFiltBtn/HTML/CSS/JS`, spliced into `neGlyphHTML`, `neGlyphCSS`, `neGlyphScript` before `applyHash()`); the per-0.025°-bin index `fidx` (NFX1: IJ runs + planar u8/u16 columns, header polynomial IJ → viewBox, `neFidxBuild` from NE store + observed-peer cells + INVEKOS h3 + Natura 2000 + OSM distances + chunk log; LRU `ne_fidx` 48 MB → disk `data/ne_fidx/<state>/` 2 GB → build; `handleNEGlyphFidx` ETag `"<state>-<plane>"`, `neFidxWarmLoop` warms bins the tile handler saw); the grammar twin (`neFiltParse/Canonical/Words/Eval`, mirrored byte-for-byte by the Worker — `TestNEFilterJSParity` runs both over one synthetic bin); the Worker (parse · evaluate · `k` BFS; holds bins for tree points and the card/peek `at` — since 2026-11-03 the veil itself is the **server tile** `v=flt&f=` (`ne_glyph_flt_tile.go`, ring `neGlyphFltBleed` painted with the neighbours' cells, `FLT_BLEED` on the client) loaded by `hiTile` like any layer at every LOD, hover peek line `fltPeekLine`); near full zoom the veil is a **vector** tile `vec=1&sp=` and base/obs tiles come supersampled `ss=2` (`hiSS`/`hiResample`, ring twins `.cur.g`/`.hov.g` — `docs/ne-filter.md` §12); the agent endpoint `/api/v1/ne/filter` + `/filter/fields`. **Overview preview** `ne_glyph_fnat.go`: `/api/v1/ne/glyph/fnat?f=` folds `d`/`o`/`chg` terms over the national res-7 table (`ne_mvt_nat.go`) → `share[]`/`n[]` per frame cell; the page veils the res-7 dots and hex faces by share while full resolution is off (`fv*` in `neGlyphFiltJS`), other terms are named in the readout as "at full resolution". · **§8 national sample** (`ne_mvt_samp.go`, `ne_glyph_fnat.go` `neFnatSample`/`neFnat9`, page `fv9*` + `fvLegend`): every term folds at every zoom from the 1-in-49 sample, res-9 veil in the mid band, only a bare `k>=` says zoom in · **§9 tree figure** (`ne_tree_h.go`): apex height lists from the peer's bins (`tree_h_n`+`tree_h`, tree mode gated by an hourly probe), `v=flt` meta `trees= tx=`, readout exact inside the height term when every tile has lists, else ≈ from the sample · **§9a `ht` = a tree of that height** (any apex in the window, `htmax` = the tallest-tree rule; Worker plane `p=th`, `apKeep` quantised to 0.5 m so the overlay draws exactly the counted apices) |
+| `ne_glyph_warm.go` · `opn` in `ne_glyph.go` | WARM (§warm below): opened share links replayed after a restart so copied links stay fast — the page beacons its first 25 s of glyph GETs on a direct open (`POST /api/v1/ne/glyph/opened`, no `?trace`/`?dbg`/`?warm`), the server keeps ≤ 150 hashes × 2 device classes × ≤ 500 URLs 30 days in `data/ne_glyph_opened.json` and replays them 30 min after start as `ua=umfeld-warm`. |
 | `ne_glyph_test.go` | Hex fit, SVG shape, tile meta, word ban is in `api_ne_public_test.go` (`TestNEPublicWordBan` scans `ne_glyph*.go`). |
 | `api_docs_public_ne.go` | `llm.txt` NE section: glyph endpoints + the landing inventory §1–9 (share-link grammar §7, scripted checks §7a). Update with every behaviour change. |
 | `api_license.go`, `api_docs_public.go` | Sources `ne`, `invekos`, sibling services, footer. |
 
-Routes: `api_ne.go` switch `rest == "glyph" | "glyph/kgs" | "glyph/tile" | "glyph/cell" | "glyph/kg" | "glyph/sub" | "glyph/fidx" | "glyph/filter.js"` (+ `filter`, `filter/fields` before `neParseReq`, own `format=` vocabulary);
+Routes: `api_ne.go` switch `rest == "glyph" | "glyph/kgs" | "glyph/tile" | "glyph/cell" | "glyph/kg" | "glyph/sub" | "glyph/fidx" | "glyph/filter.js" | "glyph/opened"` (+ `filter`, `filter/fields` before `neParseReq`, own `format=` vocabulary);
 public via the `/api/v1/ne/` prefix + `publicAllowListGolden` (`api_tiers_test.go`).
 
 ## Page anatomy
@@ -308,7 +309,8 @@ deploy — the page is cached) to the URL and keep the tab in front 45 s. Every 
 `t | svg top:bottom:w | card rect | card classes | tools rect | filter-row rect | chips/<row children with px>
 | visible imgs | relief imgs | all imgs | vb w/h | hi.left | relief pending | fs | innerWxH | vv height | dpr
 | visibility | card head`, keeps the rows that changed and POSTs them with `dbg` and the error list to
-`/api/v1/feedback` (agent `glyph-trace`). Read the newest record:
+`/api/v1/feedback` (agent `glyph-trace`). Trace records are triage material, not feedback: `feedbackPurgeLoop` (api_feedback.go) deletes
+them 24 h after arrival (at start, then hourly; Datenschutz 2.3). Read the newest record:
 
 ```
 curl -s 'localhost:8000/api/v1/feedback?agent=glyph-trace' | python3 -c "import sys,json;fb=sorted(json.load(sys.stdin)['feedback'],key=lambda f:f['created_at']);c=fb[-1]['context'];print(fb[-1]['created_at'],c['ua']);print('\n'.join(c['rows']));print('\n'.join(c['dbg']));print(c['err'])"
@@ -341,6 +343,30 @@ squares (ortho inserts immediately and is unaffected); a 700 ms fallback adds `.
 `image load event missed <key>` to `dbg` — zero of those in a trace is the healthy state. Verify with a real
 WebKit, not Chrome (Chrome fires the event either way): `npm i playwright@1.47` (node 18) +
 `npx playwright install webkit`, load the share link, count `svg.glyph .hi image:not(.in)` at 8/15/25 s → 0.
+
+## Warm — opened links stay fast across a restart (`ne_glyph_warm.go`)
+
+Every cache behind the glyph (tile LRU, tile geometry, filter bins, pass tables) is in memory and empty after a restart,
+so the first reader of a copied link waited for every tile to render again. Now:
+
+- **Record.** On a DIRECT open (a usable hash at load; `applyHash()` returned something; not `?trace`, `?dbg`, `?warm` —
+  those are the operator's own loads, always add `?trace` when you open the page yourself so the two stay apart) the
+  page notes every same-origin `/api/v1/ne/glyph/*` GET of its first 25 s (≤ 500) and sends ONE beacon at 25 s or on
+  hide: `{hash, dev: 'd'|'m' (coarse pointer), urls}` → `POST /api/v1/ne/glyph/opened` (204, 0.2/s per IP, body ≤ 96 KB).
+  No IP, UA, screen size or time finer than the day is kept; `q=`, `pn=`, `dbg`, `trace`, `export` tokens are stripped from
+  the hash (`neWarmCanonHash`), foreign and non-glyph URLs dropped (`neWarmURLOK`).
+- **Store.** `data/ne_glyph_opened.json` (never committed): ≤ 150 hashes, per hash `n`, `last` (day, UTC), `d[]`, `m[]`;
+  entries unopened for 30 days fall out at load; the newest-then-most-opened survive when full. Size line: `ne_warm` on
+  `<private>/api/v1/debug/inflight` (entries, urls, beacons, rejected, state, replayed, failed, synth, delay).
+- **Replay.** `neWarmLoop`: 30 min after start (`NE_WARM_DELAY`, Go duration; `NE_WARM=0` = off, beacons still stored)
+  the newest ≤ 60 entries (≤ 6000 URLs) go through the in-process mux one at a time, `neRenderYield()` before each,
+  40 ms apart, as `ua=umfeld-warm` (grep the journal for it). The 30 min keep development restarts from re-rendering the
+  country. A device class never seen for a link is synthesised from the other (`neWarmCounterpart`): the same URLs when the
+  link is not `;screen` (the frame has one aspect ratio everywhere); for `;screen` the tile window of each LOD/variant group
+  is re-shaped around the same centre by AR 0.62 (desktop) ↔ 2.0 (phone), centre-first, capped like the client's `hiCap`.
+- **Check.** `curl -X POST …/api/v1/ne/glyph/opened -d '{"hash":"#kg=63330;v=obs","dev":"d","urls":["/api/v1/ne/glyph/tile?lod=1&i=1600&j=4800&v=obs"]}'`
+  → the file 10 s later; a systemd drop-in `Environment=NE_WARM_DELAY=20s` + restart → `🔥 warm: replaying … / done` in the
+  journal (remove the drop-in afterwards).
 
 ## Soak test (`ne_glyph_soak.js` → `/api/v1/ne/glyph/soak.js`)
 

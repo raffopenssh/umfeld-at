@@ -394,3 +394,20 @@ func feedbackList(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 }
+
+// feedbackPurgeLoop — glyph-trace records (the page's ?trace field recorder,
+// docs/ne-glyph.md §Phone load triage) are triage material, not feedback: they
+// are deleted 24 h after they came in, at start and then hourly. Everything
+// else in the table stays (Datenschutz 2.3).
+func feedbackPurgeLoop() {
+	for {
+		if err := initFeedbackDB(); err == nil {
+			if res, err := feedbackDB.Exec(`DELETE FROM feedback WHERE agent = 'glyph-trace' AND created_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')`); err == nil {
+				if n, _ := res.RowsAffected(); n > 0 {
+					log.Printf("📋 feedback: %d glyph-trace records older than 24 h removed", n)
+				}
+			}
+		}
+		time.Sleep(time.Hour)
+	}
+}

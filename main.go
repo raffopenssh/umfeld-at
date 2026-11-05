@@ -86,7 +86,9 @@ func main() {
 	neTreeHRestore()                                     // tree mode survives a restart (marker in data/ne_fidx)
 	go neTreeHLoop()                                     // hourly probe: ask the observed-layer peer for apex height lists once it serves them prebuilt (ne_tree_h.go)
 	go neObsCompleteLoop()                               // observed layer vs declared view per KG (ne_obs_complete.go; /ne/revisit kind obs_missing)
-	go func() { neFidxPurgeEmpty(); neFidxWarmLoop() }() // filter index: prebuild the bins behind recent near tiles (ne_glyph_fidx.go)
+	go func() { neFidxPurgeEmpty(); neFidxWarmLoop() }()
+	go neWarmLoop()                                      // opened share links replayed 30 min after start (ne_glyph_warm.go)
+	go feedbackPurgeLoop()                               // glyph-trace records live 24 h (api_feedback.go) // filter index: prebuild the bins behind recent near tiles (ne_glyph_fidx.go)
 	go func() {
 		time.Sleep(20 * time.Second)
 		// change over time (the glyph's time strip, /ne/glyph/passes): the
@@ -175,6 +177,7 @@ func main() {
 		defer done()
 		mux.ServeHTTP(w, r)
 	})))))
+	neWarmHandler = mux // the warm replay drives the routes directly: no gzip, no inflight row (ne_glyph_warm.go)
 	log.Printf("🔐 API tiers: public_only=%v private_tier=%v", publicOnly(), privateTierOpen())
 
 	srv := &http.Server{

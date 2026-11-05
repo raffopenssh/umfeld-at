@@ -21,6 +21,7 @@ data/ne_diff/
 data/ne_fidx/
 data/ne_mvt/
 data/osm_remote_grid.bin
+data/ne_glyph_opened.json*
 data/osm_remote_grid.bin.tmp
 *.gpkg
 logs/

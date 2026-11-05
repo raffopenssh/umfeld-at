@@ -198,7 +198,7 @@ func handleNE(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if r.Method != http.MethodGet && r.Method != http.MethodHead && !(r.Method == http.MethodPost && rest == "cells") {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && !(r.Method == http.MethodPost && (rest == "cells" || rest == "glyph/opened")) {
 		apiError(w, "method not allowed", 405)
 		return
 	}
@@ -276,6 +276,8 @@ func handleNE(w http.ResponseWriter, r *http.Request) {
 		handleNEGlyphPasses(w, r)
 	case rest == "glyph/soak.js":
 		handleNEGlyphSoakJS(w, r)
+	case rest == "glyph/opened":
+		handleNEGlyphOpened(w, r) // the page's direct-open beacon (ne_glyph_warm.go)
 	case len(parts) == 2 && parts[0] == "dict":
 		handleNEDict(w, r, parts[1])
 	case len(parts) == 2 && parts[0] == "chunk":

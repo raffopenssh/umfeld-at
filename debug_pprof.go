@@ -82,6 +82,7 @@ func RegisterDebugAPI(mux *http.ServeMux) {
 			"ne_glyph":         NEGlyphStats(),       // ne_glyph.go: landing-page glyph SVG + tooltip JSON (1 slot)
 			"ne_glyph_admin":   neGlyphAdminStats(),  // ne_glyph_admin.go: admin rings (once) + outline memo (bounded)
 			"osm_remote_grid":  RemoteGridStats(),    // osm_remote_grid.go: 250 m remoteness bytes for the roads ink (fixed, ~3 MB)
+			"ne_warm":          NEWarmStats(),        // ne_glyph_warm.go: opened share links (≤ 150 × 2 × 500 URLs on disk) + replay state
 			"ne_glyph_tiles":   NEGlyphTileStats(),   // ne_glyph_tile.go: rendered res-12 PNG tiles (LRU, 24 MB)
 			"ne_glyph_geom":    NEGlyphGeomStats(),   // ne_glyph_geom.go: per-tile cell list + centres (LRU 96 MB)
 			"ne_passes":        nePassMemoSize(),     // ne_change_passes.go: per-KG pass tables (≤ 512) + national memo age
