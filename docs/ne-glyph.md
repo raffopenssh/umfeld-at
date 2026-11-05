@@ -31,6 +31,15 @@ public via the `/api/v1/ne/` prefix + `publicAllowListGolden` (`api_tiers_test.g
 Tool bar `.glyph-tools`: find `/`, recent, link, full screen (no separators between them) · status
 slot `.gt-n`. The full-res button `tD` (`.gt-d`) is still wired (busy spinner, aria state, soak)
 but `hidden`: full resolution is automatic (`hiAuto`), the status slot took its room.
+**In-view note / card** (`iv`, `ivNote/ivShow/ivPlace/ivClose/ivToggle`): with a **floating** card
+(desktop) nothing picked meant no legend at all. Once the tiles are in, the loading note in `.gt-n`
+settles into `ⓘ in view · observed · 9 706 k cells` (`.gt-n.iv`, lucide info, a button); tapping it
+opens the in-view legend as the floating card in that corner (`.glyph-tip.iv`, no grip, dock + × kept)
+and the note steps away while the card is up; ×, Esc, dismiss close it and the note returns. Nothing
+shows before the picture is complete (`hi.left || hiLeftBy()`); once up it stays through pans. Hover
+cards take the spot and the in-view card returns in `hide()`. Dock ⇒ the sheet (carries the legend
+itself), float back ⇒ in-view card again. Share token `;info`. Phones / `;below` (docked) never see
+the note. Hook: `state().info`, `state().infoNote`, `info(true|false|undefined=toggle)`.
 `change` and `diff` carry a `.gt-t` word after the icon under the same rule as find's label (phones /
 coarse pointers show it, a desktop bar is icons only). View bar `.glyph-view` (`gv`) = **profile** radio pair `.gv-p` (`declared`
 `.gv-b[data-v=""]` · sep · `observed` `.gv-b[data-v=obs]`) · gap · **overlay**
@@ -168,7 +177,7 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   undocking unfolds), × `.glyph-x` (`dismiss`). The × must always be visible feedback: floating → the card slides
   away; docked → `hide()` folds whatever is on the sheet to the one-line placeholder `PH` with the `setHTML`
   height animation, even when the caller (`hiUnpin`, `apUnpin`) nulled `picked` before `hide()`.
-- **Share links**: `curHash()` writes `kg= cell= h3= q= v= change diff[=raw] full nofull trees relief ortho[=op] roads[=op] subsidy screen
+- **Share links**: `curHash()` writes `kg= cell= h3= q= v= change diff[=raw] full nofull trees relief ortho[=op] roads[=op] subsidy screen info
   at= open min below card= export`; `applyHash()` parses the same (regex per token, unknown token → ignore
   all) and applies in order `autoSet → setView → setTree → setRelief → setOrthoOp/setOrtho → setRoadsOp/setRoads → setSub → fs → open → dock`.
   **Auto full res on a link** (`hiLand` in `applyHash`): a bare `#kg=`/`#adm=`/`#pt=` switches once the fly
