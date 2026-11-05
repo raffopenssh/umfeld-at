@@ -174,7 +174,12 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   backlog after the hand stopped or reversed, which looked like inverted zoom.
 - **Card buttons** (`.glyph-tip`, right of the header): dock toggle `.glyph-dk` (desktop; `;below`), minimiser
   `.glyph-mn` (phones/touch and docked desktop cards; `;min`; folds to the header line, header or chevron unfolds,
-  undocking unfolds), × `.glyph-x` (`dismiss`). The × must always be visible feedback: floating → the card slides
+  undocking unfolds), × `.glyph-x` (`dismiss`). A docked sheet (phones, `;below`) **rests on the in-view legend**:
+  `sheetRest()` = hint line + `hiLegendHTML()` at full res — `hide()` folds whatever is on it back to that (never
+  to the bare hint, which had no way back), the chevron folds it to the legend's header line (`IN VIEW · OBSERVED ·
+  n cells` = the phone's ⓘ note). The × is `visibility:hidden` while the card is not `.x` — faded out it still
+  hit-tested and, sharing the corner with the chevron on phones, swallowed the tap (dismiss instead of fold).
+  The × must always be visible feedback: floating → the card slides
   away; docked → `hide()` folds whatever is on the sheet to the one-line placeholder `PH` with the `setHTML`
   height animation, even when the caller (`hiUnpin`, `apUnpin`) nulled `picked` before `hide()`.
 - **Share links**: `curHash()` writes `kg= cell= h3= q= v= change diff[=raw] full nofull trees relief ortho[=op] roads[=op] subsidy screen info
@@ -325,6 +330,11 @@ them 24 h after arrival (at start, then hourly; Datenschutz 2.3). Read the newes
 curl -s 'localhost:8000/api/v1/feedback?agent=glyph-trace' | python3 -c "import sys,json;fb=sorted(json.load(sys.stdin)['feedback'],key=lambda f:f['created_at']);c=fb[-1]['context'];print(fb[-1]['created_at'],c['ua']);print('\n'.join(c['rows']));print('\n'.join(c['dbg']));print(c['err'])"
 ```
 
+The trace also carries `stall Nms` rows (the 120 ms sampler fired late = main thread busy), `longtask Nms`
+(PerformanceObserver), and every `pointerdown`/`click` with the element hit (`button.glyph-mn`, `svg` = the icon
+inside a button, `button.glyph-x`…), coordinates and the card's classes; `dbg` has `chevron: fold|unfold` when the
+chevron handler ran. A tap that lands on an unexpected element is the first thing to look for.
+
 Reading it: svg bottom stepping = the frame refit (filter row / card changed height); `card classes` `on min`
 = the load fold; `hi.left` falling and `visible imgs` rising = tiles landing (monotone is good); `rel` = 0 while
 `relief pending` is 0 = the hillshade never made it (see `hiCommit` above). `err` must be `[]`.
@@ -422,7 +432,7 @@ All from one `const m = await import('/api/v1/ne/glyph/soak.js?'+Date.now())` on
 
 | Tool | One call | Gives |
 |---|---|---|
-| `m.check(hash)` | `await m.check('#kg=63330;v=chg;full;relief;z=200')` | goes there, settles, runs every `layers` check (view/full/lod/tiles complete/overlay=base/apex/sub/`.ov-*` display/svg classes/legend/hash tokens) with expectations read off the hash itself, plus **no JS errors** and **no non-200 fetch** (204 relief / 204 sub-when-peer-down tolerated) → `check … PASS 20 checks` or one `FAIL` line per miss. ~1–3 s warm. `{expect:{…}, verbose, settle}` override. |
+| `m.check(hash)` | `await m.check('#kg=63330;v=chg;full;relief;z=200')` | goes there, settles, runs every `layers` check (view/full/lod/tiles complete/overlay=base/apex/sub/`.ov-*` display/svg classes/legend/hash tokens; on a docked sheet — phone emulation or `;below` — also the sheet round trip: rests on the in-view legend with the chevron, pin → card, same cell again → legend back, chevron folds to the header (`;min`) and unfolds; `{expect:{sheetTap:false}}` skips) with expectations read off the hash itself, plus **no JS errors** and **no non-200 fetch** (204 relief / 204 sub-when-peer-down tolerated) → `check … PASS 20 checks` or one `FAIL` line per miss. ~1–3 s warm. `{expect:{…}, verbose, settle}` override. |
 | `m.tile(spec)` | `await m.tile('1/1511/4712/chg')` · `m.tile({lon,lat,lod,v})` | `{s, m (X-NE-Tile minus ms), bytes, png, w, h, sha}` of one tile — JSON, no bytes. |
 | `m.snap(name[, specs])` | `await m.snap('before')` | stores the tiles on screen (cached, in view, of the current LOD, every view) — or the given specs — in the Cache API under `name`; survives reload **and** server restart; one line per tile `key status WxH sha n=`. |
 | `m.diff(name[, specs])` | `await m.diff('before')` | re-fetches and compares each with the stored one: status, every meta key (`n 3309→3308 · lu …`), bytes, and **changed pixels** (`px 493992/1126624 (43.85%) bbox x0,y0,x1,y1`) → `same` or `CHANGED …` per tile. |
