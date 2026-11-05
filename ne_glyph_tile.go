@@ -3,7 +3,7 @@
 // cell coloured by its dominant land-use group (second group as an inner
 // hexagon when it holds ≥ 25 % of the land). Public, tokenless, no SQL.
 //
-//	GET /api/v1/ne/glyph/tile?lod=0|1|2&i=&j=[&v=obs|tree|chg|sub|subc]  PNG tile (lon/lat grid, see neGlyphLODs; f= is accepted and ignored since 2026-10-30)
+//	GET /api/v1/ne/glyph/tile?lod=0|1|2&i=&j=[&v=obs|tree|chg|sub|subc|dif|rd|flt]  PNG tile (every view at every LOD) (lon/lat grid, see neGlyphLODs; f= is accepted and ignored since 2026-10-30)
 //	GET /api/v1/ne/glyph/cell?lon=&lat=                  the res-12 cell under a point: public
 //	                                                     cell doc + its hexagon in viewBox units
 //
@@ -104,6 +104,9 @@ var neGlyphObsRGB = [3]uint8{0x17, 0x8a, 0x7a}
 // < 5 · 5–15 · 15–25 · 25–35 · 35+ m.
 var neGlyphTreeAlpha = [5]float64{0.4, 0.58, 0.74, 0.88, 1}
 
+// neGlyphTreeRGB — the page's AP_COL ramp (< 5 · 5–15 · 15–25 · 25–35 · 35 m +).
+var neGlyphTreeRGB = [5][3]uint8{{0xf4, 0xfc, 0xea}, {0xdc, 0xf2, 0xc4}, {0xbf, 0xe7, 0xa3}, {0x9f, 0xda, 0x86}, {0x7c, 0xcb, 0x6e}}
+
 // palette indexes of the overlays (after transparent 0)
 const (
 	neGlyphIdxUnknown  = 1 + 9*neGlyphTileShades
@@ -149,10 +152,10 @@ func neGlyphOverlayPalette(view string) color.Palette {
 		return append(p, color.NRGBA{c[0], c[1], c[2], 190})
 	}
 	if view == "tree" {
-		c := neGlyphObsRGB
-		for _, a := range neGlyphTreeAlpha {
-			bl := func(v uint8) uint8 { return uint8(math.Round(255 - (255-float64(v))*a)) }
-			p = append(p, color.NRGBA{bl(c[0]), bl(c[1]), bl(c[2]), 255})
+		// the five height bands in the page's crown ramp (AP_COL: lit greens, greener = taller) — the LOD-2
+		// canopy sheet, one tinted cell per wooded cell, over the profile fill
+		for _, c := range neGlyphTreeRGB {
+			p = append(p, color.NRGBA{c[0], c[1], c[2], 215})
 		}
 		return p
 	}
@@ -293,7 +296,7 @@ type neGlyphTileMeta struct {
 	conf     int
 	cand     int
 	flt      *neFltMatcher // v=chg&f=: the filter as a cell test (ne_glyph_flt_match.go)
-	hl       int           // v=chg&hl=: marks grown to the screen's pixel (neChgGrow)
+	hl       int           // v=chg|dif &hl=: marks grown to the screen's pixel (neMarkGrow)
 	dlu      [9]int64
 	first    string // v=chg: earliest / latest digest timestamp among the painted cells (day)
 	last     string
@@ -441,7 +444,7 @@ func neGlyphTileRenderF(lod neGlyphLOD, i, j int, view string, raw bool, win neC
 func neGlyphTileRenderFH(lod neGlyphLOD, i, j int, view string, raw bool, win neChangeWin, ss int, flt *neFiltExpr, hl int) ([]byte, neGlyphTileMeta) {
 	var m neGlyphTileMeta
 	m.win = win
-	if view == "chg" && (hl > 1 || lod.px <= 10) {
+	if (view == "chg" || view == "dif") && (hl > 1 || lod.px <= 10) {
 		// LOD 2 paints a res-12 cell two tile px wide: grown at every zoom (hl ≥ 1); the near LODs only once downscaled
 		if hl < 1 {
 			hl = 1
@@ -1075,9 +1078,11 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 		}
 		fltExpr = fe
 	}
-	if (view == "dif" || view == "rd") && lod == 2 {
-		apiError(w, "v="+view+" is drawn at lod=0|1 only (the marks need the near tiles)", 400)
-		return
+	// v=dif at every LOD since 2026-11-05: at LOD 2 the marks are grown like the change marks (neMarkGrow)
+	if view == "dif" {
+		if v, err := strconv.Atoi(q.Get("hl")); err == nil && v >= 1 && v <= 16 {
+			chgHL = v
+		}
 	}
 	// raw=1 on a diff tile: the kinds without their corroboration (the noise filters of ne-change.md §6d off)
 	raw := view == "dif" && q.Get("raw") == "1"

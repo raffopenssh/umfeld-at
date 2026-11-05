@@ -90,6 +90,8 @@ func neRoadInk(cls uint8, attr neRoadAttr, lod int) neRoadStyle {
 	k := 1.0
 	if lod == 0 {
 		k = 0.8
+	} else if lod == 2 {
+		k = 0.6 // ≈ 8.7 m/px: hairlines, the network as a sketch
 	}
 	s := neRoadStyle{rgb: neRoadInkRGB}
 	switch cls {
@@ -191,8 +193,8 @@ func neRoadLoad(g *neGlyphTileGeom, w, s, e, n float64, m *neGlyphRoadsMeta) []n
 			continue
 		}
 		cls, ok := neRoadClassOf(cat, major, fclass)
-		if !ok {
-			continue
+		if !ok || (cls == neRoadMinor && lodIndex(g.lod) == 2) {
+			continue // LOD 2: service ways and footways would be noise at 8.7 m/px
 		}
 		pts := unpackCoords(coords)
 		if len(pts) < 2 {
@@ -439,7 +441,7 @@ func neGlyphRoadsRender(g *neGlyphTileGeom, w, s, e, n float64, m *neGlyphRoadsM
 			continue
 		}
 		neRoadComposite(img, cov, st.rgb, 1)
-		if cls == neRoadRail && lod != 0 {
+		if cls == neRoadRail && lod == 1 {
 			// white ties over the ink (near tiles only — at LOD 0 a yard would turn to noise): short dashes narrower than the rail
 			for _, ln := range lines {
 				if ln.cls == cls {

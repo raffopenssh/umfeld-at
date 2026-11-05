@@ -55,6 +55,8 @@ const (
 	neDifMixedShareMin = 0.9 // below: the KG's newest flight year is not one year (§6d: 934 KGs)
 )
 
+const neDifIdxHalo = 4
+
 var neDifKindName = [4]string{"", "declared_built_absent", "built_undeclared", "forest_declared_open"}
 
 func neGlyphDifPalette() color.Palette {
@@ -63,6 +65,7 @@ func neGlyphDifPalette() color.Palette {
 		color.NRGBA{c[0], c[1], c[2], 200}, // kind 1 solid
 		color.NRGBA{c[0], c[1], c[2], 255}, // kind 2 chequer (dense dots read lighter)
 		color.NRGBA{c[0], c[1], c[2], 235}, // kind 3 ring
+		color.NRGBA{0x1a, 0x1a, 0x1a, 150}, // neDifIdxHalo: the dark rim of a grown mark (LOD 2 / downscaled)
 	}
 }
 
@@ -328,6 +331,7 @@ func neGlyphDifRender(g *neGlyphTileGeom, ids []uint64, kgs []string, raw bool, 
 		return img
 	}
 	var poly [8][2]float64
+	grow := m.hl >= 1 // LOD 2 (a cell is two tile px) or downscaled: solid marks of each kind, grown with a rim like the change marks
 	for k, id := range res.ids {
 		row, lu := res.obs[k], res.lu[k]
 		if row == nil || len(row) != lay.rowBytes || len(lu) < 30 {
@@ -347,6 +351,10 @@ func neGlyphDifRender(g *neGlyphTileGeom, ids []uint64, kgs []string, raw bool, 
 			continue
 		}
 		m.dif.kinds[kind]++
+		if grow {
+			neFillPoly(img, poly[:np], uint8(kind))
+			continue
+		}
 		switch kind {
 		case neDifKindDeclared:
 			neFillPoly(img, poly[:np], 1)
@@ -358,6 +366,9 @@ func neGlyphDifRender(g *neGlyphTileGeom, ids []uint64, kgs []string, raw bool, 
 			var in [8][2]float64
 			neFillPoly(img, neSubInner(poly[:np], np, cx, cy, 0.5, &in), 0)
 		}
+	}
+	if grow && m.dif.cmp > 0 {
+		neMarkGrow(img, m.hl, neDifIdxHalo, 0.6, 0.3)
 	}
 	return img
 }

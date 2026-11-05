@@ -131,22 +131,25 @@ export async function run(o) {
       s = await go(`#kg=${kg};v=obs;full;z=400`); await layers(P + 'obs/400', s, { view: 'obs', lod: 1 });
       /* trees on either profile */
       if (o.trees !== false) { s = await go(`#kg=${kg};v=obs;full;trees;z=400`); await layers(P + 'obs+trees/400', s, { view: 'obs', lod: 1, trees: true }); s = await go(`#kg=${kg};full;trees;z=400`); await layers(P + 'declared+trees/400', s, { view: '', lod: 1, trees: true }); }
-      /* photo (basemap.at orthophoto under the base, near tiles only): default weight, a given weight (hash round trip of ;ortho=), off at lod 2 while the token stays */
+      /* photo (basemap.at orthophoto under the base, every LOD): default weight, a given weight (hash round trip of ;ortho=), on at lod 2 too */
       if (o.ortho !== false) {
         s = await go(`#kg=${kg};full;ortho;z=400`); await layers(P + 'ortho/400', s, { view: '', lod: 1, ortho: true }); want(P + 'ortho default weight', s.orthoOp === 0.5 && /;ortho(;|$)/.test(s.hash), { op: s.orthoOp, hash: s.hash });
         s = await go(`#kg=${kg};v=obs;change;full;ortho=0.8;z=200`); await layers(P + 'obs+chg+ortho=0.8/200', s, { view: 'obs', change: true, lod: 0, ortho: true }); want(P + 'ortho weight kept', s.orthoOp === 0.8 && /;ortho=0\.8(;|$)/.test(s.hash), { op: s.orthoOp, hash: s.hash });
         const otf = getComputedStyle(document.querySelector('svg.glyph .hi .b')).opacity; want(P + 'ortho fills step back with the slider (obs base .3 × .48 = .144)', Math.abs(+otf - 0.144) < 0.01, otf);
-        s = await go(`#kg=${kg};full;ortho;z=20`); await layers(P + 'ortho/20 (coarse: token kept, layer off)', s, { view: '', lod: 2, ortho: true });
-        want(P + 'ortho button faded at lod 2', document.querySelector('.gv-ortho').classList.contains('off'), document.querySelector('.gv-ortho').className);
+        s = await go(`#kg=${kg};full;ortho;z=20`); await layers(P + 'ortho/20 (coarse level, photo under the wide tiles)', s, { view: '', lod: 2, ortho: true });
+        want(P + 'ortho button live at lod 2', !document.querySelector('.gv-ortho').classList.contains('off'), document.querySelector('.gv-ortho').className);
       }
-      /* roads (OSM roads + rail, v=rd tiles, near tiles only): default weight, a given weight (hash round trip of ;roads=), off at lod 2 while the token stays, under observed + change + photo */
+      /* roads (OSM roads + rail, v=rd tiles, every LOD): default weight, a given weight (hash round trip of ;roads=), at lod 2 without the service ways, under observed + change + photo */
       if (o.roads !== false) {
         s = await go(`#kg=${kg};full;roads;z=400`); await layers(P + 'roads/400', s, { view: '', lod: 1, roads: true }); want(P + 'roads default weight', s.roadsOp === 0.7 && /;roads(;|$)/.test(s.hash), { op: s.roadsOp, hash: s.hash });
         const rg = document.querySelector('svg.glyph .hi .ov-rd'); want(P + 'roads group weighed', !!rg && +rg.style.opacity === 0.7, rg && rg.style.opacity);
         s = await go(`#kg=${kg};v=obs;change;full;roads=0.4;z=200`); await layers(P + 'obs+chg+roads=0.4/200', s, { view: 'obs', change: true, lod: 0, roads: true }); want(P + 'roads weight kept', s.roadsOp === 0.4 && /;roads=0\.4(;|$)/.test(s.hash) && +rg.style.opacity === 0.4, { op: s.roadsOp, hash: s.hash, g: rg.style.opacity });
         const rt = s.tiles.find(t => t.v === 'rd' && t.ok); want(P + 'roads tile meta', !!rt && 'rd' in rt.m && 'km' in rt.m && 'rdc' in rt.m, rt && rt.m); const rtk = s.tiles.find(t => t.v === 'rd' && t.ok && +t.m.km > 0.3 && (+t.m.rdc.split(',')[0] + +t.m.rdc.split(',')[1] + +t.m.rdc.split(',')[2]) > 0); if (rtk) want(P + 'roads remoteness meta (rm 0–100, rmb 4 bands)', 'rm' in rtk.m && +rtk.m.rm >= 0 && +rtk.m.rm <= 100 && (rtk.m.rmb || '').split(',').length === 4, rtk.m);
-        s = await go(`#kg=${kg};full;roads;z=20`); await layers(P + 'roads/20 (coarse: token kept, layer off)', s, { view: '', lod: 2, roads: true });
-        want(P + 'roads button faded at lod 2', document.querySelector('.gv-rd').classList.contains('off'), document.querySelector('.gv-rd').className);
+        s = await go(`#kg=${kg};full;roads;z=20`); await layers(P + 'roads/20 (coarse level: major roads, roads, rail)', s, { view: '', lod: 2, roads: true });
+        want(P + 'roads button live at lod 2', !document.querySelector('.gv-rd').classList.contains('off'), document.querySelector('.gv-rd').className);
+        s = await go(`#kg=${kg};full;diff;trees;z=20`); await layers(P + 'diff+trees/20 (coarse level: grown marks, trees not yet)', s, { view: '', lod: 2, diff: true, trees: true });
+        want(P + 'trees button faded at z 20', document.querySelector('.gv-tree').classList.contains('off'), document.querySelector('.gv-tree').className);
+        s = await go(`#kg=${kg};full;trees;z=40`); await layers(P + 'trees/40 (coarse level from HI_TREE: the tree tiles)', s, { view: '', lod: 2, trees: true });
       }
       /* locate (the reader's position, phones/tablets; docs/ne-glyph.md row 'my position'): a fed fix draws the pulsing dot and writes nothing; the second stage pins it as the found point (pt= in the hash, full resolution); off removes the point, the selection and the card; nothing lands in localStorage */
       if (o.locate !== false) {
@@ -270,23 +273,22 @@ async function layersOf(X, P, s, e) {
     if (s.animating) X.warn.push(P + ' fly animation still running after settle ' + str({ fly: s.fly, tour: s.tour, z: Math.round(s.z), hash: s.hash }));
     const on = s.full ? s.tiles.filter(t => t.on && t.k.split('/')[1] === String(s.lod)) : [];
     const base = on.filter(t => t.v === ''), ov = on.filter(t => t.v === s.view && s.view), ap = on.filter(t => t.v === 'apex'), ch = on.filter(t => t.v === 'chg');
-    const sv = s.change ? 'subc' : 'sub', sb = on.filter(t => t.v === sv), df = on.filter(t => t.v === 'dif'), rd = on.filter(t => t.v === 'rd'), other = on.filter(t => ['', 'obs', 'chg', 'dif', 'rd', 'sub', 'subc', 'apex'].indexOf(t.v) < 0 || (t.v === 'obs' && !s.view) || (t.v === 'chg' && !s.change) || (t.v === 'dif' && !s.diff) || (t.v === 'rd' && !s.roads));
+    const sv = s.change ? 'subc' : 'sub', sb = on.filter(t => t.v === sv), df = on.filter(t => t.v === 'dif'), rd = on.filter(t => t.v === 'rd'), other = on.filter(t => ['', 'obs', 'chg', 'dif', 'rd', 'sub', 'subc', 'apex', 'tree'].indexOf(t.v) < 0 || (t.v === 'obs' && !s.view) || (t.v === 'chg' && !s.change) || (t.v === 'dif' && !s.diff) || (t.v === 'rd' && !s.roads) || (t.v === 'tree' && !s.trees));
     if (s.full) want(P + ' nothing loading for a layer that is off', other.every(t => t.ok), other.filter(t => !t.ok).map(t => t.v + '/' + t.k).slice(0, 5)); /* cached tiles of an off layer stay in view (hidden by the group), they must just not be fetched */
     if (s.full) want(P + ' base tiles', base.length > 0 && base.every(t => t.ok), { n: base.length, notOk: base.filter(t => !t.ok).map(t => t.k) });
     want(P + ' no incomplete tile on screen', on.every(t => t.ok), on.filter(t => !t.ok).map(t => t.v + '/' + t.k));
     if (s.view && s.full) want(P + ' profile tiles = base', ov.length === base.length && ov.every(t => t.ok), { ov: ov.length, base: base.length });
     if (s.change && s.full) want(P + ' change tiles = base', ch.length === base.length && ch.every(t => t.ok), { chg: ch.length, base: base.length });
     want(P + ' diff', !!s.diff === !!e.diff, s.diff);
-    if (e.diff && s.full && s.lod !== 2) want(P + ' diff tiles = base', df.length === base.length && df.every(t => t.ok), { dif: df.length, base: base.length });
-    if (s.full && s.lod === 2) want(P + ' no diff tile at lod 2', df.length === 0, df.length);
+    if (e.diff && s.full) want(P + ' diff tiles = base', df.length === base.length && df.every(t => t.ok), { dif: df.length, base: base.length });
     want(P + ' roads', !!s.roads === !!e.roads, s.roads);
-    if (e.roads && s.full && s.lod !== 2) want(P + ' roads tiles = base', rd.length === base.length && rd.every(t => t.ok), { rd: rd.length, base: base.length });
-    if (s.full && s.lod === 2) want(P + ' no roads tile at lod 2', rd.length === 0, rd.length);
+    if (e.roads && s.full) want(P + ' roads tiles = base', rd.length === base.length && rd.every(t => t.ok), { rd: rd.length, base: base.length });
     want(P + ' trees', !!s.trees === !!e.trees, s.trees);
     if (e.trees && s.full && s.lod !== 2) want(P + ' apex tiles = base', ap.length === base.length && ap.every(t => t.ok), { ap: ap.length, base: base.length });
+    if (e.trees && s.full && s.lod === 2) { const tt = on.filter(t => t.v === 'tree'), far = document.querySelector('.gv-tree').classList.contains('off'); want(P + (far ? ' no tree tile under HI_TREE' : ' tree tiles = base at lod 2'), far ? tt.length === 0 : tt.length === base.length && tt.every(t => t.ok), { tree: tt.length, base: base.length }); }
     want(P + ' relief', !!s.relief === !!e.relief, s.relief);
     want(P + ' ortho', !!s.ortho === !!e.ortho, s.ortho);
-    if (e.ortho && s.full && s.lod !== 2) want(P + ' ortho tiles on screen', document.querySelectorAll('svg.glyph .hi .ov-ortho image').length > 0, s.orthoZ);
+    if (e.ortho && s.full) want(P + ' ortho tiles on screen', document.querySelectorAll('svg.glyph .hi .ov-ortho image').length > 0, s.orthoZ);
     want(P + ' subsidy', !!s.subsidy === !!e.sub, s.subsidy);
     const subVis = !!e.sub;
     if (subVis && subUp && s.full) want(P + ' sub tiles = base', s.subsidyLoaded && sb.length === base.length && sb.every(t => t.ok), { sb: sb.length, base: base.length, loaded: s.subsidyLoaded });
@@ -299,8 +301,8 @@ async function layersOf(X, P, s, e) {
     if (document.querySelector('svg.glyph .hi .ov-chg')) { /* the overlay groups exist once full resolution was on at least once */
     want(P + ' ov-obs shown⇔obs', (disp('.ov-obs') !== 'none') === (s.view === 'obs'), disp('.ov-obs'));
     want(P + ' ov-chg shown⇔change', (disp('.ov-chg') !== 'none') === !!s.change, disp('.ov-chg'));
-    want(P + ' ov-dif shown⇔diff&near', (disp('.ov-dif') !== 'none') === (!!s.diff && s.full && s.lod !== 2), disp('.ov-dif'));
-    want(P + ' ov-rd shown⇔roads&near', (disp('.ov-rd') !== 'none') === (!!s.roads && s.full && s.lod !== 2), disp('.ov-rd'));
+    want(P + ' ov-dif shown⇔diff', (disp('.ov-dif') !== 'none') === !!s.diff, disp('.ov-dif'));
+    want(P + ' ov-rd shown⇔roads', (disp('.ov-rd') !== 'none') === !!s.roads, disp('.ov-rd'));
     { const kids = Array.from(document.querySelector('svg.glyph .hi').children).map(c => c.getAttribute('class')), ri = kids.indexOf('ov ov-rd'), si = kids.indexOf('ov ov-subc'), li = kids.indexOf('ov ov-rel'), ti = kids.indexOf('ov ov-tree'); want(P + ' ov-rd z-order (over subsidy, under relief + trees)', ri > si && (li < 0 || ri < li) && ri < ti, kids.join(' ')); }
     want(P + ' ov-sub shown⇔sub&!change', (disp('.ov-sub') !== 'none') === (!!subVis && !s.change), disp('.ov-sub'));
     want(P + ' ov-subc shown⇔sub&change', (disp('.ov-subc') !== 'none') === (!!subVis && !!s.change), disp('.ov-subc'));
@@ -315,11 +317,11 @@ async function layersOf(X, P, s, e) {
     if ((s.full || subVis) && !lgDue) want(P + ' legend waits for a pick (floating card)', !G.legend() && !s.cardOn, { legend: G.legend().slice(0, 50), cardOn: s.cardOn });
     if (lgDue && s.full) { { const until = Date.now() + 8000, need = () => !G.legend() || (subUp && s.subsidy && G.legend().toLowerCase().indexOf('\nin view · subsidy') < 0); while (need() && Date.now() < until) await sleep(150); } /* the legend lands after the last tile (debounced), after a long cold settle it may be a beat behind; the subsidy block is appended when the peer answers (hiLegend coalesced) */
       const lg = G.legend().toLowerCase(), headOK = lg.indexOf(s.view === 'obs' ? 'in view · observed' : 'in view · declared') >= 0, ci = lg.indexOf('\nin view · change'), di = lg.indexOf('\nin view · diff'), ti = lg.indexOf('\nin view · trees'), si = lg.indexOf('\nin view · subsidy');
-      want(P + ' legend blocks', headOK && (ci >= 0) === !!s.change && (di >= 0) === !!s.diff && (!s.change || !s.diff || ci < di) && ((ti >= 0) === !!(s.trees && s.lod !== 2) || s.lod === 2) && (!subUp || (si >= 0) === !!s.subsidy) && (!s.change || !s.trees || s.lod === 2 || ci < ti), { headOK, change: ci, diff: di, trees: ti, subsidy: si, legend: lg.slice(0, 80) }); }
+      want(P + ' legend blocks', headOK && (ci >= 0) === !!s.change && (di >= 0) === !!s.diff && (!s.change || !s.diff || ci < di) && (ti >= 0) === !!s.trees && (!subUp || (si >= 0) === !!s.subsidy) && (!s.change || !s.trees || ci < ti), { headOK, change: ci, diff: di, trees: ti, subsidy: si, legend: lg.slice(0, 80) }); }
     if (document.querySelector('svg.glyph .hi .ov-rel')) want(P + ' ov-rel shown⇔relief', (disp('.ov-rel') !== 'none') === !!s.relief, disp('.ov-rel'));
-    if (document.querySelector('svg.glyph .hi .ov-ortho')) { want(P + ' ov-ortho shown⇔ortho&near', (disp('.ov-ortho') !== 'none') === (!!s.ortho && s.full && s.lod !== 2), disp('.ov-ortho')); want(P + ' ov-ortho under the base', document.querySelector('svg.glyph .hi').firstElementChild.classList.contains('ov-ortho'), document.querySelector('svg.glyph .hi').firstElementChild.className.baseVal); }
-    if (lgDue && s.lod !== 2) want(P + ' legend photo line⇔ortho', (G.legend().toLowerCase().indexOf('photo') >= 0) === !!s.ortho, G.legend().slice(-80));
-    if (lgDue && s.lod !== 2) want(P + ' legend roads line⇔roads', /\nroads /.test(G.legend()) === !!s.roads, G.legend().slice(-80));
+    if (document.querySelector('svg.glyph .hi .ov-ortho')) { want(P + ' ov-ortho shown⇔ortho', (disp('.ov-ortho') !== 'none') === !!s.ortho, disp('.ov-ortho')); want(P + ' ov-ortho under the base', document.querySelector('svg.glyph .hi').firstElementChild.classList.contains('ov-ortho'), document.querySelector('svg.glyph .hi').firstElementChild.className.baseVal); }
+    if (lgDue) want(P + ' legend photo line⇔ortho', (G.legend().toLowerCase().indexOf('photo') >= 0) === !!s.ortho, G.legend().slice(-80));
+    if (lgDue) want(P + ' legend roads line⇔roads', /\nroads /.test(G.legend()) === !!s.roads, G.legend().slice(-80));
     if (lgDue) want(P + ' legend', G.legend().length > 10, G.legend().slice(0, 50)); /* the legend is a full-res (or subsidy) thing; the overview has none */
     /* paint budget (docs/ne-glyph.md §paint budget): once the LOD in use is complete, no tile of another LOD is painted under it;
        every <image> left in the SVG is one of the cached tiles; the decode queue is drained; the cache holds the budget (+ what is on screen) */
@@ -382,9 +384,10 @@ export async function matrix(kg, o) {
   const h0 = location.hash, lods = o.lods || [1], Z = { 0: 200, 1: 400, 2: 20 }, combos = [];
   for (const lod of lods) for (const v of ['', 'obs']) for (let m = 0; m < 128; m++) {
     const c = { v, change: !!(m & 1), sub: !!(m & 2), trees: !!(m & 4), relief: !!(m & 8), diff: !!(m & 16), ortho: !!(m & 32), roads: !!(m & 64), lod };
-    if (c.roads && (o.roads === false || lod !== 1 || (m & 63) > 1 && (m & 63) !== 4 && (m & 63) !== 8 && (m & 63) !== 32 && (m & 63) !== 2)) continue; /* roads: alone, with change, with subsidy, with trees, with relief, with photo */
-    if (c.ortho && (o.ortho === false || lod !== 1 || (m & 31) > 1 && (m & 31) !== 4 && (m & 31) !== 8)) continue; /* photo: alone, with change, with trees, with relief */
-    if (lod !== 1 && (c.trees || c.relief)) continue;
+    if (c.roads && (o.roads === false || lod === 0 || (lod === 2 && (m & 63)) || (m & 63) > 1 && (m & 63) !== 4 && (m & 63) !== 8 && (m & 63) !== 32 && (m & 63) !== 2)) continue; /* roads: alone, with change, with subsidy, with trees, with relief, with photo */
+    if (c.ortho && (o.ortho === false || lod === 0 || (lod === 2 && (m & 31)) || (m & 31) > 1 && (m & 31) !== 4 && (m & 31) !== 8)) continue; /* photo: alone, with change, with trees, with relief */
+    if (lod === 0 && (c.trees || c.relief)) continue;
+    if (lod === 2 && (c.relief || (c.trees && (m & 11)) || (c.diff && (m & 15) !== 16))) continue; /* lod 2: trees alone / with diff, diff alone, photo alone, roads alone */
     if (c.diff && (o.diff === false || (m & 15) > 1 && (m & 15) !== 4 && (m & 15) !== 8)) continue; /* diff: alone, with change, with trees, with relief — the view-model shape, not every product */
     if ((o.trees === false && c.trees) || (o.relief === false && c.relief) || (o.subsidy === false && c.sub)) continue;
     combos.push(c);

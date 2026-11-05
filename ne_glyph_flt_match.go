@@ -96,12 +96,17 @@ func (f *neFltMatcher) match(id uint64, lon, lat float64) uint8 {
 // mark reads like a tree ring — ~5 screen px across with a dark 1-screen-px rim (neGlyphIdxChgHalo) — at any
 // zoom; the growth fades with the zoom (hl 16 → 1) and at LOD 0/1 stops once a cell is wider than a pixel (hl 1).
 // Chamfer distance transform with label propagation, so a grown pixel takes the tone and age of its nearest mark.
-func neChgGrow(img *image.Paletted, hl int) {
+func neChgGrow(img *image.Paletted, hl int) { neMarkGrow(img, hl, neGlyphIdxChgHalo, 2.2, 1.0) }
+
+// neMarkGrow — neChgGrow for any mark palette: halo is the palette index of the rim, rad/rim the radii in
+// screen px (× hl tile px). The sparse change marks grow to 2.2 px dots with a 1 px rim; the dense diff marks
+// (ne_glyph_dif.go) only to the screen's pixel (0.6 + 0.3; hl runs ≈ 1.4 × the downscale) so that they keep their density at every zoom.
+func neMarkGrow(img *image.Paletted, hl int, halo uint8, rad, rim float64) {
 	if hl < 1 {
 		return
 	}
-	r := int32(math.Round(float64(hl) * 2.2 * 3))  // ×3: chamfer units
-	rh := r + int32(math.Round(float64(hl)*1.0*3)) // the rim outside
+	r := int32(math.Round(float64(hl) * rad * 3))  // ×3: chamfer units
+	rh := r + int32(math.Round(float64(hl)*rim*3)) // the rim outside
 	w, h := img.Rect.Dx(), img.Rect.Dy()
 	pix := img.Pix
 	const inf = 1 << 30
@@ -165,7 +170,7 @@ func neChgGrow(img *image.Paletted, hl int) {
 			if d[o] <= r {
 				pix[y*img.Stride+x] = lab[o]
 			} else if d[o] <= rh {
-				pix[y*img.Stride+x] = neGlyphIdxChgHalo
+				pix[y*img.Stride+x] = halo
 			}
 		}
 	}
