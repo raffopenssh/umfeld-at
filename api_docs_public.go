@@ -28,7 +28,7 @@ func publicBaseURL(r *http.Request) string {
 }
 
 func publicLLMText(r *http.Request) string {
-	rp := strings.NewReplacer("{NE}", publicNELLMSection, "{BASE}", publicBaseURL(r), "{STAGE_NOTE}", serviceStageNote, "{STAGE}", serviceStage)
+	rp := strings.NewReplacer("{NE}", publicNELLMSection, "{BASE}", publicBaseURL(r), "{STAGE_NOTE}", serviceStageNote, "{STAGE}", serviceStage, "{FILTER_REF}", neFilterRefText())
 	return neSpliceCoverage(rp.Replace(publicLLMTemplate))
 }
 
@@ -50,6 +50,10 @@ This API answers "what is AROUND this point?" for any WGS84 coordinate in Austri
   · register lookups: Gemeinde / PLZ / Ortschaft / KG names and codes
   · NE cells: declared land use per H3 cell and LAND-USE CHANGE over time (section "NE cells" below —
     API, plus the landing page GET / whose every piece a client can rebuild: see "Landing page")
+  · THE MAP (GET /, section "The map" next): Austria at res 12 (~300 m² cells) — declared use, LiDAR-observed
+    use, change between digests, register-vs-LiDAR diff, INVEKOS subsidy claims, every tree, relief, orthophoto,
+    roads — plus a filter over ~60 per-cell fields (height, slope, aspect, elevation, canopy, NDVI, subsidy class,
+    Natura 2000, distance to road/water, remoteness, …) at every zoom, and the monthly change pass that feeds it.
 
   The cadastre itself stays client-side: parcels, footprints and land use come straight
   from the official BEV vector tile cadastre (VTC, CC BY 4.0). vtcseamless
@@ -57,6 +61,63 @@ This API answers "what is AROUND this point?" for any WGS84 coordinate in Austri
   bevdirect-serve) stitches the tiles into seamless parcel geometries in your client;
   Python: https://github.com/raffopenssh/vtcseamless-py (bevdirect-serve client + ne_cells + this API).
   You then send us a point plus the parcel features you already hold (see /api/v1/context).
+
+## The map — GET / (everything below is also a URL; no clicks needed)
+
+  The landing page is the service. One hexagon per H3 cell, Austria at res 7 (dots) → res 12 (~300 m², the
+  "full" tiles, ;full). Every picture is one PROFILE × any OVERLAYS, each with an endpoint ("Landing page" in
+  the NE section is the exhaustive inventory; this is the short form). Open any state by writing the hash:
+
+    {BASE}/#v=obs;full;relief;f=ht=40..55,sl>=26.6,as=s;screen;at=741,2406,9.3
+      → the observed profile at full resolution with hillshade, filtered to cells holding a 40–55 m tree on a
+        ≥ 26.6° south-facing slope, full screen, centred at viewBox 741,2406 at 9.3× (lod=2 tiles from 8×, lod=0
+        from 110×, lod=1 from 300×).
+    {BASE}/#kg=63349;change;open            confirmed change of a KG, card open
+    {BASE}/#q=kohlschwarz;full;trees;relief;z=400   one hill: every tree as a ring of its crown over the relief
+    {BASE}/#adm=AT1103112;subsidy;f=n2k,scov>=50    a Natura 2000 site, the land under subsidy claim
+    {BASE}/#pt=15.0857,47.0665;full;diff;roads;ortho=0.4   a point: register vs LiDAR, roads, photo under
+
+  Profiles (exactly one; key v)     declared  use digested by peers from the BEV tiles · darker = seen more often ·
+                                              gold = reported in the last 6 h        glyph · glyph/tile?lod=&i=&j=
+                                    observed  use the LiDAR and satellite see ({OBS_NAME})   glyph/tile?v=obs
+  Overlays (any mix, any profile)   ;change   cells whose declared use moved between digests, confirmed / candidate,
+                                              aged fresh → ash; the time strip replays by pass, by day, play walks
+                                              the days (;t=2, ;t=2..3, ;t=2@d1..d2, ;t=@d1..d2)   tile?v=chg&t= · stats · glyph/passes
+                                    ;diff     register vs LiDAR TODAY: structures declared · none flown (solid),
+                                              flown · none declared (chequer), declared forest · no trees (ring);
+                                              ;diff=raw lifts the corroboration        tile?v=dif · glyph/cell → pic_dif
+                                    ;subsidy  INVEKOS Schläge as drawn ({SUB_NAME}); with ;change their lineage vs
+                                              the previous year: new / redrawn / gone   tile?v=sub|subc · glyph/sub
+                                    ;trees    every tree apex as a ring of its crown, greener = taller   tile?v=tree
+                                    ;relief   hillshade, 25 m DTM ({OBS_NAME} tiles)
+                                    ;ortho[=op] basemap.at orthophoto under the cells (≥110×)
+                                    ;roads[=op] OSM roads + rail, one ink: wider = higher rank, darker = more remote   tile?v=rd
+                                    ;f=<expr> FILTER — cells failing the expression are veiled, the readout counts the
+                                              rest; cell-exact at the near tiles, from the national 1-in-49 sample
+                                              farther out, so every term works at every zoom   filter · glyph/fidx · glyph/fnat
+  Selection                         #kg= #adm= (Gemeinde, Bezirk, Land, Natura 2000 site) #h3= #pt=lon,lat #q=<name> #cell=x,y
+  View                              ;full ;nofull ;screen ;z=<zoom> ;at=x,y,z ;open ;below ;card=fx,fy
+  Card / peek                       the cell under the pointer: declared split, observed split, structures, change,
+                                    diff, subsidy, trees — glyph/cell?lon=&lat=  ·  cell/{h3} (the rows)
+  Link ▾ / export                   the hash verbatim is an export: stats/unit?share=<hash>&format=json|flat|csv — one row
+                                    per unit (KG, admin unit, h3, bbox, point) with the SAME filter applied, federated with
+                                    {OBS_NAME} and {SUB_NAME}; QGIS: mvt/{z}/{x}/{y}.pbf (+ ?f=) · pmtiles?share=
+
+  Filter grammar  f=<group>(,<group>)*  group=<term>(|<term>)*  term=<field><op><value>
+    , = AND between groups · | = OR inside a group · >=a <=b a..b a.. ..b · sets =m1+m2 · flags bare (n2k) ·
+    field=unk = cells without a value · k>=n keeps match clusters ≥ n cells · unknown terms ignored one by one
+    (ignored[]), never an error · plain phrasing works in the page ("trees between 10 and 20 m", "facing southeast
+    to southwest", "slope at least 15 %") · member labels accepted (chg=confirmed). Same grammar everywhere:
+    /api/v1/ne/filter?bbox=|kg=|adm=&f= · /api/v1/ne/stats/unit?…&f= · /api/v1/ne/mvt.json?f= · the hash ;f=.
+  Filter fields (JSON with histograms: /api/v1/ne/filter/fields; core = held in every bin, ext = extended plane):
+{FILTER_REF}
+
+  The change pass behind the picture: {MAP_NAME} re-digests every KG of the universe from the BEV tiles about
+  once a MONTH (whole-KG reports, ~200–650 KGs a day, all 7 850 in ~30 days) next to {OBS_NAME}'s observers;
+  a chunk whose digest moves and is sighted again on a later pass (or by a second observer) is CONFIRMED change,
+  once = candidate. The strip under the map, /ne/glyph/passes and /ne/stats count by pass (k-th sighting) with
+  share seen, ETA of the open pass and the figures per day; public figures count confirmed only.
+  Self-check: /ne/glyph/passes → passes[] k=2 share, eta; /ne/stats → change.confirmed.cells, by_day.
 
 ## Keys and conventions
 

@@ -124,3 +124,87 @@ func neFiltValuesHTML(fd *neFiltField) string {
 // neFilterRefCSS — subtle: a muted summary line; the table inherits the page's.
 const neFilterRefCSS = `details.fref{margin:.6rem 0 1rem}details.fref kbd{font:inherit;font-size:.86em;padding:0 .3em;border:1px solid color-mix(in srgb,currentColor 45%,transparent);border-radius:3px;white-space:nowrap}details.fref summary{cursor:pointer;color:var(--mut);font-size:.9em;list-style:none}details.fref summary::before{content:"▸ ";font-size:.85em}details.fref[open] summary::before{content:"▾ "}details.fref summary::-webkit-details-marker{display:none}details.fref summary:hover{color:var(--fg)}
 .fref-cols{columns:2;column-gap:2.5rem;font-size:.85em;line-height:1.5}.fref-cols h4{margin:.4em 0 .1em;font-size:.78em;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);font-weight:700;break-after:avoid}.fref-cols ul{list-style:none;margin:0 0 .3em;padding:0}.fref-cols li{margin:0;padding:0;break-inside:avoid;overflow-wrap:anywhere}.fref-cols code{color:var(--acc)}.fref-cols .a,.fref-cols .v,.fref-cols .w{color:var(--mut)}.fref-cols .a:before{content:"= "}.fref-cols .v{color:var(--fg);opacity:.75}.fref-cols .v:before{content:"· "}.fref-cols .w:before{content:"· "}.fref-cols abbr{text-decoration:none;border-bottom:1px dotted var(--rule);cursor:help}@media(max-width:640px){.fref-cols{columns:1}}`
+
+// neFilterRefText — the same reference as plain text, spliced into llm.txt as
+// {FILTER_REF}: one line per field (id · label · aliases · values · words),
+// grouped like the landing page, then the presets. Generated from the
+// catalogue so the two never drift.
+func neFilterRefText() string {
+	alias := map[string][]string{}
+	for a, f := range neFiltAlias {
+		alias[f] = append(alias[f], a)
+	}
+	words := map[string][]string{}
+	for w, x := range neFiltWords {
+		i := strings.IndexAny(x, "=<>")
+		if i < 0 {
+			i = len(x)
+		}
+		words[x[:i]] = append(words[x[:i]], w+" = "+x)
+	}
+	for _, m := range []map[string][]string{alias, words} {
+		for k := range m {
+			sort.Strings(m[k])
+		}
+	}
+	var b strings.Builder
+	var groups []string
+	byGroup := map[string][]*neFiltField{}
+	cat := neFiltCatalogue()
+	for i := range cat {
+		fd := &cat[i]
+		if _, ok := byGroup[fd.Group]; !ok {
+			groups = append(groups, fd.Group)
+		}
+		byGroup[fd.Group] = append(byGroup[fd.Group], fd)
+	}
+	for _, group := range groups {
+		b.WriteString("    " + strings.ToUpper(group) + "\n")
+		for _, fd := range byGroup[group] {
+			line := "      " + fd.ID
+			if a := alias[fd.ID]; len(a) > 0 {
+				line += " (= " + strings.Join(a, " ") + ")"
+			}
+			line += "  " + fd.Label + " · " + neFiltValuesText(fd)
+			if fd.Plane == "ext" {
+				line += " · ext"
+			}
+			if w := words[fd.ID]; len(w) > 0 {
+				line += " · " + strings.Join(w, " · ")
+			}
+			b.WriteString(line + "\n")
+		}
+	}
+	b.WriteString("    PRESETS")
+	for _, p := range neFiltPresets {
+		b.WriteString("\n      " + p[1] + "  " + p[0])
+	}
+	return b.String()
+}
+
+func neFiltValuesText(fd *neFiltField) string {
+	switch fd.Kind {
+	case nfNum:
+		if fd.Max > 0 || fd.Min != 0 {
+			return strings.TrimSpace(neFiltNum(fd.Min) + "–" + neFiltNum(fd.Max) + " " + fd.Unit)
+		}
+		return "number"
+	case nfBucket:
+		p := make([]string, len(fd.Edges))
+		for i, e := range fd.Edges {
+			p[i] = strconv.Itoa(e)
+		}
+		return strings.TrimSpace("classes " + strings.Join(p, " ") + " " + fd.Unit)
+	case nfFlag:
+		return "flag"
+	case nfSites:
+		return "flag · =site code"
+	}
+	var m []string
+	for _, x := range fd.Members {
+		if x != "" {
+			m = append(m, x)
+		}
+	}
+	return "=" + strings.Join(m, "|")
+}
