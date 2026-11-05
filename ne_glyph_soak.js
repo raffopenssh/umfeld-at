@@ -339,8 +339,9 @@ async function layersOf(X, P, s, e) {
       want(P + ' decode drained', s.mem.decQ === 0 && s.mem.decN === 0, { q: s.mem.decQ, n: s.mem.decN });
       want(P + ' no leaked <image>', s.mem.images <= s.tiles.length, { images: s.mem.images, tiles: s.tiles.length });
       want(P + ' painted = on-screen & not hidden', s.mem.shown <= s.tiles.filter(t => t.on && !t.hid && t.ok).length, { shown: s.mem.shown, painted: s.tiles.filter(t => t.on && !t.hid && t.ok).length });
-      const onN = s.tiles.filter(t => t.on).length;
-      want(P + ' cache ≤ budget', s.tiles.length <= Math.max(s.mem.keep, onN), { tiles: s.tiles.length, keep: s.mem.keep, on: onN });
+      /* the budget is in tile-cost units (a ds=2 tile costs ¼): compare state().mem.load, not the tile count — same rule as stress() */
+      const onN = s.tiles.filter(t => t.on).length, load = s.mem.load != null ? s.mem.load : s.tiles.length, onLoad = s.mem.load != null ? onN * load / Math.max(1, s.tiles.length) : onN;
+      want(P + ' cache ≤ budget', load <= Math.max(s.mem.keep, onLoad) + 0.01, { load, tiles: s.tiles.length, keep: s.mem.keep, on: onN });
     } else X.warn.push(P + ' state().mem missing — stale page script');
     /* hash carries the state */
     const h = ';' + s.hash.replace(/^#/, ''); want(P + ' hash tokens', (s.view ? h.indexOf(';v=' + s.view) >= 0 : !/;v=/.test(h)) && /;change/.test(h) === !!s.change && /;diff(=raw)?(;|$)/.test(h) === !!s.diff && /;full/.test(h) === s.full && /;trees/.test(h) === !!s.trees && /;relief/.test(h) === !!s.relief && /;ortho(=[\d.]+)?(;|$)/.test(h) === !!s.ortho && /;roads(=[\d.]+)?(;|$)/.test(h) === !!s.roads && /;subsidy/.test(h) === !!s.subsidy, h);
