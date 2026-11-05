@@ -470,6 +470,10 @@ export async function check(hash, o) {
   await layersOf({ want, G, subUp, warn: R.warn }, 'state', s, e);
   const L = G.log ? G.log() : { errors: [], fetch: {} };
   want('no js errors', L.errors.length === 0, L.errors.map(x => x.m + ' @' + x.at));
+  /* the two traps that took the glyph down once (docs/ne-glyph.md §Phone load triage): a helper nested inside the previous function
+     (ReferenceError at the first tile) and an <image> that never got its load event (WebKit: href set while detached → opacity 0 forever) */
+  if (G.scope) { const sc = G.scope(), miss = Object.keys(sc).filter(k => sc[k] !== 'function'); want('helpers at script scope', miss.length === 0, miss); }
+  if (G.imgs) { await sleep(800); const im = G.imgs(); want('every image shown', im.notin.length === 0, im.notin.slice(0, 8)); want('no missed image load event', im.missed === 0, im.missed); if (e.relief && !s.reliefLeft) want('relief squares shown', im.rel > 0 && im.relin === im.rel, { rel: im.rel, relin: im.relin }); }
   const bad = {}; for (const c in L.fetch) for (const k in L.fetch[c]) if (k !== '200' && k !== 'abort' && !(c === 'tile' && k === '204' && !subUp) && !(c === 'relief' && k === '204') && !(c === 'ortho' && k === '404')) bad[c + ':' + k] = L.fetch[c][k];
   want('fetches ok', Object.keys(bad).length === 0, bad);
   const head = `check ${hash} ${R.fail ? 'FAIL' : 'PASS'} ${R.ok + R.fail} checks, ${R.fail} failed · ${((Date.now() - t0) / 1000).toFixed(1)}s · lod ${s.lod} z ${Math.round(s.z)} · fetch ${str(L.fetch)}` + (R.warn.length ? ' · warn: ' + R.warn.join('; ') : '');

@@ -330,6 +330,17 @@ ffmpeg -i /tmp/shelley-screencasts/<id>.mp4 -vf "crop=iw:ih*0.6:0:ih*0.05,signal
 Before every deploy: `node --check` the first `<script>` of `curl localhost:8000/` (a syntax error silently
 kills the glyph — `window.neGlyph` undefined); and a brace-depth check that `function hiCommit`/`hiFlush` are at
 depth 1 of the IIFE (`/tmp/depth.js` style crude lexer, or just `typeof hiCommit` from `relFetch`).
+The same trap bit `hiHref`: a `function` placed right after `hiTile`'s `.catch(...)` line lands inside `hiTile`.
+
+**WebKit and the batch commit (Safari desktop + every iPhone browser).** WebKit drops the `load` event of an
+SVG `<image>` whose `href` was set while detached and does not resend it on insertion; with `hiCommit`
+deferring the insert, the whole screen sat decoded in the DOM at opacity 0 — no hillshade, half the tiles
+(trace #38: 132 imgs, `hi.left` 0, `err []`, nothing visible). `hiHref(im,url)` therefore sets the href
+**inside** the commit callback, after `insertBefore`/`appendChild`, for profile/overlay tiles and relief
+squares (ortho inserts immediately and is unaffected); a 700 ms fallback adds `.in` anyway and logs
+`image load event missed <key>` to `dbg` — zero of those in a trace is the healthy state. Verify with a real
+WebKit, not Chrome (Chrome fires the event either way): `npm i playwright@1.47` (node 18) +
+`npx playwright install webkit`, load the share link, count `svg.glyph .hi image:not(.in)` at 8/15/25 s → 0.
 
 ## Soak test (`ne_glyph_soak.js` → `/api/v1/ne/glyph/soak.js`)
 
