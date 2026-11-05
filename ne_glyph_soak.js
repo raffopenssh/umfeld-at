@@ -215,7 +215,8 @@ export async function run(o) {
       s = await go(`#kg=${kg};full;z=20`); await layers(P + 'declared/20', s, { view: '', lod: 2 });
       /* pin a cell: client ↔ server agree on the cell under a lon/lat; card names it */
       s = await go(`#kg=${kg};full;z=400`);
-      const cen = G.lonlat(s.vb[0] + s.vb[2] / 2, s.vb[1] + s.vb[3] / 2);
+      /* the pin goes to the CENTRE of the cell under the view's centre (geom=1 names it): the client picks by point-in-polygon on the projected hexagons, the server by H3 on the sphere — within ~20 cm of an edge the two may name neighbours (not a bug: the ring the user sees is the polygon); a cell centre is never ambiguous */
+      let cen = G.lonlat(s.vb[0] + s.vb[2] / 2, s.vb[1] + s.vb[3] / 2); { const cg = await fetchJ(`/api/v1/ne/glyph/cell?geom=1&lon=${cen[0]}&lat=${cen[1]}`, 'cell'); if (cg.s === 200 && cg.j.lon) cen = [cg.j.lon, cg.j.lat]; }
       G.pin(cen[0], cen[1]); s = await settle(250); { const until = Date.now() + 8000; while (!s.pin && Date.now() < until) { await sleep(150); s = G.state(); } } /* the pick lands when the cell doc answers (hiAt) — settle() does not wait for it */
       const cd = await fetchJ(`/api/v1/ne/glyph/cell?lon=${cen[0]}&lat=${cen[1]}&sub=1`, 'cell');
       want(P + 'pin=server cell', cd.s === 200 && s.pin && cd.j.cell === s.pin, [s.pin, cd.j && cd.j.cell]);
@@ -326,10 +327,10 @@ async function layersOf(X, P, s, e) {
     if (s.full && !s.floating && !s.picked && e.sheetTap !== false) { { const until = Date.now() + 6000; while (G.legend().length < 10 && Date.now() < until) { await sleep(150); } }
       const tip = document.querySelector('.glyph-tip'), mn = document.querySelector('.glyph-mn'), mnOn = () => mn && getComputedStyle(mn).display !== 'none';
       want(P + ' sheet rests on the in-view legend', s.cardOn && G.legend().length > 10 && mnOn() && !tip.classList.contains('x'), { legend: G.legend().slice(0, 40), mn: mnOn(), cls: tip.className });
-      const cen = G.lonlat(G.state().vb.x + G.state().vb.w / 2, G.state().vb.y + G.state().vb.h / 2); G.pin(cen[0], cen[1]); { const until = Date.now() + 8000; while (!G.state().pin && Date.now() < until) await sleep(150); }
+      let cen; { const vb = G.state().vb; cen = G.lonlat(vb[0] + vb[2] / 2, vb[1] + vb[3] / 2); const cg = await fetch(`/api/v1/ne/glyph/cell?geom=1&lon=${cen[0]}&lat=${cen[1]}`, { credentials: 'omit' }).then(r => r.ok ? r.json() : null).catch(() => null); if (cg && cg.lon) cen = [cg.lon, cg.lat]; } /* vb is [x,y,w,h]; pin at the cell's centre, never at an edge (see the pin=server cell step) */ G.pin(cen[0], cen[1]); { const until = Date.now() + 8000; while (!G.state().pin && Date.now() < until) await sleep(150); }
       if (G.state().pin) { want(P + ' sheet pick → card', G.state().picked && tip.classList.contains('x'), tip.className); G.pin(cen[0], cen[1]); await sleep(900); /* same cell again = unpin */
         want(P + ' sheet unpin → legend back', !G.state().pin && !G.state().picked && G.legend().length > 10 && mnOn() && !tip.classList.contains('x') && !tip.classList.contains('min'), { pin: G.state().pin, legend: G.legend().slice(0, 40), mn: mnOn(), cls: tip.className }); }
-      else R.warn.push(P + ' sheet pick did not land (no cell under the centre)');
+      else X.warn.push(P + ' sheet pick did not land (no cell under the centre)');
       if (!tip.classList.contains('min')) { mn.click(); await sleep(500); const lg = G.legend().toLowerCase(); want(P + ' chevron folds the sheet to its header', tip.classList.contains('min') && mnOn() && lg.indexOf('in view · ' + (s.view === 'obs' ? 'observed' : 'declared')) >= 0 && /;min/.test(location.hash), { cls: tip.className, lg: lg.slice(0, 40), hash: location.hash.slice(-30) });
         mn.click(); await sleep(500); want(P + ' chevron unfolds it', !tip.classList.contains('min') && G.legend().length > 10 && !/;min/.test(location.hash), { cls: tip.className }); }
       s = G.state(); }
