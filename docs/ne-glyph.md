@@ -405,6 +405,16 @@ Options: `rounds` (1), `spots` KGs per round (2), `kgs:[…]` explicit codes, `s
 to skip the fail-soft step (~30 s per round, three fault modes). Full result
 object in `window.neGlyphSoak.last`. ~30 s per KG warm, ~60 s cold (lod-2 tiles render in 3–12 s).
 
+**Faster runs.** The server's tile rendering is the wall clock, not the checks: drive one page per
+KG in the same browser (`run({kgs:[kg], spots:1, seed})` in each) — two WebKit pages finish in
+~6 min against ~11 min for one page doing both. `stress` lowers the tile budget to 24 cost units
+with `neGlyph.keep(n)` for its walk (a `ds=2` tile costs ¼, `state().mem.load` is the figure the
+budget is held against) and restores it after: eviction is exercised in eight stops instead of thirty.
+`settled()` also waits for the load fold (`state().mem.fold`, the card unfolds 450 ms after the last
+piece), the decode queue and a pending `pin` lands when its cell doc answers — poll `state().pin`
+/ the hash for `h3=` rather than sleeping. The legend's *trees* block follows `state().avail.trees`
+(trees toggled on below `HI_TREE` have no block yet).
+
 ### Agent toolkit — verify a glyph change without a screenshot
 
 All from one `const m = await import('/api/v1/ne/glyph/soak.js?'+Date.now())` on `http://localhost:8000/`
@@ -416,7 +426,7 @@ All from one `const m = await import('/api/v1/ne/glyph/soak.js?'+Date.now())` on
 | `m.tile(spec)` | `await m.tile('1/1511/4712/chg')` · `m.tile({lon,lat,lod,v})` | `{s, m (X-NE-Tile minus ms), bytes, png, w, h, sha}` of one tile — JSON, no bytes. |
 | `m.snap(name[, specs])` | `await m.snap('before')` | stores the tiles on screen (cached, in view, of the current LOD, every view) — or the given specs — in the Cache API under `name`; survives reload **and** server restart; one line per tile `key status WxH sha n=`. |
 | `m.diff(name[, specs])` | `await m.diff('before')` | re-fetches and compares each with the stored one: status, every meta key (`n 3309→3308 · lu …`), bytes, and **changed pixels** (`px 493992/1126624 (43.85%) bbox x0,y0,x1,y1`) → `same` or `CHANGED …` per tile. |
-| `m.stress(kg?)` | `await m.stress('63330')` | long-session path: lod-1 spiral walk (views alternate) past the tile budget → budget held, `left=0`, under-LOD hidden, decode drained, eviction ran, no JS error; one line `keep/peak/evicted/shownMax/maxLeft`. ~10 s. |
+| `m.stress(kg?)` | `await m.stress('63330')` | long-session path: lod-1 spiral walk (views alternate) past the tile budget (lowered to 24 cost units for the walk, `{keep:n}` / `{steps:n}` override) → budget held (`mem.load`), `left=0`, under-LOD hidden, decode drained, eviction ran, no JS error; one line `keep/peak/evicted/shownMax/maxLeft`. ~20 s. |
 | `m.offline(hash?)` | `await m.offline('#kg=63330;full;v=obs;trees;z=300')` | fail-soft under faults (§offline): for `offline`, `5xx`, `peer` — inject, then pin / view / trees / subsidy / relief / pan, settle → **no uncaught error, no `.busy` button, `left=0`, no tile `ok=false`, offline noted, card `.rw.off`, faults reached tiles/peer**; lift → pan + re-ask subsidies + pin → tiles complete, apex back, no offline row, a real card, no busy, no errors. ~30 s. Checks that no fetch happened under a mode (all cached) become `warn:`. |
 | `neGlyph.log()` | `JSON.stringify(window.neGlyph.log())` | `{errors:[{t,m,at}], fetch:{tile:{200:n,204:n,404:n,abort:n,err:n}, relief:{…}, peer:{…}, api:{…}}, dbg:[…]}` — the page's own counters since load / `logReset()`; `dbg` is the 40-line gesture/nav trace (`?dbg` only puts it on screen). |
 | filter | `?dbgveil` in the URL, then `window.__fv(lon,lat)` (overview preview, above) · `svg.glyph` classes `v-fv` (preview) / `v-flt` (cell-exact veil) · `.gf-n` innerText = the readout · `neGlyph.log().dbg` lines `filter overview share rows=… exact=… skipped=…` | the filter's state at any zoom without a screenshot; magenta = veiled in both modes. |

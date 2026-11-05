@@ -18,7 +18,7 @@
      tile('2/123/478/chg')                        one tile: status, meta, size, sha256 (also {lon,lat,lod,v})
      snap('a') / snap('a', specs)                 store the tiles on screen (or specs) under a name (Cache API, survives reload + restart)
      diff('a') / diff('a', specs)                 re-fetch and compare with the stored ones: status, meta keys, bytes, changed pixels
-     stress(kg?, o?)                              long-session path: lod-1 walk past the tile budget (HI_KEEP), eviction, under-lod hiding,
+     stress(kg?, o?)                              long-session path: lod-1 walk past the tile budget (lowered to 24 cost units via neGlyph.keep for the walk), eviction, under-lod hiding,
                                                   decode queue, left=0, no JS error. run() includes it unless {stress:false}.
      offline(hash?, o?)                           fail-soft: injects faults via neGlyph.fault ('offline' = every fetch rejects, '5xx' = every
                                                   fetch answers 503, 'peer' = only cross-origin peers 503), interacts (pin, view, pan, trees,
@@ -78,7 +78,7 @@ export async function run(o) {
   wantDom('dom.dots held=json', dHeld === held, [dHeld, held]);
   const agedOut = C.filter(c => c[2] > 0 && c[5] >= D.fresh_hours && c[5] < D.fresh_hours + 0.5).length; /* the page's SVG was built up to a memo lifetime before the JSON: cells that crossed the fresh window in between are still fresh dots on the page (a peer burst 6 h ago ages out in one go) */
   wantDom('dom.dots fresh≈json', dFresh >= freshN - Math.max(3, freshN * 0.05) && dFresh <= freshN + Math.max(3, freshN * 0.05) + agedOut, [dFresh, freshN, agedOut]); /* age_h is rounded in the JSON */
-  wantDom('dom.dots halo=change∪cand', dHalo === chgCells + candOnly, [dHalo, chgCells + candOnly]);
+  wantDom('dom.dots halo=confirmed change', dHalo === chgCells, [dHalo, chgCells]); /* the halo lifts confirmed cells only; a candidate stands on its pale dot */
   wantDom('dom.dots empty=json', dEmpty === unheld, [dEmpty, unheld]);
   wantDom('dom.dots observed=json', dObs === obsN, [dObs, obsN]);
   wantDom('dom.dots change cells=json', dChg === chgCells, [dChg, chgCells]);
@@ -187,7 +187,7 @@ export async function run(o) {
         else want(P + 'filter national sample at z=1 (needs ?dbgveil)', true, null);
         G.filter(''); await settle(); await sleep(400); F = G.filter(); want(P + 'filter cleared', !F.f && F.bins === 0 && !/;f=/.test(location.hash) && !document.querySelector('svg.glyph').classList.contains('v-flt'), { f: F.f, hash: location.hash });
         /* the funnel is a switch: off keeps the expression (f=off:<expr> in the link, no veil, row hidden), on brings it back; a link with f=off: lands held */
-        s = await go(`#kg=${kg};full;z=20;f=steep`); await fw(); const fb0 = document.querySelector('.gt-flt'); fb0.click(); await sleep(500); F = G.filter();
+        s = await go(`#kg=${kg};full;z=20;f=steep`); await fw(); const fb0 = document.querySelector('.gt-flt'); fb0.click(); { const until = Date.now() + 6000; while (!/;f=off:/.test(location.hash) && Date.now() < until) await sleep(150); } /* setHash defers while tiles are still landing */ F = G.filter();
         want(P + 'filter funnel off = held', !F.f && F.held === 'sl>=20' && !F.open && fb0.classList.contains('held') && /;f=off:sl>=20(;|$)/.test(decodeURIComponent(location.hash)) && !document.querySelector('svg.glyph').classList.contains('v-flt'), { f: F.f, held: F.held, hash: location.hash });
         fb0.click(); for (let i = 0; i < 20 && !/;f=sl>=20(;|$)/.test(decodeURIComponent(location.hash)); i++) await sleep(100); await fw(); F = G.filter(); want(P + 'filter funnel on = back', F.f === 'sl>=20' && !F.held && F.open && /;f=sl>=20(;|$)/.test(decodeURIComponent(location.hash)), { f: F.f, hash: location.hash });
         s = await go(`#kg=${kg};full;z=20;f=off:sl>=20`); await sleep(600); F = G.filter(); want(P + 'filter link f=off: lands held', !F.f && F.held === 'sl>=20' && !F.open, { f: F.f, held: F.held });
@@ -216,10 +216,11 @@ export async function run(o) {
       /* pin a cell: client ↔ server agree on the cell under a lon/lat; card names it */
       s = await go(`#kg=${kg};full;z=400`);
       const cen = G.lonlat(s.vb[0] + s.vb[2] / 2, s.vb[1] + s.vb[3] / 2);
-      G.pin(cen[0], cen[1]); s = await settle(250);
+      G.pin(cen[0], cen[1]); s = await settle(250); { const until = Date.now() + 8000; while (!s.pin && Date.now() < until) { await sleep(150); s = G.state(); } } /* the pick lands when the cell doc answers (hiAt) — settle() does not wait for it */
       const cd = await fetchJ(`/api/v1/ne/glyph/cell?lon=${cen[0]}&lat=${cen[1]}&sub=1`, 'cell');
       want(P + 'pin=server cell', cd.s === 200 && s.pin && cd.j.cell === s.pin, [s.pin, cd.j && cd.j.cell]);
       want(P + 'cell doc shape', cd.s === 200 && cd.j.poly && cd.j.poly.length >= 5 && cd.j.x >= 0 && cd.j.x <= D.w && (!cd.j.kgs || Object.keys(cd.j.kgs).every(k => /^\d{5}$/.test(k))) && (cd.j.held === false || ('lu' in cd.j && 'pic_obs' in cd.j && 'chg' in cd.j)), cd.j && Object.keys(cd.j));
+      if (s.pin) { const until = Date.now() + 5000; while (!new RegExp('(^|#)h3=' + s.pin).test(G.state().hash) && Date.now() < until) await sleep(150); s = G.state(); } /* setHash defers while tiles land */
       want(P + 'hash h3 after pin', s.pin ? new RegExp('(^|#)h3=' + s.pin).test(s.hash) : true, s.hash);
       want(P + 'card after pin', G.card().length > 20, G.card().slice(0, 80));
       /* peek: hover a held spot that is not under the card and not the pinned cell (both suppress the peek by design) */
@@ -323,7 +324,7 @@ async function layersOf(X, P, s, e) {
         G.info(false); await sleep(500); want(P + ' × → note back', !G.state().info && !G.state().cardOn && G.state().infoNote && !/;info/.test(location.hash), { st: G.state().info, cardOn: G.state().cardOn, note: G.state().infoNote }); s = G.state(); } }
     if (lgDue && s.full) { { const until = Date.now() + 8000, need = () => !G.legend() || (subUp && s.subsidy && G.legend().toLowerCase().indexOf('\nin view · subsidy') < 0); while (need() && Date.now() < until) await sleep(150); } /* the legend lands after the last tile (debounced), after a long cold settle it may be a beat behind; the subsidy block is appended when the peer answers (hiLegend coalesced) */
       const lg = G.legend().toLowerCase(), headOK = lg.indexOf(s.view === 'obs' ? 'in view · observed' : 'in view · declared') >= 0, ci = lg.indexOf('\nin view · change'), di = lg.indexOf('\nin view · diff'), ti = lg.indexOf('\nin view · trees'), si = lg.indexOf('\nin view · subsidy');
-      want(P + ' legend blocks', headOK && (ci >= 0) === !!s.change && (di >= 0) === !!s.diff && (!s.change || !s.diff || ci < di) && (ti >= 0) === !!s.trees && (!subUp || (si >= 0) === !!s.subsidy) && (!s.change || !s.trees || ci < ti), { headOK, change: ci, diff: di, trees: ti, subsidy: si, legend: lg.slice(0, 80) }); }
+      want(P + ' legend blocks', headOK && (ci >= 0) === !!s.change && (di >= 0) === !!s.diff && (!s.change || !s.diff || ci < di) && (ti >= 0) === !!(s.trees && (!s.avail || s.avail.trees)) /* trees come from HI_TREE: toggled on farther out, the block waits with them */ && (!subUp || (si >= 0) === !!s.subsidy) && (!s.change || !s.trees || ci < ti), { headOK, change: ci, diff: di, trees: ti, subsidy: si, legend: lg.slice(0, 80) }); }
     if (document.querySelector('svg.glyph .hi .ov-rel')) want(P + ' ov-rel shown⇔relief', (disp('.ov-rel') !== 'none') === !!s.relief, disp('.ov-rel'));
     if (document.querySelector('svg.glyph .hi .ov-ortho')) { want(P + ' ov-ortho shown⇔ortho', (disp('.ov-ortho') !== 'none') === !!s.ortho, disp('.ov-ortho')); want(P + ' ov-ortho under the base', document.querySelector('svg.glyph .hi').firstElementChild.classList.contains('ov-ortho'), document.querySelector('svg.glyph .hi').firstElementChild.className.baseVal); }
     if (lgDue) want(P + ' legend photo line⇔ortho', (G.legend().toLowerCase().indexOf('photo') >= 0) === !!s.ortho, G.legend().slice(-80));
@@ -355,23 +356,25 @@ export async function stress(kg, o) {
   const h0 = location.hash; G.logReset();
   await G.go('#kg=' + kg + ';v=obs;full;z=400'); let s = await G.settled(SET);
   if (!s.mem) return 'stress SKIP state().mem missing — stale page script';
-  const keep = s.mem.keep, steps = o.steps || Math.ceil(keep / 6) + 4, c = s.vb.slice(), w = c[2], hh = c[3];
-  let peak = 0, maxLeft = 0, ev0 = s.mem.evicted, shownMax = 0;
-  for (let i = 0; i < steps; i++) {
+  /* the budget counts tile COST (a ds=2 tile is ¼), not tiles; the walk lowers it to 24 (G.keep) so eight stops cross it — the eviction path is the same at any budget, only the real one takes minutes */
+  const keep0 = s.mem.keep, keep = G.keep ? G.keep(Math.min(keep0, o.keep || 24)) : keep0, steps = o.steps || Math.ceil(keep / 6) + 4, c = s.vb.slice(), w = c[2], hh = c[3];
+  let peak = 0, peakLoad = 0, maxLeft = 0, ev0 = s.mem.evicted, shownMax = 0;
+  try { for (let i = 0; i < steps; i++) {
     // spiral of lod-1 windows, alternating zoom so lod 0 and lod 1 both fill the cache; the view alternates too
     const k = i + 1, ang = k * 2.4, r = 0.9 * Math.sqrt(k), x = c[0] + c[2] / 2 + Math.cos(ang) * r * w - w / 2, y = c[1] + c[3] / 2 + Math.sin(ang) * r * hh - hh / 2, z = i % 4 === 3 ? 200 : 400, v = i % 3 === 2 ? ';change' : ';v=obs';
     await G.go('#kg=' + kg + v + ';full;at=' + Math.round(x + w / 2) + ',' + Math.round(y + hh / 2) + ',' + z);
     s = await G.settled(SET);
-    const onN = s.tiles.filter(t => t.on).length; peak = Math.max(peak, s.tiles.length); maxLeft = Math.max(maxLeft, s.left); shownMax = Math.max(shownMax, s.mem.shown);
-    if (s.tiles.length > Math.max(keep, onN)) want(P + 'budget held @' + i, false, { tiles: s.tiles.length, keep, on: onN });
+    const onN = s.tiles.filter(t => t.on).length, load = s.mem.load != null ? s.mem.load : s.tiles.length, onLoad = s.mem.load != null ? onN * load / Math.max(1, s.tiles.length) : onN;
+    peak = Math.max(peak, s.tiles.length); peakLoad = Math.max(peakLoad, load); maxLeft = Math.max(maxLeft, s.left); shownMax = Math.max(shownMax, s.mem.shown);
+    if (load > Math.max(keep, onLoad) + 0.01) want(P + 'budget held @' + i, false, { load, tiles: s.tiles.length, keep, on: onN });
     if (s.left !== 0) want(P + 'left=0 @' + i, false, s.left);
     const under = s.tiles.filter(t => t.on && t.ok && t.k.split('/')[1] !== String(s.lod) && !t.hid);
     if (under.length) want(P + 'under-lod hidden @' + i, false, under.map(t => t.v + '/' + t.k).slice(0, 5));
     if (s.mem.decQ || s.mem.decN) want(P + 'decode drained @' + i, false, { q: s.mem.decQ, n: s.mem.decN });
-  }
+  } } finally { if (G.keep) G.keep(keep0); }
   const L = G.log(), ev = G.state().mem.evicted - ev0;
-  want(P + 'walked past the budget', peak >= Math.min(keep, 40) || ev > 0, { peak, keep, evicted: ev, steps });
-  want(P + 'eviction ran', ev > 0 || peak < keep, { evicted: ev, peak, keep });
+  want(P + 'walked past the budget', peakLoad >= keep * 0.8 || ev > 0, { peak, peakLoad, keep, evicted: ev, steps });
+  want(P + 'eviction ran', ev > 0 || peakLoad < keep, { evicted: ev, peak, peakLoad, keep });
   want(P + 'no JS error', L.errors.length === 0, L.errors.slice(0, 3));
   want(P + 'no stuck tile', G.state().tiles.filter(t => !t.ok).length === 0, G.state().tiles.filter(t => !t.ok).map(t => t.k).slice(0, 5));
   await G.go(h0 || '#');
@@ -434,12 +437,13 @@ export async function offline(hash, o) {
   for (const mode of ['offline', '5xx', 'peer']) {
     const P = 'offline/' + mode + ' ';
     G.logReset(); G.fault(mode);
+    let seenOff = null; const offPoll = setInterval(() => { const x = G.net(); if (x.offline && !seenOff) seenOff = x; }, 300); /* the offline mark prunes 12 s after the last failed answer; a slow settle under load would outlive it — remember the first sighting */
     // interact through every fetch class: cell doc + obs peer (pin), change stats + tiles (view), apex peer (trees), sub peer, relief, pan
     await pin(ll[0], ll[1]); await sleep(500);
     G.view(E.view === 'obs' ? '' : 'obs'); G.change(!E.change); await sleep(250); G.view(E.view); G.change(!!E.change); if (E.trees) { G.trees(false); await sleep(100); G.trees(true); }
     G.subsidy(true); await sleep(300); G.relief(true); G.ortho(true); G.roads(true); await nudge(0.3);
     let s = await settle(900);
-    const L = G.log(), n = G.net();
+    clearInterval(offPoll); const L = G.log(), n1 = G.net(), n = n1.offline ? n1 : (seenOff || n1);
     want(P + 'no uncaught error', L.errors.length === 0, L.errors.map(x => x.m + ' @' + x.at));
     want(P + 'no busy button', busy().length === 0, busy());
     want(P + 'left=0', s.left === 0, s.left);
