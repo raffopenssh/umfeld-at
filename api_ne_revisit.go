@@ -335,6 +335,8 @@ func NERevisitStats() map[string]interface{} {
 //	?refresh=1      recompute the snapshot synchronously
 //	?kg=<kg>        with kind=obs_missing and refresh=1: recompute that one KG's
 //	                observed-vs-view row now (answer gains obs_kg{}), no 3 h wait
+//	?pass=1         with kind=obs_missing: kick a full obs_complete pass in the
+//	                background now (obs_pass_started true/false; obs_complete.running)
 //
 // ETag = hash of the body; If-None-Match → 304 (a nightly sweep re-reads the
 // full no_log list at zero bytes when nothing moved).
@@ -430,6 +432,9 @@ func handleNERevisit(w http.ResponseWriter, r *http.Request) {
 			} else {
 				out["obs_kg"] = nil
 			}
+		}
+		if q.Get("pass") == "1" {
+			out["obs_pass_started"] = neObsCompleteRequestPass()
 		}
 		all := neObsMissingRows()
 		out["obs_missing"] = all[:min(limit, len(all))]

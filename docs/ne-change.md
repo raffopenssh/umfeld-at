@@ -369,7 +369,9 @@ steers revisits — it does not touch the baseline, the confirm rule or any stor
   `min_age_days`; `?refresh=1` recomputes synchronously; `?kind=obs_missing&kg=<kg>&refresh=1`
   recomputes that one KG's observed-vs-view row at once (answer gains `obs_kg{}`, manifest
   `obs{blank_n, nodata_n}` follow; `obs_complete.revision` bumps) — verify a swept re-post
-  without waiting for the 3 h pass; pass totals move only with the pass. The body carries an `ETag`
+  without waiting for the 3 h pass; pass totals move only with the pass, and
+  `?kind=obs_missing&pass=1` kicks a full pass in the background now (`obs_pass_started`,
+  `obs_complete.running`, then `pass_at` moves; ~3 min). The body carries an `ETag`
   (`If-None-Match` → 304, `Cache-Control: no-cache`), so a sweep re-reads the full list at zero bytes.
 - Derived only from `{kg}.changes.jsonl` (refreshed via `neChangeSummaryOf` when a log grew) and
   the reports walk `neScanReportFiles` already does (per-KG facts ride on it, no second walk).

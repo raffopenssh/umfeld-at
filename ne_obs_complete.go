@@ -218,13 +218,42 @@ func neObsCompletePass() {
 	neObsComplete.mu.Unlock()
 }
 
+// neObsCompleteKick — /ne/revisit?kind=obs_missing&pass=1 asks the loop for
+// a full pass now (coalesced: one pending kick at a time, never two passes).
+var neObsCompleteKick = make(chan struct{}, 1)
+
+var neObsCompleteRunning bool // under neObsComplete.mu
+
+// neObsCompleteRequestPass — start a full pass now unless one is running;
+// reports whether the kick was accepted.
+func neObsCompleteRequestPass() bool {
+	select {
+	case neObsCompleteKick <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
 // neObsCompleteLoop — first pass a few minutes after start (after the declared
-// warm-up), then every neObsCompleteEvery. Started from main.
+// warm-up), then every neObsCompleteEvery or on a kick. Started from main.
 func neObsCompleteLoop() {
-	time.Sleep(4 * time.Minute)
-	for {
+	for first := true; ; first = false {
+		wait := neObsCompleteEvery
+		if first {
+			wait = 4 * time.Minute
+		}
+		select {
+		case <-time.After(wait):
+		case <-neObsCompleteKick:
+		}
+		neObsComplete.mu.Lock()
+		neObsCompleteRunning = true
+		neObsComplete.mu.Unlock()
 		neObsCompletePass()
-		time.Sleep(neObsCompleteEvery)
+		neObsComplete.mu.Lock()
+		neObsCompleteRunning = false
+		neObsComplete.mu.Unlock()
 	}
 }
 
@@ -288,7 +317,7 @@ func NEObsCompleteStats() map[string]interface{} {
 		"cells_obs_missing": neObsComplete.cellsMissing, "cells_obs_extra": neObsComplete.cellsExtra,
 		"kgs_obs_blank": neObsComplete.kgsBlank, "cells_obs_blank": neObsComplete.cellsBlank,
 		"kgs_obs_nodata": neObsComplete.kgsNodata, "cells_obs_nodata": neObsComplete.cellsNodata,
-		"pass_at": at, "pass_ms": neObsComplete.passMS, "passes": neObsComplete.passes, "revision": neObsComplete.revision, "computed_last_pass": neObsComplete.computed, "every_s": int(neObsCompleteEvery.Seconds())}
+		"pass_at": at, "pass_ms": neObsComplete.passMS, "passes": neObsComplete.passes, "revision": neObsComplete.revision, "running": neObsCompleteRunning, "computed_last_pass": neObsComplete.computed, "every_s": int(neObsCompleteEvery.Seconds())}
 }
 
 // neObsCompleteCounts — blank_n / nodata_n of the last pass for one KG
