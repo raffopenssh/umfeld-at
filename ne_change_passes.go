@@ -386,6 +386,23 @@ func nePassFill(r *nePassRow, cum map[uint64]*neCellCum) {
 
 // ── national ─────────────────────────────────────────────────────────────────
 
+// neChunkUniverse — the chunk universe: every chunk digested so far plus every
+// frame cell nobody digested yet at the nominal 343. Coverage shares are
+// chunk counts over this (exactly 100 % once every frame cell holds a digest);
+// chunks × mean hexagon area / Austria overshoots because border chunks spill
+// over the border.
+func neChunkUniverse(ever map[string]int) int {
+	universe := ever["once"]
+	if g := neGlyphCurrent(); g != nil {
+		for i := range g.Rows {
+			if g.Rows[i].Chunks == 0 {
+				universe += neGlyphChunksPer
+			}
+		}
+	}
+	return universe
+}
+
 // nePassNational — the country: progress of each pass from the daily tracker
 // (distinct observation days per chunk, `chunks_nth`), change per pass from the
 // KGs that hold any, per res-7 cell for the overview dots. Built in the
@@ -395,16 +412,7 @@ func nePassNational() map[string]interface{} {
 	scan := neScanReportFiles()
 	daily, _ := scan["daily"].([]neDayStat)
 	ever, _ := scan["chunks_ever"].(map[string]int)
-	g := neGlyphCurrent()
-	// chunk universe: digested chunks + every frame cell nobody digested yet at the nominal 343
-	universe := ever["once"]
-	if g != nil {
-		for i := range g.Rows {
-			if g.Rows[i].Chunks == 0 {
-				universe += neGlyphChunksPer
-			}
-		}
-	}
+	universe := neChunkUniverse(ever)
 	// cumulative curve per pass k (2..5) from the tracker's exact nth counts
 	const maxK = 5
 	var cum [maxK + 1]int

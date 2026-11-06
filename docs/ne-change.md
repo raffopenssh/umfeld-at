@@ -304,10 +304,12 @@ steers revisits — it does not touch the baseline, the confirm rule or any stor
   `candidate`: not the baseline, not `pipeline`/`jitter`/`coverage`; lossy builds never enter the log; a
   superseded candidate is not pending), oldest `oldest_since` first. `candidate_m2` = positive
   Δlu of those cells. `baseline_source` = source of the version the oldest pending one is compared against.
-- `stale[] = {kg, baseline_at, reports, last_observer, last_at, chunks, chunks_confirmed, bbox}` —
-  KGs whose chunk log was not re-sighted: more chunks hold a single-sighting latest version than a
-  confirmed one and nothing is pending; oldest `baseline_at` (= the log's `since`) first;
-  `?min_age_days=` (default 7). Derived from the log's `sightings` roll-up in the summary line of
+- `stale[] = {kg, baseline_at, reports, last_observer, last_at, chunks, chunks_confirmed, chunks_single, bbox}` —
+  KGs whose chunk log is not fully re-sighted: `chunks_single > 0` (chunks whose latest version was
+  sighted once — the missing second pass, also partial KGs a viewport observer only half re-posted)
+  and nothing is pending; most `chunks_single` first, then oldest `baseline_at` (= the log's `since`);
+  `?min_age_days=` (default 7). `totals.chunks_single` / `chunks_confirmed` sum this over every log
+  (the national second-pass share the landing caption shows once coverage is 100 %). Derived from the log's `sightings` roll-up in the summary line of
   `{kg}.changes.jsonl` (`neChangeSightings`, schema 6) — **not** from the reports walk: a
   chunk-bearing report flagged `layout_change` (aligned build vs a legacy baseline) and an
   `unchanged:true` re-post both confirm chunks in the log, which the reports walk cannot see
@@ -320,6 +322,18 @@ steers revisits — it does not touch the baseline, the confirm rule or any stor
   omits edge chunks. (A wider viewport is never a `layout_change`.) Covering the box also gives the revisit its coverage reference (ne-cells.md §coverage): a
   build truncated by an incomplete fetch is `coverage_lossy` against the block instead of entering
   the log; a narrower viewport is caught per chunk (`coverage` deltas).
+- `next_pass[] = {kg, pass, chunks, chunks_below, last_at, last_observer, bbox}` — the standing
+  work queue for every later pass. The chunk log stops counting at the second sighting (bounded
+  growth, `neChangeConfirm`), so passes ≥ 3 come from the reports walk: `neKGReportStat.Depth[n]`
+  = chunks of the KG at exactly `n` distinct observation days (kept incrementally in
+  `neDailyAgg.add`, same walk, no extra disk read). `pass` = the KG's shallowest chunk + 1 (the
+  visit that lifts every chunk by one), `chunks_below` = chunks still under it. Order: `pass` asc
+  (the nation finishes its 2nd pass before its 3rd), `chunks_below` desc, oldest `last_at` first —
+  a peer that takes a fixed daily slice from the top always does the most useful work.
+  `?observer=` hides KGs I visited within `min_age_days`. `totals.pass_target` = the lowest pass
+  not complete nationally, `totals.chunks_by_pass{k: chunks with ≥ k passes}`, `totals.kgs_next_pass`.
+  The landing caption shows the same figure (`neContribSummaryText`: once coverage is 100 %, the
+  first incomplete pass and its share).
 - `no_log[] = {kg, has_obs, reports, last_report_at, last_observer, bbox}` — KGs without any chunk
   log: their declared picture is still the index epoch (§4b); one report with chunk rows covering
   `bbox` (the KG's universe bbox) gives them a baseline. KGs with an observed layer first. A

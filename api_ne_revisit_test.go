@@ -150,14 +150,35 @@ func TestNERevisitHandler(t *testing.T) {
 	}
 	stale, _ := js["stale"].([]interface{})
 	// 01002 (baseline only) and 01008 (re-posted inside the pass window) are stale; 01007 (log confirmed) and 01005 (no log) are not
-	if len(stale) != 2 || stale[0].(map[string]interface{})["kg"] != "01002" || stale[0].(map[string]interface{})["reports"].(float64) != 1 || stale[0].(map[string]interface{})["last_observer"] != "peer-vm-1" || stale[0].(map[string]interface{})["bbox"] != "10.4200,47.1000,10.5000,47.1800" ||
-		stale[0].(map[string]interface{})["chunks"].(float64) != 3 || stale[0].(map[string]interface{})["chunks_confirmed"].(float64) != 0 || stale[1].(map[string]interface{})["kg"] != "01008" {
+	// most chunks_single first: 01008 (4) before 01002 (3)
+	if len(stale) != 2 || stale[1].(map[string]interface{})["kg"] != "01002" || stale[1].(map[string]interface{})["reports"].(float64) != 1 || stale[1].(map[string]interface{})["last_observer"] != "peer-vm-1" || stale[1].(map[string]interface{})["bbox"] != "10.4200,47.1000,10.5000,47.1800" ||
+		stale[1].(map[string]interface{})["chunks"].(float64) != 3 || stale[1].(map[string]interface{})["chunks_confirmed"].(float64) != 0 || stale[1].(map[string]interface{})["chunks_single"].(float64) != 3 ||
+		stale[0].(map[string]interface{})["kg"] != "01008" || stale[0].(map[string]interface{})["chunks_single"].(float64) != 4 {
 		t.Fatalf("stale: %v", js["stale"])
+	}
+	tot := js["totals"].(map[string]interface{})
+	if tot["pass_target"].(float64) != 2 || tot["chunks_single"].(float64) < 7 {
+		t.Fatalf("totals: %v", tot)
+	}
+	np, _ := js["next_pass"].([]interface{})
+	if len(np) == 0 {
+		t.Fatalf("next_pass: %v", js["next_pass"])
+	}
+	for _, r := range np {
+		m := r.(map[string]interface{})
+		if m["pass"].(float64) < 2 || m["chunks_below"].(float64) < 1 || m["chunks"].(float64) < m["chunks_below"].(float64) {
+			t.Fatalf("next_pass row: %v", m)
+		}
 	}
 	// observer=map-peer: 01008 hides (map-peer was there an hour ago), 01009 leaves no_log for the same reason
 	_, js = get("/k/api/v1/ne/revisit?observer=map-peer")
 	if stale, _ = js["stale"].([]interface{}); len(stale) != 1 || stale[0].(map[string]interface{})["kg"] != "01002" {
 		t.Fatalf("stale observer: %v", js["stale"])
+	}
+	for _, r := range js["next_pass"].([]interface{}) {
+		if r.(map[string]interface{})["kg"] == "01008" {
+			t.Fatalf("next_pass observer filter: %v", js["next_pass"])
+		}
 	}
 	hasNoLog := func(js map[string]interface{}, kg string) bool {
 		for _, r := range js["no_log"].([]interface{}) {

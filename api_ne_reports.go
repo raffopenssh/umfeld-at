@@ -1048,11 +1048,23 @@ func neScanReportFiles() map[string]interface{} {
 		changed = changed[:50]
 	}
 	glyph.fold(&daily)
+	for kg, d := range daily.kgDepth {
+		ks := kgStats[kg]
+		ks.Depth = *d
+		for n := 1; n <= neEverDepthMax; n++ {
+			ks.Chunks += d[n]
+		}
+		kgStats[kg] = ks
+	}
 	neReportsScanMemo.at, neReportsScanMemo.dir, neReportsScanMemo.dirty = time.Now(), neDir, false
 	neReportsScanMemo.kgs = kgStats
 	neReportsScanMemo.data = map[string]interface{}{"files": len(files), "lines": totalLines, "glyph": glyph, "observers": rows, "kgs_with_changes": changed, "daily": daily.rows(), "chunks_ever": func() map[string]int {
-		o, t, d := daily.everDepth()
-		return map[string]int{"once": o, "twice_or_more": t, "deepest_pass": d}
+		o, t, d, al := daily.everDepth()
+		m := map[string]int{"once": o, "twice_or_more": t, "deepest_pass": d}
+		for k := 2; k <= neEverDepthMax; k++ {
+			m["pass_"+strconv.Itoa(k)+"_or_more"] = al[k]
+		}
+		return m
 	}(), "scanned_at": neReportsScanMemo.at.UTC().Format(time.RFC3339)}
 	return neReportsScanMemo.data
 }
@@ -1136,6 +1148,9 @@ type neDailyAgg struct {
 	days   []neDayStat                      // index = days since first
 	dayKGs map[uint16]map[string]bool
 	hex    map[string]uint64 // fallback for non-hex chunk keys (tests)
+	// kgDepth[kg][n] = chunks at exactly n passes (capped at neEverDepthMax),
+	// kept incrementally — chunk → KG never changes (one KG file per chunk).
+	kgDepth map[string]*[neEverDepthMax + 1]int
 }
 
 type neChunkObs struct {
@@ -1157,7 +1172,7 @@ func (a *neDailyAgg) dayIndex(day string) (uint16, bool) {
 		return 0, false
 	}
 	if a.chunks == nil {
-		a.chunks, a.dayKGs, a.hex = map[string]map[uint64]neChunkObs{}, map[uint16]map[string]bool{}, map[string]uint64{}
+		a.chunks, a.dayKGs, a.hex, a.kgDepth = map[string]map[uint64]neChunkObs{}, map[uint16]map[string]bool{}, map[string]uint64{}, map[string]*[neEverDepthMax + 1]int{}
 		a.first = t
 	}
 	if t.Before(a.first) {
@@ -1223,6 +1238,11 @@ func (a *neDailyAgg) add(kg string, s neStoredReport) {
 		chunks = map[uint64]neChunkObs{}
 		a.chunks[class] = chunks
 	}
+	depth := a.kgDepth[kg]
+	if depth == nil {
+		depth = new([neEverDepthMax + 1]int)
+		a.kgDepth[kg] = depth
+	}
 	for c := range s.Report.Chunks {
 		k, ok := neChunkKey(c)
 		if !ok {
@@ -1244,6 +1264,10 @@ func (a *neDailyAgg) add(kg string, s neStoredReport) {
 			o.n++ // out-of-order older line: still a distinct day
 		}
 		chunks[k] = o
+		if o.n > 1 {
+			depth[min(int(o.n)-1, neEverDepthMax)]--
+		}
+		depth[min(int(o.n), neEverDepthMax)]++
 		st.Chunks++
 		st.Passes[nePassBand(int(o.n))]++
 		if o.n >= 2 && o.n <= 5 {
@@ -1283,14 +1307,20 @@ func (a *neDailyAgg) rows() []neDayStat {
 
 // ever — distinct chunks digested at least once / on ≥ 2 different days.
 func (a *neDailyAgg) ever() (once, twice int) {
-	once, twice, _ = a.everDepth()
+	once, twice, _, _ = a.everDepth()
 	return
 }
 
 // everDepth — like ever, plus the deepest pass any chunk has reached.
 // once = distinct land (union over classes); twice/deepest are per class,
 // because only same-class passes are comparable.
-func (a *neDailyAgg) everDepth() (once, twice, deepest int) {
+// everDepth — once = distinct chunks digested, twice = chunks with ≥ 2
+// distinct observation days, deepest = the deepest pass any chunk reached,
+// atLeast[k] = chunks with ≥ k passes for k = 2..neEverDepthMax (per assembly
+// class, like twice).
+const neEverDepthMax = 12
+
+func (a *neDailyAgg) everDepth() (once, twice, deepest int, atLeast [neEverDepthMax + 1]int) {
 	var union map[uint64]struct{}
 	if len(a.chunks) > 1 {
 		union = map[uint64]struct{}{}
@@ -1304,6 +1334,9 @@ func (a *neDailyAgg) everDepth() (once, twice, deepest int) {
 			}
 			if o.n >= 2 {
 				twice++
+			}
+			for d := 2; d <= neEverDepthMax && d <= int(o.n); d++ {
+				atLeast[d]++
 			}
 			if int(o.n) > deepest {
 				deepest = int(o.n)

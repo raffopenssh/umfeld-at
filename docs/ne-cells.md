@@ -128,7 +128,11 @@ kgs, sources, first/last_at, compared, chunks_changed_since_last).
 **Peer note — revisit order:** at the start of each pass fetch
 `GET /contrib/api/v1/ne/revisit?observer=<your observer name>&limit=50`, observe
 the KGs in `pending[].kg` first (oldest first; single-sighting change your pass
-would confirm or supersede), then `stale[].kg` (baseline only), then
+would confirm or supersede), then `stale[].kg` (chunks still without a second
+sighting), then `next_pass[].kg` (the standing queue for every later pass:
+`pass` = the pass your visit gives the KG, lowest pass first, most chunks
+behind first — a fixed daily slice from the top always does the most useful
+work; `totals.pass_target` says which pass the nation is on), then
 `no_log[].kg` (no chunk rows ever — the declared picture there is still the
 index epoch) and, observed-layer peer only, `obs_on_index[].kg` and
 `obs_missing[].kg` (re-post NEO1 built on `GET /contrib/api/v1/ne/{kg}/declared`;
@@ -137,6 +141,8 @@ order. `?observer=` drops KGs whose pending versions you posted yourself — a
 re-post of your own digest inside 20 h is not a sighting — and stale/no_log KGs
 you reported within `min_age_days`. A whole list for a monthly sweep:
 `?kind=no_log&all=1` (ETag → 304). The answer is a snapshot ≤ 10 min old.
+Cheapest daily poll: `?kind=next_pass&observer=<me>&limit=<your daily KGs>`
+with `If-None-Match` — a few KB, 304 when nothing moved.
 
 **Reading rules learnt from the first passes:**
 - Almost everything in a first pass is `baseline:this_report` — expected;

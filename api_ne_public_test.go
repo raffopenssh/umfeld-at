@@ -496,7 +496,7 @@ func TestNEContribChart(t *testing.T) {
 	if rows[2].Passes != [nePassBandN]int{2, 1, 0, 0, 0} || rows[3].Passes != [nePassBandN]int{0, 0, 1, 0, 0} || rows[5].Passes != [nePassBandN]int{0, 0, 0, 1, 0} || rows[10].Passes != [nePassBandN]int{0, 0, 0, 0, 1} {
 		t.Fatalf("pass bands: %+v %+v %+v %+v", rows[2].Passes, rows[3].Passes, rows[5].Passes, rows[10].Passes)
 	}
-	once, twice, deepest := a.everDepth()
+	once, twice, deepest, _ := a.everDepth()
 	if once != 4 || twice != 1 || deepest != 12 {
 		t.Fatalf("ever: %d %d %d", once, twice, deepest)
 	}
@@ -512,7 +512,7 @@ func TestNEContribChart(t *testing.T) {
 	if r.Passes != [nePassBandN]int{1, 0, 0, 0, 1} || r.Sources["bevdirect@v0.3.2"] != 1 || r.Sources["bevdirect@v0.1.0"] != 1 {
 		t.Fatalf("class split: %+v", r)
 	}
-	if once, twice, deepest = a.everDepth(); once != 4 || twice != 1 || deepest != 13 {
+	if once, twice, deepest, _ = a.everDepth(); once != 4 || twice != 1 || deepest != 13 {
 		t.Fatalf("ever after class split (union, per-class depth): %d %d %d", once, twice, deepest)
 	}
 	if mix := neSourceMix(map[string]int{"bevdirect@v0.3.1": 9, "bevdirect@v0.3.2": 1, "bevdirect@v0.3.0": 1, "index-2026-03": 1}); mix != "bevdirect@v0.3.1 ×9, index-2026-03 ×1, bevdirect@v0.3.2 ×1, v0.3.0 ×1" {

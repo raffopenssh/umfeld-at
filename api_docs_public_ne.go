@@ -15,6 +15,7 @@ import (
 	"math"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -1015,8 +1016,29 @@ func neContribSummaryText(daily []neDayStat, ever map[string]int) string {
 		changed7 += daily[i].Changed
 	}
 	once, twice, deepest := ever["once"], ever["twice_or_more"], ever["deepest_pass"]
-	s := fmt.Sprintf("last 7 days: %s in %s reports · ever: %s digested (%.2f %% of Austria), %s on two or more days",
-		neFmtKm2(last7), neFmtInt(reports), neFmtKm2(once), 100*float64(once)*neChunkAreaKm2/austriaAreaKm2, neFmtKm2(twice))
+	universe := neChunkUniverse(ever)
+	share := func(n int) string {
+		if universe <= 0 {
+			return "0 %"
+		}
+		if n >= universe {
+			return "100 %"
+		}
+		return fmt.Sprintf("%.2f %%", 100*float64(n)/float64(universe))
+	}
+	s := fmt.Sprintf("last 7 days: %s in %s reports · ever: %s digested (%s of Austria)",
+		neFmtKm2(last7), neFmtInt(reports), neFmtKm2(once), share(once))
+	if once >= universe && universe > 0 {
+		// full coverage: the interesting figure is the first pass that is not
+		// complete yet — 2nd, then 3rd once the 2nd reached 100 %, and so on
+		k, n := 2, twice
+		for k < neEverDepthMax && n >= universe {
+			k, n = k+1, ever["pass_"+strconv.Itoa(k+1)+"_or_more"]
+		}
+		s += fmt.Sprintf(" · %s pass: %s (%s)", neOrdinal(k), share(n), neFmtKm2(n))
+	} else {
+		s += fmt.Sprintf(", %s on two or more days", neFmtKm2(twice))
+	}
 	if deepest >= 3 {
 		s += fmt.Sprintf(", deepest pass %d", deepest)
 	}
@@ -1050,6 +1072,22 @@ func neContribSummaryText(daily []neDayStat, ever map[string]int) string {
 		}
 	}
 	return s
+}
+
+// neOrdinal — 2 → "2nd", 3 → "3rd", 11 → "11th".
+func neOrdinal(n int) string {
+	suf := "th"
+	if n%100 < 11 || n%100 > 13 {
+		switch n % 10 {
+		case 1:
+			suf = "st"
+		case 2:
+			suf = "nd"
+		case 3:
+			suf = "rd"
+		}
+	}
+	return strconv.Itoa(n) + suf
 }
 
 // neSourceMix — "bevdirect@v0.3.1 ×289, v0.3.2 ×1" (count desc, then tag
