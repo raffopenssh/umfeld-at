@@ -33,3 +33,37 @@ func TestStatsMemoAgeForcesSyncRefresh(t *testing.T) {
 		t.Fatalf("stale must recompute synchronously on the first call, got %d", got)
 	}
 }
+
+// While the first (synchronous) compute of a key runs, other callers must not
+// start a second one: they get an empty value flagged stats_refreshing. And a
+// force while a refresh runs is likewise skipped. (2026-11-06: the landing
+// page blocked 30 s on the coverage walk; a second walk in parallel doubled it.)
+func TestStatsMemoNeverTwoComputes(t *testing.T) {
+	key := "test_single_compute"
+	started, release := make(chan struct{}), make(chan struct{})
+	done := make(chan map[string]interface{}, 1)
+	go func() {
+		done <- StatsMemo(key, time.Minute, false, func() map[string]interface{} {
+			close(started)
+			<-release
+			return map[string]interface{}{"n": 1}
+		})
+	}()
+	<-started
+	calls := 0
+	second := StatsMemo(key, time.Minute, true, func() map[string]interface{} { calls++; return map[string]interface{}{"n": 2} })
+	if calls != 0 || second["stats_refreshing"] != true || second["n"] != nil {
+		t.Fatalf("concurrent caller must get an empty refreshing value, got %v calls=%d", second, calls)
+	}
+	close(release)
+	if v := <-done; v["n"] != 1 {
+		t.Fatalf("first compute: %v", v)
+	}
+	if v := StatsMemo(key, time.Minute, false, nil); v["n"] != 1 || v["stats_refreshing"] == true {
+		t.Fatalf("after compute: %v", v)
+	}
+	StatsMemoTouch(key)
+	if age, _ := StatsMemoAge(key); age > time.Second {
+		t.Fatalf("touch must reset age, got %s", age)
+	}
+}

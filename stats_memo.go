@@ -17,7 +17,9 @@
 //
 //	fresh   (< ttl)        → return cached, no work
 //	stale   (>= ttl)       → return cached IMMEDIATELY, refresh in background
-//	missing (first call)   → compute synchronously (nothing else to serve)
+//	missing (first call)   → compute synchronously (nothing else to serve);
+//	                         while that runs, other callers get an empty map
+//	                         with stats_refreshing=true (never a second compute)
 //
 // Only one refresh per key runs at a time, so a polling dashboard cannot
 // stack recomputes.
@@ -60,8 +62,11 @@ func StatsMemo(key string, ttl time.Duration, force bool, compute func() map[str
 	age := time.Since(e.computedAt)
 	// force while another refresh is already running: serve the cached value,
 	// the running compute will land shortly (never two walks at once).
-	needSync := (force && !e.refreshing) || !haveValue
-	needAsync := !needSync && age >= ttl && !e.refreshing
+	// Nothing cached and a compute already running: return an empty value
+	// marked stats_refreshing rather than start a second one (callers degrade:
+	// glyph → 503 retry_after, texts → "being computed").
+	needSync := !e.refreshing && (force || !haveValue)
+	needAsync := !needSync && haveValue && age >= ttl && !e.refreshing
 	if needSync || needAsync {
 		e.refreshing = true
 	}

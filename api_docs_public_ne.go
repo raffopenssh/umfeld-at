@@ -750,7 +750,11 @@ func neCoverageChangeKey() string {
 // something did. Started once from main (server mode only). StatsMemo skips
 // the force while another refresh is already running.
 func neCoverageKeepFresh() {
-	lastKey, lastFull := "", time.Time{}
+	// prime right after start: the first visitor must not pay the first walk
+	// (glyph handlers answer 503 glyph_not_built + retry_after until then,
+	// never block).
+	neCoverageStats(true)
+	lastKey, lastFull := neCoverageChangeKey(), time.Now()
 	for {
 		time.Sleep(neCoverageKeepEvery)
 		key := neCoverageChangeKey()
@@ -784,6 +788,9 @@ func neCoverageText() string {
 	cells, _ := c["cells"].(int)
 	asOf, _ := c["as_of"].(string)
 	if total == 0 {
+		if r, _ := c["stats_refreshing"].(bool); r {
+			return "coverage is being computed after a restart — retry in a minute."
+		}
 		return "no KG built yet (store empty) — see GET /api/v1/ne."
 	}
 	pct := 100 * float64(built) / float64(total)
