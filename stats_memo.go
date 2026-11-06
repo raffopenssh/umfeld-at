@@ -47,7 +47,8 @@ var (
 // The returned map also carries `stats_computed_at` and `stats_age_seconds` so
 // callers can see how old the snapshot is, plus `stats_refreshing` while a
 // background recompute is in flight. Pass force=true (e.g. ?refresh=1) to
-// recompute synchronously.
+// recompute synchronously — unless a refresh is already running, in which
+// case the cached value is returned (stats_refreshing=true).
 func StatsMemo(key string, ttl time.Duration, force bool, compute func() map[string]interface{}) map[string]interface{} {
 	statsMemoMapMu.Lock()
 	e, ok := statsMemoMap[key]
@@ -57,9 +58,11 @@ func StatsMemo(key string, ttl time.Duration, force bool, compute func() map[str
 	}
 	haveValue := e.val != nil
 	age := time.Since(e.computedAt)
-	needSync := force || !haveValue
+	// force while another refresh is already running: serve the cached value,
+	// the running compute will land shortly (never two walks at once).
+	needSync := (force && !e.refreshing) || !haveValue
 	needAsync := !needSync && age >= ttl && !e.refreshing
-	if needAsync {
+	if needSync || needAsync {
 		e.refreshing = true
 	}
 	cached, computedAt, refreshing := e.val, e.computedAt, e.refreshing
@@ -90,6 +93,18 @@ func StatsMemo(key string, ttl time.Duration, force bool, compute func() map[str
 		out["stats_refreshing"] = true
 	}
 	return out
+}
+
+// StatsMemoTouch marks the cached value for key as verified-current now
+// (resets its age without recomputing). For keys whose inputs are known to
+// be unchanged — a keeper loop that checks cheap change markers calls this
+// instead of paying the compute. No-op when nothing is cached.
+func StatsMemoTouch(key string) {
+	statsMemoMapMu.Lock()
+	defer statsMemoMapMu.Unlock()
+	if e, ok := statsMemoMap[key]; ok && e.val != nil {
+		e.computedAt = time.Now()
+	}
 }
 
 // StatsMemoAge reports how old the cached value for key is (0, false when

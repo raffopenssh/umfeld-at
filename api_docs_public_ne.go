@@ -11,6 +11,7 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"sort"
@@ -634,13 +635,27 @@ func serveNEChangeDoc(w http.ResponseWriter, r *http.Request) {
 // parsed — milliseconds) and NEStoreStats (a loop over ~8 000 in-memory
 // entries).
 //
-// Because the compute is cheap, a STALE entry is recomputed synchronously
-// (force when age ≥ TTL) rather than stale-while-revalidate: with SWR the
-// first page load after hours of idle showed the coverage from the previous
-// visit ("as of 20:32" at 05:13, 1 479 KGs instead of 2 535) and only the
-// second load was current. A background ticker (neCoverageKeepFresh) refreshes
-// every TTL so even the first request normally finds a fresh value.
-const neCoverageTTL = 5 * time.Minute
+// The compute is NOT cheap: it walks every {kg}.reports.jsonl (7 850 files,
+// ~1 GB) and rebuilds the landing glyph — 30 s on a 2-core box while a peer
+// posts obs. So request handlers never recompute synchronously: they serve the
+// memo stale-while-revalidate (one refresh at a time); the synchronous path is
+// only taken when there is no value at all (first call after start). The
+// landing page once blocked 30 s on it (2026-11-06) when a reload fell into
+// the window between "memo ≥ TTL" and the ticker's own recompute.
+//
+// Freshness is event-driven, not clocked (neCoverageKeepFresh): every minute
+// the keeper compares a cheap change key — manifest generation (files on
+// disk), report appends, the observed-layer peer's generation — with the one
+// the memo was computed from. Unchanged → the memo is touched (age reset, no
+// work; idle nights cost nothing). Changed → a full recompute, at most one per
+// neCoverageMinRefresh even while a peer posts continuously (≈ 30 s of CPU per
+// 5 min at worst). The TTL below is only the safety net under which a request
+// would trigger a background refresh if the keeper ever stopped.
+const (
+	neCoverageTTL        = 30 * time.Minute
+	neCoverageKeepEvery  = time.Minute
+	neCoverageMinRefresh = 5 * time.Minute
+)
 
 // neObsDay — observed-layer (satellite / LiDAR, {OBS_NAME}) KGs whose
 // current layer was built on a UTC day, with their cells. Keyed by the
@@ -650,10 +665,13 @@ type neObsDay struct {
 }
 
 func neCoverageStats(force bool) map[string]interface{} {
-	if age, ok := StatsMemoAge("ne_coverage"); ok && age >= neCoverageTTL {
-		force = true
-	}
 	return StatsMemo("ne_coverage", neCoverageTTL, force, func() map[string]interface{} {
+		t0 := time.Now()
+		defer func() {
+			if d := time.Since(t0); d > 2*time.Second {
+				log.Printf("ne coverage: recompute took %s (reports walk + glyph build)", d.Round(time.Millisecond))
+			}
+		}()
 		neManifest.refresh(false)
 		neManifest.mu.Lock()
 		total, built, obs, cells := len(neManifest.kgs), 0, 0, 0
@@ -709,13 +727,44 @@ func neCoverageStats(force bool) map[string]interface{} {
 	})
 }
 
-// neCoverageKeepFresh — background refresh of the coverage memo every TTL so
-// the landing page / llm.txt / license never pay the (small) recompute and
-// never show a stale "as of". Started once from main (server mode only).
+// neCoverageChangeKey — the cheap markers the coverage memo depends on:
+// manifest generation (any .nex/.obs/.nec/log file change), report appends
+// (neReportsScanMemo), the observed-layer peer's served/generation state.
+func neCoverageChangeKey() string {
+	neManifest.refresh(false)
+	neManifest.mu.Lock()
+	gen := neManifest.generatedAt
+	neManifest.mu.Unlock()
+	neReportsScanMemo.Lock()
+	rep := fmt.Sprintf("%d/%v", neReportsScanMemo.at.UnixNano(), neReportsScanMemo.dirty)
+	neReportsScanMemo.Unlock()
+	peer := ""
+	if st := PeerNEState(); st != nil {
+		peer = fmt.Sprintf("%v/%d/%s/%s", st.Reachable, st.ServedReported, st.CellsGen, st.ManifestGen)
+	}
+	return gen + "|" + rep + "|" + peer
+}
+
+// neCoverageKeepFresh — keeper loop of the coverage memo (see neCoverageTTL):
+// touch when nothing changed, recompute (≥ neCoverageMinRefresh apart) when
+// something did. Started once from main (server mode only). StatsMemo skips
+// the force while another refresh is already running.
 func neCoverageKeepFresh() {
+	lastKey, lastFull := "", time.Time{}
 	for {
-		time.Sleep(neCoverageTTL)
+		time.Sleep(neCoverageKeepEvery)
+		key := neCoverageChangeKey()
+		if _, ok := StatsMemoAge("ne_coverage"); ok && key == lastKey {
+			StatsMemoTouch("ne_coverage")
+			continue
+		}
+		if time.Since(lastFull) < neCoverageMinRefresh {
+			StatsMemoTouch("ne_coverage")
+			continue
+		}
 		neCoverageStats(true)
+		// re-read: the recompute itself moves the reports scan marker
+		lastKey, lastFull = neCoverageChangeKey(), time.Now()
 	}
 }
 

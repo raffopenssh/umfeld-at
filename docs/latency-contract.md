@@ -18,7 +18,12 @@ A partial answer is `complete:false` with the gap described (`missing{}`,
 `pending`, `kgs_warming`); clients retry and converge. `{"wait":true}` (where
 offered) opts back into blocking. Any new endpoint touching lazily-built data
 must follow this shape. `StatsMemo` (`stats_memo.go`) is the stale-while-revalidate
-primitive for expensive aggregates.
+primitive for expensive aggregates. A request handler never passes `force=true` to it
+(the NE coverage memo — `neCoverageStats`, a ~30 s walk of every `{kg}.reports.jsonl` +
+glyph build — once blocked the landing page 30 s that way, 2026-11-06). Keep expensive
+memos fresh with a keeper loop that checks a cheap change key and `StatsMemoTouch`es
+when nothing changed (`neCoverageKeepFresh`): idle costs nothing, a continuous peer
+feed recomputes at most once per `neCoverageMinRefresh`.
 
 **3. No per-row or per-point SQL in a loop.**
 One query per item with a small pool starves the whole process. KG lookups by
