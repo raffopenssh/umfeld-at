@@ -49,6 +49,7 @@ var neObsComplete struct {
 	passAt                               time.Time
 	passMS                               int64
 	passes                               int
+	revision                             int // bumps on every (re)computed row — the manifest keys obs{blank_n, nodata_n} on it
 	computed                             int // rows (re)computed in the last pass
 	kgsNoObs                             int
 	kgsMissing, cellsMissing, cellsExtra int
@@ -145,8 +146,25 @@ func neObsCompareKG(kg string) *neObsCompleteRow {
 		neObsComplete.rows = map[string]*neObsCompleteRow{}
 	}
 	neObsComplete.rows[kg] = row
+	neObsComplete.revision++
 	neObsComplete.mu.Unlock()
 	return row
+}
+
+// neObsRecomputeKG — one KG now, outside the 3 h pass (/ne/revisit
+// ?kind=obs_missing&kg=<kg>&refresh=1): the memo decides whether anything
+// moved (view identity, obs digest, coverage); the pass totals stay as they
+// were until the next pass, the row and manifest obs{blank_n, nodata_n}
+// follow at once. nil when the KG has no observed layer or no view.
+func neObsRecomputeKG(kg string) *neObsCompleteRow {
+	r := neObsCompareKG(kg)
+	if r == nil {
+		return nil
+	}
+	neObsComplete.mu.Lock()
+	cp := *r
+	neObsComplete.mu.Unlock()
+	return &cp
 }
 
 // neObsCompletePass — every KG once; yields to renders between KGs.
@@ -270,7 +288,7 @@ func NEObsCompleteStats() map[string]interface{} {
 		"cells_obs_missing": neObsComplete.cellsMissing, "cells_obs_extra": neObsComplete.cellsExtra,
 		"kgs_obs_blank": neObsComplete.kgsBlank, "cells_obs_blank": neObsComplete.cellsBlank,
 		"kgs_obs_nodata": neObsComplete.kgsNodata, "cells_obs_nodata": neObsComplete.cellsNodata,
-		"pass_at": at, "pass_ms": neObsComplete.passMS, "passes": neObsComplete.passes, "computed_last_pass": neObsComplete.computed, "every_s": int(neObsCompleteEvery.Seconds())}
+		"pass_at": at, "pass_ms": neObsComplete.passMS, "passes": neObsComplete.passes, "revision": neObsComplete.revision, "computed_last_pass": neObsComplete.computed, "every_s": int(neObsCompleteEvery.Seconds())}
 }
 
 // neObsCompleteCounts — blank_n / nodata_n of the last pass for one KG

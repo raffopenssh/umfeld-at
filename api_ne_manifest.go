@@ -133,7 +133,7 @@ type neManifestCache struct {
 	obsOnBev    int
 	obsOnIndex  int
 	logBytes    int64 // Σ chunk-log sizes at the last scan (append-only → grows when any log did)
-	obsPasses   int   // obs_complete passes at the last scan (obs{blank_n, nodata_n} ride on entries)
+	obsRev      int   // obs_complete revision at the last scan (obs{blank_n, nodata_n} ride on entries; bumps per pass and per ?kg=&refresh=1 recompute)
 	generatedAt string
 }
 
@@ -270,9 +270,9 @@ func (m *neManifestCache) refresh(force bool) {
 		m.logBytes = logBytes
 		changed = true
 	}
-	// obs{blank_n, nodata_n} come from the obs_complete pass (ne_obs_complete.go): a new pass moves them
-	if n, _ := NEObsCompleteStats()["passes"].(int); n != m.obsPasses {
-		m.obsPasses = n
+	// obs{blank_n, nodata_n} come from the obs_complete rows (ne_obs_complete.go): a pass or a per-KG recompute moves them
+	if n, _ := NEObsCompleteStats()["revision"].(int); n != m.obsRev {
+		m.obsRev = n
 		changed = true
 	}
 	// build order = sorted local KG codes (or queue.order_file, see below)

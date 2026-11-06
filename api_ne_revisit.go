@@ -333,6 +333,8 @@ func NERevisitStats() map[string]interface{} {
 //	?min_age_days=  (default 7) stale: baseline older than this; with ?observer=
 //	                also the "I was here recently" window on stale and no_log
 //	?refresh=1      recompute the snapshot synchronously
+//	?kg=<kg>        with kind=obs_missing and refresh=1: recompute that one KG's
+//	                observed-vs-view row now (answer gains obs_kg{}), no 3 h wait
 //
 // ETag = hash of the body; If-None-Match → 304 (a nightly sweep re-reads the
 // full no_log list at zero bytes when nothing moved).
@@ -373,7 +375,7 @@ func handleNERevisit(w http.ResponseWriter, r *http.Request) {
 		"observer":         observer,
 		"same_pass_window": neSamePassWindow.String(),
 		"note": "Hints only, oldest first. pending = KGs holding chunk versions sighted once (candidate: not baseline, not pipeline/jitter/coverage; lossy builds are never logged) — a second sighting of the same digest_ap by another observer, or by the same one after same_pass_window, confirms them. " +
-			"stale = KGs whose chunk log was not re-sighted (more chunks with a single-sighting latest version than confirmed ones, nothing pending) — one report with chunk rows covering bbox by another observer, or by the same one after same_pass_window, confirms them. no_log = KGs without any chunk log yet (declared picture still the index epoch; one report with chunk rows gives them a baseline — a digest-only earlier report is not a layout, chunk rows are requested at once). obs_on_index = KGs whose observed layer was validated against the index epoch's cell set: re-post NEO1 built on GET {kg}/declared (has_view) or NEC1+NEO1. obs_missing = KGs whose observed layer lacks cells of today's declared view (missing_n), holds rows the view no longer has (extra_n), or holds unswept rows that observe nothing (blank_n: obs_lu all 0, h_mean nodata, no flight year — padding written for view cells the pipeline never ran on; they paint as unknown and count as unobserved) — the view moved since the NEO1 was validated (re-baseline, bevdirect edge fix, another observer's edge cells) or the rekey padded instead of observing: run the pipeline on every cell of GET {kg}/declared and re-post NEO1; most missing + extra + blank first, snapshot of a background pass every few hours (obs_complete.pass_at). Once a KG's sweep is closed, post it with the NEO1 header field view_rekey.coverage=\"swept\" (= every blank row in the body was run and has no ALS data: open water, seams): its blank rows then count as nodata_n (totals cells_obs_nodata / kgs_obs_nodata), never as blank_n, and the KG is listed only while missing_n or extra_n > 0 — an identical re-post is never asked for. coverage rides on each row and on manifest obs{coverage, view_rekey, blank_n, nodata_n}. Order: pending, stale, no_log, obs_on_index, obs_missing, then your normal order. ?observer=<me> hides what I reported within min_age_days; ?kind=no_log&all=1 is the whole list (ETag, 304). Nothing here changes baselines or the confirm rule; values are a snapshot ≤ 10 min old (?refresh=1 recomputes).",
+			"stale = KGs whose chunk log was not re-sighted (more chunks with a single-sighting latest version than confirmed ones, nothing pending) — one report with chunk rows covering bbox by another observer, or by the same one after same_pass_window, confirms them. no_log = KGs without any chunk log yet (declared picture still the index epoch; one report with chunk rows gives them a baseline — a digest-only earlier report is not a layout, chunk rows are requested at once). obs_on_index = KGs whose observed layer was validated against the index epoch's cell set: re-post NEO1 built on GET {kg}/declared (has_view) or NEC1+NEO1. obs_missing = KGs whose observed layer lacks cells of today's declared view (missing_n), holds rows the view no longer has (extra_n), or holds unswept rows that observe nothing (blank_n: obs_lu all 0, h_mean nodata, no flight year — padding written for view cells the pipeline never ran on; they paint as unknown and count as unobserved) — the view moved since the NEO1 was validated (re-baseline, bevdirect edge fix, another observer's edge cells) or the rekey padded instead of observing: run the pipeline on every cell of GET {kg}/declared and re-post NEO1; most missing + extra + blank first, snapshot of a background pass every few hours (obs_complete.pass_at). Once a KG's sweep is closed, post it with the NEO1 header field view_rekey.coverage=\"swept\" (= every blank row in the body was run and has no ALS data: open water, seams): its blank rows then count as nodata_n (totals cells_obs_nodata / kgs_obs_nodata), never as blank_n, and the KG is listed only while missing_n or extra_n > 0 — an identical re-post is never asked for. coverage rides on each row and on manifest obs{coverage, view_rekey, blank_n, nodata_n}. Order: pending, stale, no_log, obs_on_index, obs_missing, then your normal order. ?observer=<me> hides what I reported within min_age_days; ?kind=no_log&all=1 is the whole list (ETag, 304). Nothing here changes baselines or the confirm rule; values are a snapshot ≤ 10 min old (?refresh=1 recomputes; ?kind=obs_missing&kg=<kg>&refresh=1 recomputes that KG's obs_missing row now → obs_kg{}, and manifest obs{blank_n, nodata_n} follow).",
 	}
 	if want("pending") {
 		all, _ := m["pending"].([]*neRevisitPending)
@@ -422,6 +424,13 @@ func handleNERevisit(w http.ResponseWriter, r *http.Request) {
 		out["obs_on_index"] = all[:min(limit, len(all))]
 	}
 	if want("obs_missing") { // ne_obs_complete.go: its own background pass, not the 10-min memo
+		if kg := q.Get("kg"); kg != "" && q.Get("refresh") == "1" {
+			if row := neObsRecomputeKG(kg); row != nil {
+				out["obs_kg"] = row
+			} else {
+				out["obs_kg"] = nil
+			}
+		}
 		all := neObsMissingRows()
 		out["obs_missing"] = all[:min(limit, len(all))]
 		out["obs_complete"] = NEObsCompleteStats()
