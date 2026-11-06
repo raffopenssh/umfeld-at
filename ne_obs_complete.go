@@ -257,10 +257,18 @@ func neObsCompleteLoop() {
 	}
 }
 
+// neObsBlankRule — the blank-row rule as peers read it (revisit
+// obs_complete.blank_rule, docs/ne-change.md §5b). The observed-layer peer
+// mirrors it when it decides which rows a sweep must still run (its commit
+// 820e626); keep the string and neObsRowBlank in step.
+const neObsBlankRule = "blank = obs_lu[9] all 0 && h_mean == 255 (nodata) && flight_years == 0 (when the layout has it); elev_mean and every other field are ignored"
+
 // neObsRowBlank — an observed row that observes nothing: every obs_lu share 0,
-// h_mean nodata (255) and no flight year. A real cell of bare rock still has a
-// height and a flight; these rows are the padding a peer's view_rekey writes
-// for view cells it never ran its pipeline on.
+// h_mean nodata (255) and no flight year (neObsBlankRule). elev_mean is NOT
+// consulted: the DTM has a height almost everywhere, padding rows carry one
+// too. A real cell of bare rock still has an h_mean and a flight; these rows
+// are the padding a peer's view_rekey writes for view cells it never ran its
+// pipeline on.
 func neObsRowBlank(row []byte, lay *neObsLayoutT) bool {
 	for _, b := range row[lay.luOff : lay.luOff+9] {
 		if b != 0 {
@@ -317,7 +325,7 @@ func NEObsCompleteStats() map[string]interface{} {
 		"cells_obs_missing": neObsComplete.cellsMissing, "cells_obs_extra": neObsComplete.cellsExtra,
 		"kgs_obs_blank": neObsComplete.kgsBlank, "cells_obs_blank": neObsComplete.cellsBlank,
 		"kgs_obs_nodata": neObsComplete.kgsNodata, "cells_obs_nodata": neObsComplete.cellsNodata,
-		"pass_at": at, "pass_ms": neObsComplete.passMS, "passes": neObsComplete.passes, "revision": neObsComplete.revision, "running": neObsCompleteRunning, "computed_last_pass": neObsComplete.computed, "every_s": int(neObsCompleteEvery.Seconds())}
+		"blank_rule": neObsBlankRule, "pass_at": at, "pass_ms": neObsComplete.passMS, "passes": neObsComplete.passes, "revision": neObsComplete.revision, "running": neObsCompleteRunning, "computed_last_pass": neObsComplete.computed, "every_s": int(neObsCompleteEvery.Seconds())}
 }
 
 // neObsCompleteCounts — blank_n / nodata_n of the last pass for one KG

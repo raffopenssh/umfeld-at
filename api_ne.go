@@ -476,7 +476,7 @@ func handleNEObsPost(w http.ResponseWriter, r *http.Request, kg string) {
 		return
 	}
 	// view_rekey.coverage="swept": the observer asserts every blank row in
-	// this body (obs_lu all 0, h_mean nodata, no flight) was run through its
+	// this body (neObsBlankRule: obs_lu all 0, h_mean nodata, no flight; elev_mean ignored) was run through its
 	// pipeline and has no ALS data (open water, seams). Such rows count as
 	// nodata, not as padding (ne_obs_complete.go). Only that one value exists.
 	coverage := neObsCoverageOf(h)

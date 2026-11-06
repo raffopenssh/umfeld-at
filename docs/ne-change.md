@@ -336,7 +336,11 @@ steers revisits — it does not touch the baseline, the confirm rule or any stor
   `extra_n` = observed rows for cells the view no longer holds (an edge-cell drift of a few cells
   per KG; the cells themselves follow the BEV KG polygons in the tiles — a declared/observed set that is
   narrower than a generalised administrative outline is not a gap). `blank_n` = observed rows that
-  observe nothing (`obs_lu` all 0, `h_mean` nodata, no flight year): the NEO1 header's
+  observe nothing — **blank rule:** `obs_lu[9]` all 0 **and** `h_mean == 255` (nodata) **and**
+  `flight_years == 0` when the layout has it; `elev_mean` and every other field are ignored (the
+  DTM has a height nearly everywhere, padding rows carry one too). The answer echoes it as
+  `obs_complete.blank_rule`; the observed-layer peer applies the same rule when it decides which
+  rows a sweep still has to run. Blank rows are the NEO1 header's
   `view_rekey{filled}` — the observed-layer peer ran its pipeline on the index-epoch product
   (`product_cells_n`) and padded the view's extra cells with nodata rows instead of observing them
   (80002 Imst: 23 269 of 380 837 rows, 2026-11-04; 2 782 KGs, 1.13 M cells nationally). They paint

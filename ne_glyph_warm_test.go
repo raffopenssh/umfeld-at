@@ -47,7 +47,7 @@ func TestNEWarmCounterpart(t *testing.T) {
 	if len(m) == 0 || len(m) > 48 {
 		t.Fatalf("phone list %d", len(m))
 	}
-	jmin, jmax := 1 << 30, 0
+	jmin, jmax := 1<<30, 0
 	for _, u := range m {
 		tt, ok := neWarmParseTile(u)
 		if !ok || tt.rest != "v=obs" || tt.lod != 1 {
@@ -70,7 +70,11 @@ func TestNEWarmRecordStore(t *testing.T) {
 	neWarmLoaded, neWarmEntries = true, map[string]*neWarmEntry{}
 	neWarmDirty = true // no deferred save: the store path is the real one
 	neWarmMu.Unlock()
-	defer func() { neWarmMu.Lock(); neWarmLoaded, neWarmEntries, neWarmDirty = false, nil, false; neWarmMu.Unlock() }()
+	defer func() {
+		neWarmMu.Lock()
+		neWarmLoaded, neWarmEntries, neWarmDirty = false, nil, false
+		neWarmMu.Unlock()
+	}()
 	if neWarmRecord("#kg=1;v=obs", "x", []string{"/api/v1/ne/glyph/kgs"}) {
 		t.Fatal("bad dev accepted")
 	}

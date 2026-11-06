@@ -76,8 +76,8 @@ var (
 	neWarmDirty   bool
 	neWarmStat    = struct {
 		beacons, rejected, replayed, failed, synth int
-		startedAt, doneAt                           time.Time
-		state                                       string
+		startedAt, doneAt                          time.Time
+		state                                      string
 	}{state: "idle"}
 )
 
