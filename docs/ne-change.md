@@ -329,7 +329,7 @@ steers revisits — it does not touch the baseline, the confirm rule or any stor
 - `obs_on_index[] = {kg, obs_at, has_view, view_source, bbox}` — KGs whose observed layer was
   validated against the index epoch's cell set: re-post NEO1 built on `GET /contrib/api/v1/ne/{kg}/declared`
   (`has_view`), or NEC1+NEO1. `totals.kgs_no_log`, `totals.kgs_obs_on_index`.
-- `obs_missing[] = {kg, view_n, obs_n, missing_n, extra_n, blank_n, view_source, obs_at, obs_declared_source, bbox}` —
+- `obs_missing[] = {kg, view_n, obs_n, missing_n, extra_n, blank_n, nodata_n, coverage, view_source, obs_at, obs_declared_source, bbox}` —
   **is the observed layer complete?** The NEO1 cell set was validated against the declared layer of
   its POST day; the declared *view* (§4b) moves afterwards — a re-baseline, the bevdirect v0.3.6
   edge-cell fix, another observer's edge cells. `missing_n` = view cells without an observed row,
@@ -342,12 +342,25 @@ steers revisits — it does not touch the baseline, the confirm rule or any stor
   (80002 Imst: 23 269 of 380 837 rows, 2026-11-04; 2 782 KGs, 1.13 M cells nationally). They paint
   as grey "unknown" in rectangular blocks under `v=obs`, veil every filter term, and count as
   unobserved here. Re-post NEO1 with the pipeline run on **every** cell of `GET {kg}/declared`;
-  most missing + blank first. Computed by its own background pass (`ne_obs_complete.go`:
+  most missing + extra + blank first.
+  **Observed nodata (swept).** Blank rows are not always padding: the ALS DTM/DSM has no data over
+  open water (Lake Constance 911xx, Neusiedler See 32023 — ~35 k cells) and on border seams
+  (3 123 KGs with ≤ 5 cells, 2026-11-06). Once an observer has run its pipeline on *every* cell of
+  the view and the remaining blanks are nodata, it posts the KG with the NEO1 header field
+  `view_rekey.coverage = "swept"` (the only accepted value; any other → 400). The stored header
+  keeps it; the pass then counts the KG's blank rows as `nodata_n` instead of `blank_n`
+  (`kgs_obs_nodata` / `cells_obs_nodata`), and the KG stays on `obs_missing` only while
+  `missing_n > 0` or `extra_n > 0` (real view drift) — a swept KG is never asked to re-post an
+  identical body. A post whose rows are unchanged but whose coverage assertion flips is a
+  digest-neutral header rewrite (`coverage_changed`, `previous_coverage` in the answer, not
+  `unchanged`). The manifest's `obs{}` carries `coverage`, the `view_rekey{}` block and, after the
+  first pass, `blank_n` / `nodata_n`. Consumers see no change: nodata rows paint as unobserved
+  exactly as before. Computed by its own background pass (`ne_obs_complete.go`:
   one merge of the two sorted id lists per KG, memoised per (view identity, obs digest), ~20 ms per
   KG, whole universe ≈ 2.5 min on first pass then seconds, every 3 h, yields to tile renders) — a
-  snapshot, `obs_complete{pass_at, kgs_no_obs, kgs_obs_missing, cells_obs_missing, cells_obs_extra, kgs_obs_blank, cells_obs_blank}`
+  snapshot, `obs_complete{pass_at, kgs_no_obs, kgs_obs_missing, cells_obs_missing, cells_obs_extra, kgs_obs_blank, cells_obs_blank, kgs_obs_nodata, cells_obs_nodata}`
   rides on the answer; `totals.kgs_obs_missing`, `totals.cells_obs_missing`, `totals.kgs_obs_blank`,
-  `totals.cells_obs_blank`; `ne_obs_complete`
+  `totals.cells_obs_blank`, `totals.kgs_obs_nodata`, `totals.cells_obs_nodata`; `ne_obs_complete`
   line on the debug inflight page.
 - `?limit=` (default 100, max 8000 ≥ the universe; all five lists), `?all=1` = the whole list,
   `?kind=no_log,stale` = only those lists; `?observer=<name>` is the per-peer view: drops pending

@@ -475,6 +475,17 @@ func handleNEObsPost(w http.ResponseWriter, r *http.Request, kg string) {
 		apiError(w, "header fields[] present but empty", 400)
 		return
 	}
+	// view_rekey.coverage="swept": the observer asserts every blank row in
+	// this body (obs_lu all 0, h_mean nodata, no flight) was run through its
+	// pipeline and has no ALS data (open water, seams). Such rows count as
+	// nodata, not as padding (ne_obs_complete.go). Only that one value exists.
+	coverage := neObsCoverageOf(h)
+	if vr, ok := h["view_rekey"].(map[string]interface{}); ok {
+		if c, present := vr["coverage"]; present && coverage != neObsCoverageSwept {
+			apiError(w, fmt.Sprintf("header view_rekey.coverage=%v unknown (only %q: every blank row was run and has no ALS data)", c, neObsCoverageSwept), 400)
+			return
+		}
+	}
 	// ── the declared layer to validate against ──
 	// NEC1+NEO1: the posted build. Bare NEO1: the declared VIEW cell set
 	// (chunk-log view → bev → lu, ne_change_declared.go — what
@@ -579,11 +590,12 @@ func handleNEObsPost(w http.ResponseWriter, r *http.Request, kg string) {
 	}
 	neWriteMu.Lock()
 	defer neWriteMu.Unlock()
-	prev, prevDeclared, prevBev := "", "", ""
+	prev, prevDeclared, prevBev, prevCoverage := "", "", "", ""
 	if k := neStore.get(kg); k != nil {
 		if oh := k.layerHeader("obs"); oh != nil {
 			prev, _ = oh["digest"].(string)
 			prevDeclared, _ = oh["declared_digest"].(string)
+			prevCoverage = neObsCoverageOf(oh)
 		}
 		if bh := k.layerHeader("bev"); bh != nil {
 			prevBev, _ = bh["digest"].(string)
@@ -592,6 +604,7 @@ func handleNEObsPost(w http.ResponseWriter, r *http.Request, kg string) {
 		if _, ph, err := neReadHeader(neFilePath(kg, "obs")); err == nil {
 			prev, _ = ph["digest"].(string)
 			prevDeclared, _ = ph["declared_digest"].(string)
+			prevCoverage = neObsCoverageOf(ph)
 		}
 		if _, ph, err := neReadHeader(neFilePath(kg, "bev.nec")); err == nil {
 			prevBev, _ = ph["digest"].(string)
@@ -603,6 +616,9 @@ func handleNEObsPost(w http.ResponseWriter, r *http.Request, kg string) {
 		"digest": h["digest"], "lu_digest": luHdr["digest"],
 		"declared_layer": decLayer, "declared_source": decSource, "declared_digest": decDigest,
 		"get": tierPrefixFor(r) + "/api/v1/ne/" + kg + "?layers=lu,bev,obs",
+	}
+	if coverage != "" {
+		resp["coverage"] = coverage
 	}
 	if view != nil && decLayer == "lu" {
 		resp["hint"] = "validated against the index epoch's lu set, not the current declared view — build NEO1 on GET " + tierPrefixFor(r) + "/api/v1/ne/" + kg + "/declared (" + strconv.Itoa(view.CellsN()) + " cells, " + view.Source + ")"
@@ -630,7 +646,9 @@ func handleNEObsPost(w http.ResponseWriter, r *http.Request, kg string) {
 	}
 	bevUnchanged := decSec == nil || prevBev == decDigest
 	d, _ := h["digest"].(string)
-	if prev != "" && prev == d && prevDeclared == decDigest && bevUnchanged {
+	// same rows, same declared layer, same coverage assertion → nothing to
+	// write (a coverage flip alone is a digest-neutral header rewrite)
+	if prev != "" && prev == d && prevDeclared == decDigest && bevUnchanged && prevCoverage == coverage {
 		resp["unchanged"] = true
 		writeJSON(w, 200, resp)
 		return
@@ -658,6 +676,9 @@ func handleNEObsPost(w http.ResponseWriter, r *http.Request, kg string) {
 	resp["unchanged"] = false
 	if prev != "" {
 		resp["replaced"], resp["previous_digest"] = true, prev
+		if prev == d && prevCoverage != coverage {
+			resp["coverage_changed"], resp["previous_coverage"] = true, prevCoverage
+		}
 	}
 	if decSec != nil && prevBev != "" && !bevUnchanged {
 		resp["bev_replaced"], resp["bev_previous_digest"] = true, prevBev

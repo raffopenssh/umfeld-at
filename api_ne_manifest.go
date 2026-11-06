@@ -62,6 +62,16 @@ type neLayerInfo struct {
 	// obs.declared_digest with bev.digest / lu.digest instead of cells_n.
 	DeclaredSource string `json:"declared_source,omitempty"`
 	DeclaredDigest string `json:"declared_digest,omitempty"`
+	// NEO1 only: the peer's view_rekey header block ({dropped, filled,
+	// borrowed, blank, coverage}); Coverage = view_rekey.coverage ("swept":
+	// every blank row was run and is ALS nodata — ne_obs_complete.go).
+	ViewRekey map[string]interface{} `json:"view_rekey,omitempty"`
+	Coverage  string                 `json:"coverage,omitempty"`
+	// NEO1 only: from the last obs_complete pass (ne_obs_complete.go) — blank_n
+	// = unswept padding rows (want a re-post), nodata_n = swept rows without
+	// ALS data (not a gap). Absent until the first pass has seen the KG.
+	BlankN  *int `json:"blank_n,omitempty"`
+	NodataN *int `json:"nodata_n,omitempty"`
 }
 
 // neDeclaredInfo — what the declared VIEW of a KG reads today
@@ -123,6 +133,7 @@ type neManifestCache struct {
 	obsOnBev    int
 	obsOnIndex  int
 	logBytes    int64 // Σ chunk-log sizes at the last scan (append-only → grows when any log did)
+	obsPasses   int   // obs_complete passes at the last scan (obs{blank_n, nodata_n} ride on entries)
 	generatedAt string
 }
 
@@ -167,6 +178,9 @@ func neLayerInfoFromHeader(h map[string]interface{}, size int64, mod time.Time) 
 		li.RecordBytes = int(rb)
 	}
 	li.DeclaredSource, li.DeclaredDigest = s("declared_source"), s("declared_digest")
+	if vr, ok := h["view_rekey"].(map[string]interface{}); ok {
+		li.ViewRekey, li.Coverage = vr, neObsCoverageOf(h)
+	}
 	if fs, ok := h["fields"].([]interface{}); ok {
 		for _, f := range fs {
 			if str, ok := f.(string); ok {
@@ -254,6 +268,11 @@ func (m *neManifestCache) refresh(force bool) {
 	}
 	if logBytes != m.logBytes {
 		m.logBytes = logBytes
+		changed = true
+	}
+	// obs{blank_n, nodata_n} come from the obs_complete pass (ne_obs_complete.go): a new pass moves them
+	if n, _ := NEObsCompleteStats()["passes"].(int); n != m.obsPasses {
+		m.obsPasses = n
 		changed = true
 	}
 	// build order = sorted local KG codes (or queue.order_file, see below)
@@ -375,6 +394,9 @@ func (m *neManifestCache) rebuildLocked() {
 		e.UpdatedAt = latest
 		if e.Obs != nil {
 			obs++
+			if bn, nn, ok := neObsCompleteCounts(kg); ok {
+				e.Obs.BlankN, e.Obs.NodataN = &bn, &nn
+			}
 			if e.Bev != nil && e.Obs.DeclaredDigest != "" && e.Obs.DeclaredDigest == e.Bev.Digest {
 				obsOnBev++
 			}

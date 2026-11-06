@@ -32,7 +32,9 @@ type neObsCompleteRow struct {
 	ObsN       int    `json:"obs_n"`
 	MissingN   int    `json:"missing_n"`
 	ExtraN     int    `json:"extra_n"`
-	BlankN     int    `json:"blank_n"` // observed rows that observe nothing: obs_lu all zero, h_mean nodata, no flight — placeholders the peer's view_rekey filled in for view cells its pipeline never ran on (80002: 23 269 of 380 837, 2026-11-04)
+	BlankN     int    `json:"blank_n"`            // observed rows that observe nothing: obs_lu all zero, h_mean nodata, no flight — placeholders the peer's view_rekey filled in for view cells its pipeline never ran on (80002: 23 269 of 380 837, 2026-11-04). 0 when the post is swept.
+	NodataN    int    `json:"nodata_n"`           // the same rows under a post whose header asserts view_rekey.coverage="swept": the pipeline ran, the ALS DTM/DSM has no data there (open water — Lake Constance, Neusiedler See — and border seams). Not a gap; never listed for re-post on its own.
+	Coverage   string `json:"coverage,omitempty"` // "swept" when the stored NEO1 header carries view_rekey.coverage="swept"
 	ViewSrc    string `json:"view_source"`
 	ObsAt      string `json:"obs_at"`
 	ObsDecl    string `json:"obs_declared_source,omitempty"`
@@ -51,6 +53,19 @@ var neObsComplete struct {
 	kgsNoObs                             int
 	kgsMissing, cellsMissing, cellsExtra int
 	kgsBlank, cellsBlank                 int
+	kgsNodata, cellsNodata               int
+}
+
+// neObsCoverageSwept — the one value of the NEO1 header field
+// view_rekey.coverage: the observer ran its pipeline on every cell of the
+// body and the blank rows are ALS nodata, not padding.
+const neObsCoverageSwept = "swept"
+
+// neObsCoverageOf — view_rekey.coverage of an NEO1 header ("" when absent).
+func neObsCoverageOf(h map[string]interface{}) string {
+	vr, _ := h["view_rekey"].(map[string]interface{})
+	c, _ := vr["coverage"].(string)
+	return c
 }
 
 const neObsCompleteEvery = 3 * time.Hour
@@ -70,7 +85,7 @@ func neObsCompareKG(kg string) *neObsCompleteRow {
 	if v == nil {
 		return nil
 	}
-	ident := v.Identity + "/" + e.Obs.Digest
+	ident := v.Identity + "/" + e.Obs.Digest + "/" + e.Obs.Coverage
 	neObsComplete.mu.Lock()
 	if r := neObsComplete.rows[kg]; r != nil && r.identity == ident {
 		neObsComplete.mu.Unlock()
@@ -90,16 +105,22 @@ func neObsCompareKG(kg string) *neObsCompleteRow {
 	}
 	rb := l.RowBytes
 	nv, no := v.CellsN(), len(obs)/rb
-	row := &neObsCompleteRow{KG: kg, ViewN: nv, ObsN: no, ViewSrc: v.Source, ObsAt: e.Obs.BuiltAt, ObsDecl: e.Obs.DeclaredSource, identity: ident, computedAt: time.Now()}
+	row := &neObsCompleteRow{KG: kg, ViewN: nv, ObsN: no, ViewSrc: v.Source, ObsAt: e.Obs.BuiltAt, ObsDecl: e.Obs.DeclaredSource, Coverage: e.Obs.Coverage, identity: ident, computedAt: time.Now()}
 	rec := ""
 	if h := k.layerHeader("obs"); h != nil {
 		rec, _ = h["record"].(string)
 	}
 	lay := neObsLayout(neObsFields(k), rec)
+	blank := 0
 	for j := 0; lay != nil && j < no && lay.rowBytes == rb; j++ {
 		if neObsRowBlank(obs[j*rb:(j+1)*rb], lay) {
-			row.BlankN++
+			blank++
 		}
+	}
+	if row.Coverage == neObsCoverageSwept {
+		row.NodataN = blank // asserted run-and-empty: ALS nodata, not padding
+	} else {
+		row.BlankN = blank
 	}
 	i, j := 0, 0
 	for i < nv && j < no {
@@ -135,7 +156,7 @@ func neObsCompletePass() {
 	for _, b := range kgBoxSnapshot() {
 		boxes[b.code] = fmt.Sprintf("%.4f,%.4f,%.4f,%.4f", b.minLon, b.minLat, b.maxLon, b.maxLat)
 	}
-	var noObs, kgsMissing, cellsMissing, cellsExtra, kgsBlank, cellsBlank, computed int
+	var noObs, kgsMissing, cellsMissing, cellsExtra, kgsBlank, cellsBlank, kgsNodata, cellsNodata, computed int
 	seen := map[string]bool{}
 	for _, kg := range neStore.kgCodes() {
 		neRenderYield()
@@ -161,6 +182,10 @@ func neObsCompletePass() {
 			kgsBlank++
 		}
 		cellsBlank += r.BlankN
+		if r.NodataN > 0 {
+			kgsNodata++
+		}
+		cellsNodata += r.NodataN
 	}
 	neObsComplete.mu.Lock()
 	for kg := range neObsComplete.rows {
@@ -171,6 +196,7 @@ func neObsCompletePass() {
 	neObsComplete.passAt, neObsComplete.passMS, neObsComplete.passes = time.Now(), time.Since(t0).Milliseconds(), neObsComplete.passes+1
 	neObsComplete.kgsNoObs, neObsComplete.kgsMissing, neObsComplete.cellsMissing, neObsComplete.cellsExtra, neObsComplete.computed = noObs, kgsMissing, cellsMissing, cellsExtra, computed
 	neObsComplete.kgsBlank, neObsComplete.cellsBlank = kgsBlank, cellsBlank
+	neObsComplete.kgsNodata, neObsComplete.cellsNodata = kgsNodata, cellsNodata
 	neObsComplete.mu.Unlock()
 }
 
@@ -203,19 +229,27 @@ func neObsRowBlank(row []byte, lay *neObsLayoutT) bool {
 	return true
 }
 
-// neObsMissingRows — the snapshot's KGs with missing or blank cells, most
-// (missing + blank) first (ties by code). Copies, safe to hand out.
+// neObsRowWantsRepost — a KG belongs on the obs_missing list when the view
+// drifted (missing or extra cells) or the post still holds unswept blank
+// padding. Swept nodata rows alone never list a KG: re-posting an identical
+// body changes nothing (the ~35 k open-water and seam cells, 2026-11-06).
+func neObsRowWantsRepost(r *neObsCompleteRow) bool {
+	return r.MissingN > 0 || r.ExtraN > 0 || r.BlankN > 0
+}
+
+// neObsMissingRows — the snapshot's KGs that want a re-post, most
+// (missing + extra + blank) first (ties by code). Copies, safe to hand out.
 func neObsMissingRows() []neObsCompleteRow {
 	neObsComplete.mu.Lock()
 	out := make([]neObsCompleteRow, 0, 64)
 	for _, r := range neObsComplete.rows {
-		if r.MissingN > 0 || r.BlankN > 0 {
+		if neObsRowWantsRepost(r) {
 			out = append(out, *r)
 		}
 	}
 	neObsComplete.mu.Unlock()
 	sort.Slice(out, func(i, j int) bool {
-		a, b := out[i].MissingN+out[i].BlankN, out[j].MissingN+out[j].BlankN
+		a, b := out[i].MissingN+out[i].ExtraN+out[i].BlankN, out[j].MissingN+out[j].ExtraN+out[j].BlankN
 		if a != b {
 			return a > b
 		}
@@ -235,5 +269,18 @@ func NEObsCompleteStats() map[string]interface{} {
 	return map[string]interface{}{"rows": len(neObsComplete.rows), "kgs_no_obs": neObsComplete.kgsNoObs, "kgs_obs_missing": neObsComplete.kgsMissing,
 		"cells_obs_missing": neObsComplete.cellsMissing, "cells_obs_extra": neObsComplete.cellsExtra,
 		"kgs_obs_blank": neObsComplete.kgsBlank, "cells_obs_blank": neObsComplete.cellsBlank,
+		"kgs_obs_nodata": neObsComplete.kgsNodata, "cells_obs_nodata": neObsComplete.cellsNodata,
 		"pass_at": at, "pass_ms": neObsComplete.passMS, "passes": neObsComplete.passes, "computed_last_pass": neObsComplete.computed, "every_s": int(neObsCompleteEvery.Seconds())}
+}
+
+// neObsCompleteCounts — blank_n / nodata_n of the last pass for one KG
+// (manifest.obs); ok=false before the pass has seen it.
+func neObsCompleteCounts(kg string) (blank, nodata int, ok bool) {
+	neObsComplete.mu.Lock()
+	defer neObsComplete.mu.Unlock()
+	r := neObsComplete.rows[kg]
+	if r == nil {
+		return 0, 0, false
+	}
+	return r.BlankN, r.NodataN, true
 }
