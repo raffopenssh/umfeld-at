@@ -72,6 +72,12 @@ type neLayerInfo struct {
 	// ALS data (not a gap). Absent until the first pass has seen the KG.
 	BlankN  *int `json:"blank_n,omitempty"`
 	NodataN *int `json:"nodata_n,omitempty"`
+	// NEO1 only: when blank_n / nodata_n were last (re)counted (a pass or a
+	// per-KG recompute after the view or the post moved). Folded into the
+	// entry's updated_at, so `?since=` deltas list a recount even when the
+	// obs file itself did not move. Not persisted: after a restart the first
+	// pass recounts every KG (one delta listing every obs KG).
+	CountsAt string `json:"counts_at,omitempty"`
 }
 
 // neDeclaredInfo — what the declared VIEW of a KG reads today
@@ -394,8 +400,12 @@ func (m *neManifestCache) rebuildLocked() {
 		e.UpdatedAt = latest
 		if e.Obs != nil {
 			obs++
-			if bn, nn, ok := neObsCompleteCounts(kg); ok {
+			if bn, nn, at, ok := neObsCompleteCounts(kg); ok {
 				e.Obs.BlankN, e.Obs.NodataN = &bn, &nn
+				e.Obs.CountsAt = at.UTC().Format(time.RFC3339)
+				if e.Obs.CountsAt > e.UpdatedAt {
+					e.UpdatedAt = e.Obs.CountsAt // a recount is an update for ?since= (srtm 2026-11-06: 2 289 parents stuck on stale blank_n)
+				}
 			}
 			if e.Bev != nil && e.Obs.DeclaredDigest != "" && e.Obs.DeclaredDigest == e.Bev.Digest {
 				obsOnBev++
@@ -548,7 +558,8 @@ func handleNEManifest(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// delta renders `?since=` — the kgs whose updated_at ≥ since (second
+// delta renders `?since=` — the kgs whose updated_at ≥ since (updated_at =
+// latest built_at OR obs.counts_at, whichever is later; second
 // resolution, INCLUSIVE: a file written in the same second as the previous
 // generated_at but after that ReadDir would otherwise be lost; the client may
 // re-see a boundary entry, merging is idempotent) plus the counters. ok=false

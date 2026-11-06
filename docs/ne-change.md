@@ -372,7 +372,7 @@ steers revisits — it does not touch the baseline, the confirm rule or any stor
   `neSamePassWindow` = 20 h is not a sighting) and stale / no_log KGs it reported within
   `min_age_days`; `?refresh=1` recomputes synchronously; `?kind=obs_missing&kg=<kg>&refresh=1`
   recomputes that one KG's observed-vs-view row at once (answer gains `obs_kg{}`, manifest
-  `obs{blank_n, nodata_n}` follow; `obs_complete.revision` bumps) — verify a swept re-post
+  `obs{blank_n, nodata_n, counts_at}` follow and `updated_at` moves with `counts_at`, so a manifest `?since=` delta lists the recount; `obs_complete.revision` bumps) — verify a swept re-post
   without waiting for the 3 h pass; pass totals move only with the pass, and
   `?kind=obs_missing&pass=1` kicks a full pass in the background now (`obs_pass_started`,
   `obs_complete.running`, then `pass_at` moves; ~3 min). The body carries an `ETag`

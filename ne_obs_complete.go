@@ -329,13 +329,15 @@ func NEObsCompleteStats() map[string]interface{} {
 }
 
 // neObsCompleteCounts — blank_n / nodata_n of the last pass for one KG
-// (manifest.obs); ok=false before the pass has seen it.
-func neObsCompleteCounts(kg string) (blank, nodata int, ok bool) {
+// (manifest.obs) and when that row was (re)computed (manifest obs.counts_at;
+// bumps updated_at so a ?since= delta lists a recount — the view can move
+// without the obs file moving); ok=false before the pass has seen it.
+func neObsCompleteCounts(kg string) (blank, nodata int, at time.Time, ok bool) {
 	neObsComplete.mu.Lock()
 	defer neObsComplete.mu.Unlock()
 	r := neObsComplete.rows[kg]
 	if r == nil {
-		return 0, 0, false
+		return 0, 0, time.Time{}, false
 	}
-	return r.BlankN, r.NodataN, true
+	return r.BlankN, r.NodataN, r.computedAt, true
 }

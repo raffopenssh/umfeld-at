@@ -286,9 +286,13 @@ full ETag moves with every build because `queue_position`s change):
   written in the same second as the previous `generated_at` but after that
   scan's ReadDir would otherwise be lost forever. A client therefore re-sees
   the boundary entries — merge by KG code, it is idempotent.
-- `updated_at` = latest `built_at` of the KG's layers, so a KG moving queued →
-  built, a new obs post or a rebuild all show up; a KG that only moved in the
-  queue does not — deltas carry no `queue`/`frozen`, read the full body for those.
+- `updated_at` = latest `built_at` of the KG's layers **or `obs.counts_at`**
+  (when the obs_complete pass last recounted `obs.blank_n`/`nodata_n` — the
+  declared view can move without the obs file moving), whichever is later; so a
+  KG moving queued → built, a new obs post, a rebuild or a recount all show up;
+  a KG that only moved in the queue does not. `counts_at` is not persisted:
+  the first pass after a restart recounts every KG, one delta then lists every
+  obs KG (merge, idempotent) — deltas carry no `queue`/`frozen`, read the full body for those.
 - Fallback to the **full** manifest (`delta:false`, replace your copy): cursor
   older than `neManifestDeltaRetention` (7 d), or later than our current
   `generated_at` (foreign/clock-skewed cursor). Unparseable `since` → 400.
