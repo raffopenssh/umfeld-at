@@ -31,8 +31,9 @@ const neFltVecQ = 8.0
 type neFltVecPt struct{ x, y int32 }
 
 type neFltVecEdge struct {
-	a, b neFltVecPt
-	used bool
+	a, b   neFltVecPt
+	used   bool
+	silent bool // a clip edge: closes the fill loop at the painted box but is NOT part of the picture's outline (no stroke)
 }
 
 // neFltVec — the edge soup of one tile: boundary edges keyed by their snapped endpoints; an edge seen a second time
@@ -51,7 +52,13 @@ func neFltVecLess(a, b neFltVecPt) bool { return a.x < b.x || (a.x == b.x && a.y
 
 // add one boundary edge; tol: the edge faces another bin (the neighbour is not in this bin's lattice), so the
 // twin edge from the other side comes from another polynomial fit and may snap one grid cell away — look around.
-func (v *neFltVec) add(x0, y0, x1, y1 float64, tol bool) {
+func (v *neFltVec) add(x0, y0, x1, y1 float64, tol bool) { v.addEdge(x0, y0, x1, y1, tol, false) }
+
+// addSilent — an edge towards a MATCHING neighbour outside the painted box: the fill needs it to close the loop,
+// the stroke must not draw it (it would be a seam along every tile margin).
+func (v *neFltVec) addSilent(x0, y0, x1, y1 float64) { v.addEdge(x0, y0, x1, y1, false, true) }
+
+func (v *neFltVec) addEdge(x0, y0, x1, y1 float64, tol, silent bool) {
 	a, b := neFltVecSnap(x0, y0), neFltVecSnap(x1, y1)
 	if a == b {
 		return
@@ -92,13 +99,14 @@ func (v *neFltVec) add(x0, y0, x1, y1 float64, tol bool) {
 		}
 	}
 	v.edges[key] = len(v.list)
-	v.list = append(v.list, neFltVecEdge{a: a, b: b})
+	v.list = append(v.list, neFltVecEdge{a: a, b: b, silent: silent})
 	v.n++
 }
 
 // loops — link the live edges into closed loops (undirected: pick any unused edge at the far vertex; a
-// vertex seen ±1 snap cell away counts as the same vertex). Returns path data in tile px.
-func (v *neFltVec) loops(sb *strings.Builder) {
+// vertex seen ±1 snap cell away counts as the same vertex). Writes the fill path (every loop, closed) to sb and
+// the stroke path (the same loops minus the silent clip edges, as open polylines) to st; both in tile px.
+func (v *neFltVec) loops(sb, st *strings.Builder) {
 	at := make(map[neFltVecPt][]int, len(v.list))
 	for i := range v.list {
 		e := &v.list[i]
@@ -120,13 +128,17 @@ func (v *neFltVec) loops(sb *strings.Builder) {
 		}
 		return 0, false
 	}
-	put := func(p neFltVecPt) {
-		sb.WriteString(strconv.FormatFloat(float64(p.x)/neFltVecQ, 'f', 2, 64))
-		sb.WriteByte(' ')
-		sb.WriteString(strconv.FormatFloat(float64(p.y)/neFltVecQ, 'f', 2, 64))
+	put := func(b *strings.Builder, p neFltVecPt) {
+		b.WriteString(strconv.FormatFloat(float64(p.x)/neFltVecQ, 'f', 2, 64))
+		b.WriteByte(' ')
+		b.WriteString(strconv.FormatFloat(float64(p.y)/neFltVecQ, 'f', 2, 64))
+	}
+	type step struct {
+		p      neFltVecPt
+		silent bool // the edge that led to p is a clip edge
 	}
 	// walk from p along unused edges until the chain closes at stop or runs out; the visited vertices go to out.
-	walk := func(p, stop neFltVecPt, out []neFltVecPt) ([]neFltVecPt, bool) {
+	walk := func(p, stop neFltVecPt, out []step) ([]step, bool) {
 		for n := 0; n < len(v.list); n++ {
 			k, ok := next(p)
 			if !ok {
@@ -138,21 +150,21 @@ func (v *neFltVec) loops(sb *strings.Builder) {
 			} else {
 				p = v.list[k].a
 			}
+			out = append(out, step{p, v.list[k].silent})
 			if p == stop || (abs32(p.x-stop.x) <= 1 && abs32(p.y-stop.y) <= 1) {
 				return out, true
 			}
-			out = append(out, p)
 		}
 		return out, false
 	}
-	var fwd, back []neFltVecPt
+	var fwd, back, seq []step
 	for i := range v.list {
 		if v.list[i].used {
 			continue
 		}
 		v.list[i].used = true
 		start, cur := v.list[i].a, v.list[i].b
-		fwd = append(fwd[:0], cur)
+		fwd = append(fwd[:0], step{cur, v.list[i].silent})
 		fwd, closed := walk(cur, start, fwd)
 		back = back[:0]
 		if !closed {
@@ -160,21 +172,67 @@ func (v *neFltVec) loops(sb *strings.Builder) {
 			// path is one polyline, never a chain broken into fragments each closed by a chord
 			back, _ = walk(start, cur, back)
 		}
-		sb.WriteByte('M')
-		if len(back) > 0 {
-			put(back[len(back)-1])
-			for k := len(back) - 2; k >= 0; k-- {
-				sb.WriteByte('L')
-				put(back[k])
+		// one vertex sequence: back reversed, start, fwd — the silent flag of a step belongs to the edge
+		// INTO it, so reversing `back` moves each flag to the next vertex
+		seq = seq[:0]
+		for k := len(back) - 1; k >= 0; k-- {
+			sl := false
+			if k+1 < len(back) {
+				sl = back[k+1].silent
 			}
-			sb.WriteByte('L')
+			seq = append(seq, step{back[k].p, sl})
 		}
-		put(start)
-		for _, p := range fwd {
+		if len(back) > 0 {
+			seq = append(seq, step{start, back[0].silent})
+		} else {
+			seq = append(seq, step{start, false})
+		}
+		seq = append(seq, fwd...)
+		if closed && len(seq) > 1 && seq[len(seq)-1].p != seq[0].p {
+			seq[len(seq)-1].p = seq[0].p // the closing vertex snapped ±1: use the start vertex itself
+		}
+		if closed && len(seq) > 2 {
+			// rotate a closed loop so it starts right after a silent edge: the stroke then is as few polylines as
+			// possible (the first vertex's incoming edge is the loop's last step)
+			n := len(seq) - 1 // seq[n].p == seq[0].p
+			for k := 1; k <= n; k++ {
+				if seq[k].silent {
+					rot := append([]step(nil), seq[k:n]...)
+					rot = append(rot, seq[:k]...)
+					rot[n-k].silent = seq[n].silent // old seq[0]: its incoming edge is the loop's last step
+					rot = append(rot, step{rot[0].p, seq[k].silent})
+					seq = rot
+					break
+				}
+			}
+		}
+		// fill: the loop, closed
+		sb.WriteByte('M')
+		put(sb, seq[0].p)
+		last := len(seq)
+		if closed {
+			last-- // the walk's last step is the start vertex again: Z closes it
+		}
+		for _, sp := range seq[1:last] {
 			sb.WriteByte('L')
-			put(p)
+			put(sb, sp.p)
 		}
 		sb.WriteByte('Z')
+		// stroke: the same vertices, a pen lift at every silent edge
+		pen := false
+		for k := 1; k < len(seq); k++ {
+			if seq[k].silent {
+				pen = false
+				continue
+			}
+			if !pen {
+				st.WriteByte('M')
+				put(st, seq[k-1].p)
+				pen = true
+			}
+			st.WriteByte('L')
+			put(st, seq[k].p)
+		}
 	}
 }
 
@@ -243,16 +301,19 @@ func neGlyphFltRenderVec(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExp
 				ci, cj := b.IJ[2*k], b.IJ[2*k+1]
 				for d := 0; d < 6; d++ {
 					q, ok := lat[ijKey(ci+neFidxNbr[d][0], cj+neFidxNbr[d][1])]
+					v0 := E[d]
+					v1 := (v0 + 1) % 6
 					if ok && mask[q] != 0 {
 						// shared with a matching neighbour of this bin: interior — unless that neighbour lies
-						// outside the painted box (its own edges are never added): then the edge is the
-						// picture's boundary, or the chain stays open and closes by a chord across the tile
+						// outside the painted box (its own edges are never added): then the fill loop would
+						// stay open and close by a chord across the tile. Such an edge is a silent clip edge:
+						// it closes the loop but is never stroked (a stroke there was a seam at the tile margin)
 						if qx, qy := b.pos(int(q)); qx >= x0 && qx <= x1 && qy >= y0 && qy <= y1 {
 							continue
 						}
+						vec.addSilent(cx+hex[v0][0]*px, cy+hex[v0][1]*px, cx+hex[v1][0]*px, cy+hex[v1][1]*px)
+						continue
 					}
-					v0 := E[d]
-					v1 := (v0 + 1) % 6
 					vec.add(cx+hex[v0][0]*px, cy+hex[v0][1]*px, cx+hex[v1][0]*px, cy+hex[v1][1]*px, !ok)
 				}
 				if vec.n > neFltVecMaxEdges {
@@ -281,14 +342,14 @@ func neGlyphFltRenderVec(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExp
 	sb.WriteByte(' ')
 	sb.WriteString(strconv.Itoa(g.ph))
 	sb.WriteString(`" shape-rendering="geometricPrecision">`)
-	var d strings.Builder
-	vec.loops(&d)
-	loops := d.String()
-	if loops != "" {
-		sb.WriteString(`<path fill="none" stroke="` + acc + `" stroke-linejoin="round" stroke-width="`)
+	var d, ds strings.Builder
+	vec.loops(&d, &ds)
+	loops, stroke := d.String(), ds.String()
+	if stroke != "" {
+		sb.WriteString(`<path fill="none" stroke="` + acc + `" stroke-linejoin="round" stroke-linecap="round" stroke-width="`)
 		sb.WriteString(strconv.FormatFloat(hair, 'f', 3, 64))
 		sb.WriteString(`" d="`)
-		sb.WriteString(loops)
+		sb.WriteString(stroke)
 		sb.WriteString(`"/>`)
 	}
 	sb.WriteString(`<path fill="` + veil + `" fill-rule="evenodd" d="M0 0H`)

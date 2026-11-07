@@ -701,7 +701,11 @@ At LOD 0/1 close to full zoom the browser upscales a tile px to several device p
   too via a ±1 snap-cell search), painted OVER an accent stroke of width `2/sp` on the same outline: the sheet
   covers the outer half, one device px of the wald green (`neGlyphGroupRGB[4]`, dark theme `#6ebe8c`) remains
   inside every hole, on the cell colour, no feather, no halo. A tile whose outline exceeds `neFltVecMaxEdges`
-  falls back to the raster render unnoticed. Client: `fltDP(lod)` = device px per tile px from the real svg width ×
+  falls back to the raster render unnoticed. Edges towards a matching neighbour that lies OUTSIDE the painted box
+  (its own edges are never added) are *silent* clip edges (`addSilent`): they close the fill loop (otherwise the
+  chain stays open and `Z` draws a chord across the tile — the wedges of 2026-11-07) but are left out of the
+  stroke (`loops` writes fill and stroke paths separately; a stroked clip edge was a seam along every tile
+  margin, the second artefact of the same day). `TestNEFltVecSilentEdgesNotStroked`. Client: `fltDP(lod)` = device px per tile px from the real svg width ×
   DPR, `fltSP` (powers of √2, 1.41..8, 0 = raster), `fltQ`/`fltKV` add `vec/sp` to the query and the key.
 - **Supersampled base / obs tile** `ss=2` (`neGlyphTileRenderSS`, LOD 0/1 only): the paletted picture is painted
   at 2× and box-filtered into an NRGBA PNG of the usual size (`neGlyphDownsampleN`, flat 2×2 blocks copied
