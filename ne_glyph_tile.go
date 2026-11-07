@@ -1386,6 +1386,9 @@ func handleNEGlyphCell(w http.ResponseWriter, r *http.Request) {
 		}
 		out["ring"] = ring
 	}
+	if q.Get("dbg") == "1" {
+		out["dbg"] = neGlyphCellDbg(id) // operator triage (ne_glyph_dbg.go): H3 ancestry, frame index, tile keys, raw observed rows
+	}
 	if q.Get("geom") == "1" {
 		// geom=1: geometry only (the cell and its ring stubs), sub-millisecond — the hover ring of the page;
 		// the doc (which may take tens of ms cold) is asked for by cell= afterwards
@@ -1435,6 +1438,9 @@ func handleNEGlyphCell(w http.ResponseWriter, r *http.Request) {
 		if p := nePendingKGs(KGCodesNearPointMem(lon, lat, 0.005)); len(p) > 0 {
 			out["pending_kgs"] = p
 		}
+		w.Header().Set("Cache-Control", "no-store")
+	}
+	if out["dbg"] != nil {
 		w.Header().Set("Cache-Control", "no-store")
 	}
 	writeJSON(w, 200, out)
