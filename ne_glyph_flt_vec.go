@@ -125,30 +125,54 @@ func (v *neFltVec) loops(sb *strings.Builder) {
 		sb.WriteByte(' ')
 		sb.WriteString(strconv.FormatFloat(float64(p.y)/neFltVecQ, 'f', 2, 64))
 	}
+	// walk from p along unused edges until the chain closes at stop or runs out; the visited vertices go to out.
+	walk := func(p, stop neFltVecPt, out []neFltVecPt) ([]neFltVecPt, bool) {
+		for n := 0; n < len(v.list); n++ {
+			k, ok := next(p)
+			if !ok {
+				return out, false
+			}
+			v.list[k].used = true
+			if v.list[k].a == p || (abs32(v.list[k].a.x-p.x) <= 1 && abs32(v.list[k].a.y-p.y) <= 1) {
+				p = v.list[k].b
+			} else {
+				p = v.list[k].a
+			}
+			if p == stop || (abs32(p.x-stop.x) <= 1 && abs32(p.y-stop.y) <= 1) {
+				return out, true
+			}
+			out = append(out, p)
+		}
+		return out, false
+	}
+	var fwd, back []neFltVecPt
 	for i := range v.list {
 		if v.list[i].used {
 			continue
 		}
 		v.list[i].used = true
 		start, cur := v.list[i].a, v.list[i].b
+		fwd = append(fwd[:0], cur)
+		fwd, closed := walk(cur, start, fwd)
+		back = back[:0]
+		if !closed {
+			// an open chain (the walk began mid-chain): extend the other way from start so the
+			// path is one polyline, never a chain broken into fragments each closed by a chord
+			back, _ = walk(start, cur, back)
+		}
 		sb.WriteByte('M')
-		put(start)
-		for n := 0; n < len(v.list); n++ {
+		if len(back) > 0 {
+			put(back[len(back)-1])
+			for k := len(back) - 2; k >= 0; k-- {
+				sb.WriteByte('L')
+				put(back[k])
+			}
 			sb.WriteByte('L')
-			put(cur)
-			k, ok := next(cur)
-			if !ok {
-				break
-			}
-			v.list[k].used = true
-			if v.list[k].a == cur || (abs32(v.list[k].a.x-cur.x) <= 1 && abs32(v.list[k].a.y-cur.y) <= 1) {
-				cur = v.list[k].b
-			} else {
-				cur = v.list[k].a
-			}
-			if cur == start {
-				break
-			}
+		}
+		put(start)
+		for _, p := range fwd {
+			sb.WriteByte('L')
+			put(p)
 		}
 		sb.WriteByte('Z')
 	}
@@ -220,7 +244,12 @@ func neGlyphFltRenderVec(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExp
 				for d := 0; d < 6; d++ {
 					q, ok := lat[ijKey(ci+neFidxNbr[d][0], cj+neFidxNbr[d][1])]
 					if ok && mask[q] != 0 {
-						continue // shared with a matching neighbour of this bin: interior
+						// shared with a matching neighbour of this bin: interior — unless that neighbour lies
+						// outside the painted box (its own edges are never added): then the edge is the
+						// picture's boundary, or the chain stays open and closes by a chord across the tile
+						if qx, qy := b.pos(int(q)); qx >= x0 && qx <= x1 && qy >= y0 && qy <= y1 {
+							continue
+						}
 					}
 					v0 := E[d]
 					v1 := (v0 + 1) % 6
