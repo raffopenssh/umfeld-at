@@ -368,11 +368,19 @@ func neGlyphTileGeomBleed(lod neGlyphLOD, i, j int, bleed float64) (g neGlyphTil
 	w, s, e, n = neGlyphTileBox(lod, i, j)
 	x0, y0 := neGlyphProj(w, n) // top-left in viewBox units (y grows south)
 	x1, y1 := neGlyphProj(e, s)
-	pw, ph := int(math.Ceil((x1-x0)*lod.px))+2*int(bleed), int(math.Ceil((y1-y0)*lod.px))+2*int(bleed)
+	// the picture's pixels lie on ONE global grid (frame unit × px): its origin and extent are whole grid pixels, so
+	// a shape straddling two tiles rasterises identically in both (same sub-pixel phase, no 1-px shift of a hairline
+	// or feather in the overlap) and the client stretches nothing — it places the image at the same rounded origin
+	// (hiTile: X0 = round(t.x·px − bleed)) at exactly pw/px units. Before, the origin was the tile's own fraction
+	// and ceil() added up to a pixel the client stretched away: the veil's overlapping rings differed by a pixel,
+	// a zig-zag seam along every margin.
+	X0, Y0 := math.Floor(x0*lod.px-bleed+0.5), math.Floor(y0*lod.px-bleed+0.5)
+	X1, Y1 := math.Floor(x1*lod.px+bleed+0.5), math.Floor(y1*lod.px+bleed+0.5)
+	pw, ph := int(X1-X0), int(Y1-Y0)
 	if pw < 1 || ph < 1 || pw*ph > 4<<20 {
 		return g, w, s, e, n, false
 	}
-	return neGlyphTileGeom{lod: lod, x0: x0 - bleed/lod.px, y0: y0 - bleed/lod.px, pw: pw, ph: ph}, w, s, e, n, true
+	return neGlyphTileGeom{lod: lod, x0: X0 / lod.px, y0: Y0 / lod.px, pw: pw, ph: ph}, w, s, e, n, true
 }
 
 // neGlyphFltBleed — the veil tile's ring in tile pixels. The browser resamples every

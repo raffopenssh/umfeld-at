@@ -240,6 +240,14 @@ func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, 
 	cx0, cy0 := neGlyphProj(w, n)
 	cx1, cy1 := neGlyphProj(e, s)
 	strokes := g.lod.px >= 40
+	// the hairline: every matching cell's edges towards a non-matching neighbour. Edges towards a matching cell of
+	// ANOTHER bin cancel too (the twin edge from that bin's lattice, snapped with tolerance as in the vector veil):
+	// at LOD 0 a bin is a tile, so without the cancel every tile margin wore a zig-zag of hairlines along the cells
+	// whose matching neighbour sits in the next bin — a thin seam crossing the matching clusters.
+	var vec *neFltVec
+	if strokes {
+		vec = &neFltVec{edges: make(map[[2]neFltVecPt]int, 1024)}
+	}
 	stamp := time.Now().UnixNano()
 	var poly [6][2]float64
 	polyS := poly[:]
@@ -320,14 +328,23 @@ func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, 
 				cx, cy := (fx-g.x0)*px, (fy-g.y0)*px
 				ci, cj := b.IJ[2*k], b.IJ[2*k+1]
 				for d := 0; d < 6; d++ {
-					if q, ok := lat[ijKey(ci+neFidxNbr[d][0], cj+neFidxNbr[d][1])]; ok && mask[q] != 0 {
+					q, ok := lat[ijKey(ci+neFidxNbr[d][0], cj+neFidxNbr[d][1])]
+					if ok && mask[q] != 0 {
 						continue
 					}
 					v0 := E[d]
 					v1 := (v0 + 1) % 6
-					neLineIdx(img, cx+hex[v0][0]*px, cy+hex[v0][1]*px, cx+hex[v1][0]*px, cy+hex[v1][1]*px, 2)
+					vec.add(cx+hex[v0][0]*px, cy+hex[v0][1]*px, cx+hex[v1][0]*px, cy+hex[v1][1]*px, !ok)
 				}
 			}
+		}
+	}
+	if vec != nil {
+		for _, ed := range vec.list {
+			if ed.used {
+				continue
+			}
+			neLineIdx(img, float64(ed.a.x)/neFltVecQ, float64(ed.a.y)/neFltVecQ, float64(ed.b.x)/neFltVecQ, float64(ed.b.y)/neFltVecQ, 2)
 		}
 	}
 	neFltGrow(img, neFltMinR(hl))
