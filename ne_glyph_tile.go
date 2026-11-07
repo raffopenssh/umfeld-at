@@ -274,9 +274,25 @@ func neGlyphTileBox(lod neGlyphLOD, i, j int) (w, s, e, n float64) {
 	return float64(i) * lod.deg, float64(j) * lod.deg, float64(i+1) * lod.deg, float64(j+1) * lod.deg
 }
 
-// neGlyphTileBleed — the picture carries one extra pixel ring so stretched
-// edges never show a seam; the client widens the image rect by 1/px.
+// neGlyphTileBleed — the translucent overlays (chg, dif, tree, sub, rd) carry one extra pixel ring so
+// resampled edges never show a seam; the client widens the image rect by 1/px (BLEED). Wider would double
+// their alpha over a visible band where two tiles overlap.
 const neGlyphTileBleed = 1
+
+// neGlyphTilePicBleed — the opaque pictures (declared base, v=obs) carry a 3-px ring (client BLEED_PIC):
+// WebKit anti-aliases every <image> edge over ~1 device px on each side, and at the far end of LOD 0 a
+// tile px is ~0.6 css px, so with a 1-px ring both tiles' faded edges met over the page background — a
+// hairline of it along every tile margin on Safari (Chrome's edge is sharper and hid it). The pictures
+// are opaque and identical in the overlap, so a wider ring costs nothing but a few pixels.
+const neGlyphTilePicBleed = 3
+
+// neGlyphTileBleedFor — the ring of a view's tile; mirrored by the client's hiTile (BLEED / BLEED_PIC).
+func neGlyphTileBleedFor(view string) float64 {
+	if view == "" || view == "obs" {
+		return neGlyphTilePicBleed
+	}
+	return neGlyphTileBleed
+}
 
 // neGlyphTileMeta — what rides in X-NE-Tile beside the picture: cell count,
 // per-group land-use sums (1/255 cell-area units), unknown cells, pending
@@ -462,7 +478,7 @@ func neGlyphTileRenderFH(lod neGlyphLOD, i, j int, view string, raw bool, win ne
 	if view == "chg" && flt != nil {
 		m.flt = neFltMatcherFor(flt, time.Now().UnixNano())
 	}
-	g, w, s, e, n, ok := neGlyphTileGeomOf(lod, i, j)
+	g, w, s, e, n, ok := neGlyphTileGeomBleed(lod, i, j, neGlyphTileBleedFor(view))
 	if !ok {
 		return nil, m
 	}

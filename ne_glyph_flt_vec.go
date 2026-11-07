@@ -352,11 +352,16 @@ func neGlyphFltRenderVec(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExp
 		sb.WriteString(stroke)
 		sb.WriteString(`"/>`)
 	}
-	sb.WriteString(`<path fill="` + veil + `" fill-rule="evenodd" d="M0 0H`)
-	sb.WriteString(strconv.Itoa(g.pw))
+	// the sheet reaches 8 px BEYOND the viewport: the hole loops run past the picture's edge (cells of the ring),
+	// and with the sheet ending exactly at the edge, the strip "inside a loop but outside the sheet" — odd winding,
+	// filled — met the browser's anti-aliased viewport clip: Chrome and WebKit both painted a faint veil-coloured
+	// hairline along every edge of the <image>, across the holes, a seam at every tile margin (measured ≈ 15 %
+	// white over the cell). Beyond the viewport nothing is rasterised, so the sliver is gone.
+	sb.WriteString(`<path fill="` + veil + `" fill-rule="evenodd" d="M-8 -8H`)
+	sb.WriteString(strconv.Itoa(g.pw + 8))
 	sb.WriteString("V")
-	sb.WriteString(strconv.Itoa(g.ph))
-	sb.WriteString("H0Z")
+	sb.WriteString(strconv.Itoa(g.ph + 8))
+	sb.WriteString("H-8Z")
 	sb.WriteString(loops)
 	sb.WriteString(`"/></svg>`)
 	return []byte(sb.String())
