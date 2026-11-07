@@ -78,7 +78,7 @@ func neSrcRows(t *testing.T, kg string) (lu, k []byte) {
 }
 
 func TestNEPublicWordBan(t *testing.T) {
-	for _, f := range []string{"api_ne_public.go", "ne_h3.go", "ne_store.go", "api_docs_public_ne.go", "ne_change.go", "api_ne_change.go", "ne_glyph.go", "ne_glyph_filt.go", "ne_glyph_fidx.go", "ne_filter_expr.go", "api_ne_filter.go", "ne_glyph_filter.js", "api_ne_stats_unit.go", "ne_glyph_export.go", "docs/stats-envelope.md"} {
+	for _, f := range []string{"api_ne_public.go", "ne_h3.go", "ne_store.go", "api_docs_public_ne.go", "ne_change.go", "api_ne_change.go", "ne_glyph.go", "ne_glyph_filt.go", "ne_glyph_fidx.go", "ne_filter_expr.go", "api_ne_filter.go", "ne_where.go", "ne_glyph_where.go", "ne_glyph_filter.js", "api_ne_stats_unit.go", "ne_glyph_export.go", "docs/stats-envelope.md"} {
 		b, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)

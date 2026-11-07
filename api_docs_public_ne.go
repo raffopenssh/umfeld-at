@@ -185,6 +185,30 @@ GET /api/v1/ne/glyph/passes[?kg=]           change over time, by PASS (not by ca
                                             [cell_index, pass, day_index, confirmed, candidate] + days[] (national only), curve}.
                                             Window grammar (t= on tile/cell, ;t= in the share link): t=2 one pass · t=2..3 passes
                                             · t=2@d1..d2 days of a pass · t=@d1..d2 calendar across passes. 5 min memo.
+GET /api/v1/ne/where?pt=lon,lat|lon=&lat=|cell=<res-12>|share=<glyph hash or URL>[&f=][&format=txt|json][&n=24][&ar=][&fields=all|a,b]
+                                            WHERE — one call that names a spot the way the landing page's ?dbg panel does
+                                            (the panel's body IS this text): the point (lon/lat both orders, viewBox xy),
+                                            the view a share link describes (zoom, LOD, full, flags, bbox, centre, the LOD
+                                            tile keys in view, toggles that cannot show at that zoom, dropped tokens), the
+                                            point's tile keys per LOD + tile URL, the res-12 cell with its H3 ancestry r7–r11,
+                                            chunk9, bboxes, res-7 frame row, kgs, the decoded declared row, chg, pic_obs/pic_dif,
+                                            every OBS row held (field by field + the layer's source/epoch/built_at/digest),
+                                            the filter-index bin (key, state, row, n, every catalogue field's value + raw +
+                                            source, the apex height list), the peer's cells block as parsed (when cached: epoch
+                                            + the raw row) and its URL, and — with f= or a share ;f= (also f=off:…, reported
+                                            held) — the verdict term by term (value, raw, ✓/✗), cell_match, and the matching
+                                            cells of the view (clipped to 0.1°, nearest first, n ≤ 200) with the terms'
+                                            values; urls{} = the same spot at {OBS_NAME} (landscape?bbox= of the cell and its
+                                            res-7 parent, kg/{kg}/cells) and here (cell, glyph/cell?dbg=1, stats/unit, filter,
+                                            the glyph link and its ?dbg twin). share= takes the hash verbatim, a full URL, or a
+                                            percent-encoded one; the point is pt= > share pt= > at= centre > h3= > cell=x,y >
+                                            kg=; ar= = the viewport's h/w for the view bbox (the page passes it). Never cached;
+                                            format=txt (or Accept: text/plain) is the panel's text, format=json the structure.
+                                            This is the self-debug entry for {OBS_NAME}: its observers curl it for a cell they
+                                            posted and see which of their numbers reached which column, with which epoch, and
+                                            why a filter does or does not pick the cell. Triage: OBS row absent → the KG was not
+                                            uploaded by the NE writer yet; fidx srtm epoch older than the OBS row → the bin predates
+                                            the post (rebuilt on demand, delete-safe); ht_list vs tree_h_max → §9a lists rule.
 GET /api/v1/ne/glyph/cell?lon=&lat=|cell=[&t=] the res-12 cell under a point: public cell doc + its hexagon in viewBox units
                                             + pic_obs = what the v=obs tile shows there, in words ({dom, dom_pct (5 % steps),
                                             second?, tree?: {band 0–4, h_m, n}} | {unknown:true} | null = no observed row) — the
@@ -442,6 +466,9 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     to the nearest dot, so from lon/lat: x = round((lon·kx − minx)·scale)+pad, y = round((−lat − miny)·scale)+pad.
     Mint these yourself to hand a person the change picture of a place ("confirmed change in KG 63349" →
     /#kg=63349;open; "the trees and the ground of that hill" → /#q=<name>;full;trees;relief;z=400).
+  7a' No browser needed for triage: GET /api/v1/ne/where?share=<the hash>&format=txt answers what the ?dbg panel
+    would show for that link (its view, its filter verdicts, the cell under its centre, the peer URLs) — curl first,
+    drive a browser only to look at pixels. ?dbg on the page prints the exact curl line for the pointer's spot.
   7a Scripted checks (window.neGlyph, for a browser driver): state() {hash, view ('' | 'obs' = the profile), profile,
     change, diff, diffRaw, overlays {change, diff, subsidy, trees, relief, ortho, roads}, z, vb, full, trees, relief,
     ortho, orthoOp, orthoZ, orthoLeft, roads, roadsOp, subsidy, subsidyLoaded, reliefZ, reliefLeft, lod, left, tiles[] {k, v, on, ok, hid, n, m = X-NE-Tile meta}, sel, pinned, pin, loading,

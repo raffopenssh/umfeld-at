@@ -226,6 +226,9 @@ func handleNE(w http.ResponseWriter, r *http.Request) {
 	case "filter/fields":
 		handleNEFilterFields(w, r)
 		return
+	case "where":
+		handleNEWhere(w, r) // the ?dbg WHERE panel as an endpoint (ne_where.go)
+		return
 	case "stats/unit":
 		if id, ok := exportGate(w, r); ok {
 			handleNEStatsUnit(w, r, id)
