@@ -1800,7 +1800,7 @@ var svg=fig.querySelector('svg.contrib'),tip=fig.querySelector('.contrib-tip'),d
 if(!svg||!tip||!dyn||!el)return;
 var D;try{D=JSON.parse(el.textContent)}catch(e){return}
 if(!D.days||!D.days.length)return;
-var NS='http://www.w3.org/2000/svg',W=840,H=176,TOP=18,BOT=50,PLOT=H-TOP-BOT,KM2=D.unit_km2,BANDS=D.bands,NB=BANDS.length;
+var NS='http://www.w3.org/2000/svg',W=840,H=176,TOP=18,BOT=50,PAD=28,PW=W-2*PAD,PLOT=H-TOP-BOT,KM2=D.unit_km2,BANDS=D.bands,NB=BANDS.length;
 var rows=D.days,cards={},hoverable=window.matchMedia('(hover:hover)').matches;
 [].forEach.call(tip.querySelectorAll('.dd'),function(c){cards[c.dataset.day]=c});
 var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -1855,12 +1855,12 @@ function newGroup(b,x){var g=mk('g','day');g.setAttribute('tabindex','0');g.setA
 function render(){
  all=buckets(state.u);N=winN();
  if(state.end==null||state.end>all.length-1)state.end=all.length-1;if(state.end<N-1)state.end=N-1;
- vis=all.slice(state.end-N+1,state.end+1);cw=W/N;bw=cw*(state.u==='d'?.56:state.u==='w'?.46:.38);
+ vis=all.slice(state.end-N+1,state.end+1);cw=PW/N;bw=cw*(state.u==='d'?.56:state.u==='w'?.46:.38);
  var maxC=1;vis.forEach(function(b){if(b.c>maxC)maxC=b.c});var y=function(c){return PLOT*c/maxC};
  // static per window: y guide, labels
  [].forEach.call(dyn.querySelectorAll('.win'),function(e){dyn.removeChild(e)});
  var keep={},first=dyn.firstChild;
- vis.forEach(function(b,i){var key=state.u+':'+b.key,x=i*cw,bx=x+(cw-bw)/2,g=groups[key];keep[key]=1;
+ vis.forEach(function(b,i){var key=state.u+':'+b.key,x=PAD+i*cw,bx=x+(cw-bw)/2,g=groups[key];keep[key]=1;
   if(!g){g=groups[key]=newGroup(b,bx);g.key=key;void g.getBoundingClientRect()}
   g.bucket=b;g.classList.toggle('flag',b.flag.length>0);g.classList.toggle('pad',!!b.pad);
   g.setAttribute('aria-label',label(b));
@@ -1878,7 +1878,7 @@ function render(){
  for(var key in groups)if(!keep[key]){var g=groups[key];if(g.parentNode)g.parentNode.removeChild(g);delete groups[key]}
  // keep DOM order = time order (focus walk)
  order.forEach(function(k){dyn.appendChild(groups[k])});
- var gl=mk('line','grid win');attrs(gl,{x1:0,y1:TOP,x2:W,y2:TOP});dyn.insertBefore(gl,dyn.firstChild);
+ var gl=mk('line','grid win');attrs(gl,{x1:PAD,y1:TOP,x2:W-PAD,y2:TOP});dyn.insertBefore(gl,dyn.firstChild);
  svg.querySelector('.ctl .yv').textContent=km2(maxC);
  // controls
  [].forEach.call(svg.querySelectorAll('.ctl .u'),function(t){t.classList.toggle('on',t.dataset.u===state.u)});
