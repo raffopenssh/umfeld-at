@@ -1828,7 +1828,9 @@ function span(b){var u=state.u;if(u==='d')return b.key;if(u==='m'){var t=ymd(b.k
 function head(b){var u=state.u;if(u==='d')return WD[ymd(b.key).getUTCDay()];if(u==='m')return 'month';
  var t=ymd(b.key),d=new Date(Date.UTC(t.getUTCFullYear(),0,4));d.setUTCDate(d.getUTCDate()-(d.getUTCDay()+6)%7);var wk=1+Math.round((t-d)/6048e5);return 'week '+wk}
 // ── state + drawing ────────────────────────────────────────────────────────
-var state={u:'d',end:null},all=[],vis=[],groups={},order=[],N=28,cw=30,bw=16.8;
+var state={u:'d',end:null},all=[],vis=[],groups={},gone={},order=[],N=28,cw=30,bw=16.8,SLIDE=360;
+// the plot is clipped so columns can scroll in and out past its edges
+var defs=svg.querySelector('defs'),cp=mk('clipPath','',defs);cp.setAttribute('id','ne-cclip');attrs(mk('rect','',cp),{x:PAD-1,y:-40,width:PW+2,height:H+80});dyn.setAttribute('clip-path','url(#ne-cclip)');
 function mk(tag,cls,parent){var e=document.createElementNS(NS,tag);if(cls)e.setAttribute('class',cls);(parent||dyn).appendChild(e);return e}
 function attrs(e,a){for(var k in a)e.setAttribute(k,a[k])}
 function unitWord(){return{d:'day',w:'week',m:'month'}[state.u]}
@@ -1852,16 +1854,27 @@ function newGroup(b,x){var g=mk('g','day');g.setAttribute('tabindex','0');g.setA
   else if(k==='ArrowRight'){e.preventDefault();if(i<order.length-1){groups[order[i+1]].focus();if(pinned)pin(order[i+1])}else if(pan(1))groups[order[order.length-1]].focus()}
   else if(k==='Escape'){e.preventDefault();pin(null)}});
  return g}
-function render(){
+// setX — shift a column horizontally (its heights stay): the scroll of a leaving column
+function setX(g,x){var bx=x+(cw-bw)/2;attrs(g.hit,{x:x});attrs(g.mark,{x:bx});attrs(g.zero,{x:bx});
+ for(var i=0;i<NB;i++){attrs(g.segs[i],{x:bx});if(g.hat[i])attrs(g.hat[i],{x:bx})}attrs(g.cap,{x:bx});g.chev.style.transform='translate('+(x+cw/2)+'px,'+(H-BOT+8)+'px)'}
+// leave — slide an element out by dx and drop it once the transition is over (a pan
+// back in time revives a column from gone instead of growing a new one)
+function leave(e,dx,key){if(e.leaveT)clearTimeout(e.leaveT);e.leaveT=setTimeout(function(){if(e.parentNode)e.parentNode.removeChild(e);if(key)delete gone[key]},SLIDE+40);
+ if(key){gone[key]=e;setX(e,PAD+(e.idx-dx)*cw)}else e.style.transform='translate('+(-dx*cw)+'px,0)'}
+// render(k): k = columns panned (+ later, − earlier); columns and labels enter from
+// the side they come from and leave towards the other, like a strip scrolling under the plot
+function render(k){k=k||0;
  all=buckets(state.u);N=winN();
  if(state.end==null||state.end>all.length-1)state.end=all.length-1;if(state.end<N-1)state.end=N-1;
  vis=all.slice(state.end-N+1,state.end+1);cw=PW/N;bw=cw*(state.u==='d'?.56:state.u==='w'?.46:.38);
  var maxC=1;vis.forEach(function(b){if(b.c>maxC)maxC=b.c});var y=function(c){return PLOT*c/maxC};
- // static per window: y guide, labels
- [].forEach.call(dyn.querySelectorAll('.win'),function(e){dyn.removeChild(e)});
- var keep={},first=dyn.firstChild;
+ // static per window: y guide, labels (slide out with the columns when panning)
+ [].forEach.call(dyn.querySelectorAll('.win'),function(e){if(k&&e.classList.contains('sl'))leave(e,k);else dyn.removeChild(e)});
+ var keep={},fresh=[],pass=0;
  vis.forEach(function(b,i){var key=state.u+':'+b.key,x=PAD+i*cw,bx=x+(cw-bw)/2,g=groups[key];keep[key]=1;
-  if(!g){g=groups[key]=newGroup(b,bx);g.key=key;void g.getBoundingClientRect()}
+  if(!g){g=gone[key];if(g){clearTimeout(g.leaveT);g.leaveT=0;delete gone[key];groups[key]=g}
+   else{g=groups[key]=newGroup(b,bx);g.key=key;if(k){fresh.push([g,b,i,PAD+(i+k)*cw])}else void g.getBoundingClientRect()}}
+  g.idx=i;
   g.bucket=b;g.classList.toggle('flag',b.flag.length>0);g.classList.toggle('pad',!!b.pad);
   g.setAttribute('aria-label',label(b));
   attrs(g.hit,{x:x,width:cw});attrs(g.mark,{x:bx,width:bw});
@@ -1870,12 +1883,17 @@ function render(){
   for(k=NB-1;k>=0;k--){var h=thin?(k===best?1.5:0):y(b.p[k]);if(b.c===0)h=0;yy-=h;attrs(g.segs[k],{x:bx,y:yy,width:bw,height:h});if(g.hat[k])attrs(g.hat[k],{x:bx,y:yy,width:bw,height:h>=2?h:0})}
   var on=b.flag.length>0,capY=H-BOT-Math.max(y(b.c),1.5);attrs(g.cap,{x:bx,y:on?capY:H-BOT,width:bw,height:on?2.5:0});
   g.chev.style.transform='translate('+(x+cw/2)+'px,'+(H-BOT+8)+'px)';g.chev.style.opacity=on?1:0;
-  if(b.c===maxC&&b.c>0){var t=mk('text','lbl val win'),cx=x+cw/2,right=cx>W-130;attrs(t,{x:right?Math.min(bx-4,W-136):cx,y:H-BOT-y(b.c)-4,'text-anchor':right?'end':'middle'});t.textContent=km2(b.c)}
-  var xl=xlabel(b,i);if(xl){var ln=mk('line','tick win');attrs(ln,{x1:x+cw/2,y1:H-BOT,x2:x+cw/2,y2:H-BOT+4});var tx=mk('text','lbl win');attrs(tx,{x:x+cw/2,y:H-BOT+17,'text-anchor':i===N-1?'end':i===0?'start':'middle'});tx.textContent=xl}
+  if(b.c===maxC&&b.c>0){var t=mk('text','lbl val win sl'),cx=x+cw/2,right=cx>W-130;attrs(t,{x:right?Math.min(bx-4,W-136):cx,y:H-BOT-y(b.c)-4,'text-anchor':right?'end':'middle'});t.textContent=km2(b.c)}
+  var xl=xlabel(b,i);if(xl){var ln=mk('line','tick win sl');attrs(ln,{x1:x+cw/2,y1:H-BOT,x2:x+cw/2,y2:H-BOT+4});var tx=mk('text','lbl win sl');attrs(tx,{x:x+cw/2,y:H-BOT+17,'text-anchor':i===N-1?'end':i===0?'start':'middle'});tx.textContent=xl}
  });
  order=vis.map(function(b){return state.u+':'+b.key});
- // drop columns that left the window
- for(var key in groups)if(!keep[key]){var g=groups[key];if(g.parentNode)g.parentNode.removeChild(g);delete groups[key]}
+ // entering columns and labels start one pan away and slide into place
+ if(k){var slin=[].filter.call(dyn.querySelectorAll('.win.sl'),function(e){return !e.leaveT});
+  slin.forEach(function(e){e.style.transform='translate('+(k*cw)+'px,0)'});fresh.forEach(function(f){setX(f[0],f[3])});
+  void dyn.getBoundingClientRect();
+  slin.forEach(function(e){e.style.transform=''});fresh.forEach(function(f){setX(f[0],PAD+f[2]*cw)})}
+ // columns that left the window scroll out (and are dropped after the slide)
+ for(var key in groups)if(!keep[key]){var g=groups[key];delete groups[key];if(k)leave(g,k,key);else if(g.parentNode)g.parentNode.removeChild(g)}
  // keep DOM order = time order (focus walk)
  order.forEach(function(k){dyn.appendChild(groups[k])});
  var gl=mk('line','grid win');attrs(gl,{x1:PAD,y1:TOP,x2:W-PAD,y2:TOP});dyn.insertBefore(gl,dyn.firstChild);
@@ -1958,7 +1976,7 @@ function click(g){var key=g.key;
 function drill(lastDay,pinDay,n){state.u='d';pinned=null;var days=buckets('d'),i=-1;days.forEach(function(b,j){if(b.key===lastDay)i=j});
  state.end=i<0?null:Math.min(days.length-1,i+Math.floor((28-(n||1))/2));render();
  if(pinDay&&groups['d:'+pinDay]){pin('d:'+pinDay);groups['d:'+pinDay].focus({preventScroll:true})}}
-function pan(k){var e=Math.max(N-1,Math.min(all.length-1,state.end+k));if(e===state.end)return false;state.end=e;render();return true}
+function pan(k){var e=Math.max(N-1,Math.min(all.length-1,state.end+k));if(e===state.end)return false;k=e-state.end;state.end=e;render(k);return true}
 // ── controls: unit switch, arrows, wheel, drag ────────────────────────────
 svg.classList.add('js');svg.querySelector('.ctl').removeAttribute('aria-hidden');
 [].forEach.call(svg.querySelectorAll('.ctl .u'),function(t){t.setAttribute('role','button');t.setAttribute('tabindex','0');t.setAttribute('aria-label','per '+{d:'day',w:'week',m:'month'}[t.dataset.u]);
@@ -1975,10 +1993,10 @@ var drag={x:0,moved:false,on:false,start:0};
 svg.addEventListener('pointerdown',function(e){if(e.button!==0||e.target.closest('.ctl'))return;drag.on=true;drag.moved=false;drag.x=e.clientX;drag.y=e.clientY;drag.start=state.end;drag.id=e.pointerId});
 svg.addEventListener('pointermove',function(e){if(!drag.on)return;var dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(!drag.moved&&(Math.abs(dx)<6||Math.abs(dx)<Math.abs(dy)))return;
  if(!drag.moved){drag.moved=true;svg.classList.add('drag');try{svg.setPointerCapture(drag.id)}catch(x){}}
- var px=cw*svg.getBoundingClientRect().width/W,e2=Math.max(N-1,Math.min(all.length-1,drag.start-Math.round(dx/px)));if(e2!==state.end){state.end=e2;render()}});
+ var px=cw*svg.getBoundingClientRect().width/W,e2=Math.max(N-1,Math.min(all.length-1,drag.start-Math.round(dx/px)));if(e2!==state.end){var dk=e2-state.end;state.end=e2;render(dk)}});
 function dragEnd(){if(!drag.on)return;drag.on=false;svg.classList.remove('drag');if(drag.moved)setTimeout(function(){drag.moved=false},0)}
 svg.addEventListener('pointerup',dragEnd);svg.addEventListener('pointercancel',dragEnd);
-svg.addEventListener('mouseleave',hide);
+svg.addEventListener('mouseleave',hide);svg.addEventListener('touchstart',function(){},{passive:true});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&pinned)pin(null)});
 document.addEventListener('click',function(e){if(pinned&&!fig.contains(e.target))pin(null)});
 window.addEventListener('resize',function(){if(shown&&groups[shown])place(groups[shown])});
