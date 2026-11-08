@@ -7,7 +7,7 @@
 # rebuilt on demand). We drop anything not used in the last few hours, which
 # keeps the hot entries (stdlib, the ~1 min cgo sqlite3 build, deps) and sheds
 # the stale per-edit objects.
-# Installed by scripts/install.sh as a systemd timer (weekly).
+# Installed by scripts/install.sh as a systemd timer (daily).
 set -e
 CACHE="${GOCACHE:-$(go env GOCACHE 2>/dev/null || echo "$HOME/.cache/go-build")}"
 MAX_AGE_MIN="${GO_CACHE_MAX_AGE_MIN:-360}"
