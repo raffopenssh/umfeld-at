@@ -1091,7 +1091,7 @@ var tl={on:false,d:null,kg:{},scope:'',win:null,lvl:2,k:0,lgx:false,bins:[],map:
 var tlEl=fig.querySelector('.glyph-time');
 var W=+fig.dataset.w,H=+fig.dataset.h,per=+fig.dataset.per||343,fresh=+fig.dataset.fresh||6,ALPHA=+fig.dataset.alpha||0.13,picks=[];try{picks=JSON.parse(fig.dataset.picks||'[]')}catch(e){}
 var hex=(fig.dataset.hex||'').split(',').map(Number);if(hex.length!==6||hex.some(isNaN))hex=null;
-var rm=matchMedia('(prefers-reduced-motion:reduce)').matches,coarse=matchMedia('(hover:none)').matches,data=null,load=null,grid={},G=120,cells=[],kgs=[];
+var rm=matchMedia('(prefers-reduced-motion:reduce)').matches,coarse=matchMedia('(hover:none)').matches,MAC=/Mac|iPhone|iPad/.test(navigator.platform||''),data=null,load=null,grid={},G=120,cells=[],kgs=[];
 var AR=H/W,YF=.5,vb={x:0,y:0,w:W,h:H},ZMAX=24,HEX0=1.7,HEX1=3.2,shown=-1,pinned=-1,hideT=0,hover=false,picked=null,pk=null,hexG=null,hexBuilt=false,view='',cg={on:false};/* view = the profile ('' declared | 'obs'); cg = the change overlay; sb / hi.tree / rl = the other overlays (docs/ne-glyph.md §view model) */
 /* ── hex field: every res-7 cell is a regular hexagon whose rotation and radius are linear in (x, y); the exact H3 tiling from six numbers ── */
 function hexAt(x,y){return[(hex[0]+hex[1]*x+hex[2]*y)*Math.PI/180,hex[3]+hex[4]*x+hex[5]*y]}
@@ -1305,7 +1305,7 @@ var revK=null,mnWant=false;function reveal(c,html,isTour){clearTimeout(hideT);ti
 function show(i){if(i<0){hide();return}var c=cells[i];reveal(c,i!==shown?card(c):null,false);shown=i;picked=c;pk={t:'cell',i:i};ring(c,i)}
 /* the view changed: the same card, its sources reordered (async parts come back from their caches) */
 function recard(){if(!picked||!pk)return;var h=pk.t==='cell'?card(cells[pk.i]):pk.t==='kg'||pk.t==='adm'?areaCard():pk.t==='h3'?hiCard(pk.d):pk.t==='tree'?apCard(pk.a):pk.t==='pick'?card(pk.c):pk.t==='off'?offCardHTML():null;if(h!=null)setHTML(h)}
-var PH='<span class="mut">'+(coarse?'tap a cell · pinch to zoom':'hover a cell · click for its card · ctrl + scroll to zoom · / finds a KG, a place or an address')+'</span>';
+/* the resting hint: what the hand can do here — phones: tap, pinch, double-tap; desktop: hover peeks, click pins, zoom by double-click, + / − keys or shift + wheel (ctrl/⌘ work too, but ctrl + wheel is the browser's page zoom and ⌘ is Mac-only; a plain wheel scrolls the page until the map is focused), / opens the find box */var PH='<span class="mut">'+(coarse?'tap a cell for its card \u00b7 pinch or double-tap to zoom':'hover a cell to peek \u00b7 click to pin its card \u00b7 zoom: double-click, \u21e7shift-scroll or the + \u2212 keys (\u21e7 faster) \u00b7 / finds a KG, place or address')+'</span>';
 function hide(){tip.classList.remove('follow');tagSync();if(hi.on&&hi.apx){return}if(hi.on&&hi.pin){hiShow(hi.pin,false);return}if(pinned>=0){show(pinned);return}if(sel||asel){showSel();return}svg.classList.remove('on');tip.classList.remove('x');revK=null;mnAuto(false);if(typeof iv!=='undefined'&&iv.on&&floating()){ivShow();return}if(floating()){tip.classList.remove('on');unmove();hideT=setTimeout(function(){shown=-1;picked=null},220);return}
  /* docked: whatever is on the sheet folds to the one-line placeholder (setHTML animates the height) — also when the caller already nulled picked (hiUnpin, apUnpin), so the × is never a no-op */var rest=sheetRest();if(shown>=0||picked||inner.innerHTML!==rest){shown=-1;picked=null;hideT=setTimeout(function(){setHTML(sheetRest())},160)}}
 /* the docked sheet's resting state: the hint line, and at full resolution the in-view legend under it (the phone's version of the desktop ⓘ in-view note — the chevron folds it to its header line, so there is always a way back; a sheet that folds to the bare hint has none) */function sheetRest(){return PH+(hi.on?(hiLegendHTML()||''):'')}
@@ -1490,7 +1490,7 @@ tip.addEventListener('pointerleave',function(e){if(e.pointerType!=='mouse'||(e.r
 /* wheel: coalesced per frame. On slow machines wheel events arrive in bursts long after the hand moved; applying each one (a full setVB) made the backlog keep zooming after the user stopped, and a corrective scroll the other way was played *after* the stale events — which read as the zoom going the wrong way. So: sum the deltas of one frame (opposite directions net out), zoom once from the latest cursor position, and drop events older than 250 ms outright */
 var whl={d:0,e:null,r:0};
 function wheelFlush(){whl.r=0;var d=whl.d,e=whl.e;whl.d=0;whl.e=null;if(!d||!e)return;pause(0);var p=at(e);zoomAt(p[0],p[1],Math.exp(-d*0.012),0)}
-main.addEventListener('wheel',function(e){var z=W/vb.w;if(!(e.ctrlKey||e.metaKey)&&z<=1.01&&document.activeElement!==main){showHint('ctrl + scroll · double-click to zoom');return}
+main.addEventListener('wheel',function(e){var z=W/vb.w;if(!(e.shiftKey||e.ctrlKey||e.metaKey)&&z<=1.01&&document.activeElement!==main){showHint('zoom: \u21e7shift-scroll, double-click or the + \u2212 keys');return}
  e.preventDefault();if(e.timeStamp<1e12&&performance.now()-e.timeStamp>250)return;
  if(keys().length)navCancel();stopAnim();kpStop();clearTimeout(dismissT);
  var d=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?400:1);whl.d=Math.max(-90,Math.min(90,whl.d+Math.max(-60,Math.min(60,d))));whl.e=e;
@@ -1498,7 +1498,7 @@ main.addEventListener('wheel',function(e){var z=W/vb.w;if(!(e.ctrlKey||e.metaKey
 main.addEventListener('dblclick',function(e){e.preventDefault()});
 /* ── keyboard ── */
 /* keyboard camera: arrows pan, + and − zoom, with velocity — a tap nudges (a tenth of the view, or a zoom step of ×1.3), a held key ramps up to one view per second / one doubling per second (shift: three times, alt: a quarter), two arrows go diagonal at the same speed, a release coasts out. Pan and zoom combine (arrow + plus = fly in sideways); the zoom is anchored on the pinned cell when it is in view, else the centre. The loop paints through navLive (one transform per frame) and commits once it has stopped. Fully zoomed out the arrows still step between the res-7 cells */
-var MAC=/Mac|iPhone|iPad/.test(navigator.platform||''),KP_DIR={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]},KP_Z={'+':1,'=':1,'-':-1,'_':-1},kp={keys:{},vx:0,vy:0,vz:0,r:0,t:0,fast:false,fine:false};
+var KP_DIR={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]},KP_Z={'+':1,'=':1,'-':-1,'_':-1},kp={keys:{},vx:0,vy:0,vz:0,r:0,t:0,fast:false,fine:false};
 function kpMode(){return hi.on||W/(live.t||vb).w>1.01}
 function kpSpeed(z){return kp.fast&&!z?3:kp.fine?.3:1}/* + is shift-= on most layouts, so shift never speeds the zoom */
 var KP_CODE={Equal:'+',NumpadAdd:'+',BracketRight:'+',Minus:'-',NumpadSubtract:'-'};
