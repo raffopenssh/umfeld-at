@@ -411,14 +411,29 @@ steers revisits — it does not touch the baseline, the confirm rule or any stor
   the bar + chevron under the axis, `g.day.flag`) when its land-use change **rate** — m² that
   changed group (sum of paired from→to transitions of the cell deltas whose new version arrived
   that day, confirmed + candidate) per km² the day could compare (re-observed chunks) — is ≥ 3× the
-  median rate of the other comparing days in the 28-day window with ≥ 1 ha moved, or whenever a
-  confirmed delta landed that day. The card then shows the rate vs usual as text and ONE stacked
+  median rate of the other comparing days in a ±14-day window (`neChangeSignalWindow`) with
+  ≥ 1 ha moved; only while fewer than two days compare at all (the first pass) does a confirmed
+  delta alone flag a day. So once a whole pass exists the chevrons mark outstanding days, not
+  every day with a delta. The card then shows the rate vs usual as text and ONE stacked
   bar per status (confirmed in colour, candidate muted, labelled) of the hectares by transition,
   plus the structure line (`+N new · roof ±ha`). Candidate figures are displayed only labelled as
   such; the figcaption totals stay confirmed-only. `candidate_by_day` sits beside `by_day` in
   `/ne/stats` and the derived `{kg}.changes.jsonl` (`schema` field; older files are recomputed).
   The chart itself is unchanged — change is never drawn as a bar segment (sub-pixel on the area
   scale) and never as a dot series.
+- Chart time range (`neContribScript`, `neContribDataJSON`): the server draws the last 28 days
+  (and pre-renders cards for the last `neContribCardDays` = 90); the whole history goes to the
+  page as `<script type="application/json" id="ne-contrib-data">` (one row per day: chunks,
+  KGs, reports, pass bands, flag, moved m², observed cells). The script re-buckets by **day /
+  week (ISO, Monday) / month** — the unit switch is part of the y label (`12 859 km² / day week
+  month`, active one dotted-underlined, others faded) — windows of 28 · 26 · 24 slots (padded
+  backwards so the shape holds from day one), bars thinner per unit (56 / 46 / 38 % of the
+  slot), and pans: ‹ › at the plot's left/right edge mid-height (hidden when nothing is there),
+  horizontal wheel / shift+wheel, drag, ArrowLeft/Right past the edge. Week/month cards are
+  synthesised client-side from the blob with the same classes (`.dd.syn`); their flagged days
+  link down into the day view; clicking an aggregate bar whose card is in view opens its days.
+  The max-value label moves left of its bar when it would collide with the controls. Edit the
+  script, then `node --check` it (paste into a file) before deploying.
 - Card layout: two source blocks kept visibly apart — **declared** (blue rule: the
   bar's km² · KG · reports · digest shape, pass mix as a mini stacked bar, "seen before" =
   comparable share, then the change block with status chips `confirmed ✓ 2 sightings` /

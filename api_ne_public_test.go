@@ -525,7 +525,7 @@ func TestNEContribChart(t *testing.T) {
 		t.Fatalf("tooltip lacks source mix")
 	}
 	svg := neContribChartSVG(rows[:13])
-	for _, want := range []string{`class="p0"`, `class="p1"`, `class="p2"`, `class="p4"`, `url(#ne-h4)`, "2026-09-06 · ", "1st 0.0 km²", "10th+", "<defs>"} {
+	for _, want := range []string{`class="seg p0"`, `class="seg p1"`, `class="seg p2"`, `class="seg p4"`, `url(#ne-h4)`, "2026-09-06 · ", "1st 0.0 km²", "10th+", "<defs>", `<g class="dyn">`, `class="ctl"`, `data-u="w"`} {
 		if !strings.Contains(svg, want) {
 			t.Fatalf("svg lacks %q: %s", want, svg)
 		}
@@ -534,7 +534,7 @@ func TestNEContribChart(t *testing.T) {
 		t.Fatalf("svg titles: %s", svg)
 	}
 	html := neContribChartHTML()
-	if !strings.Contains(html, `class="contrib-tip"`) || !strings.Contains(html, `class="day" data-day=`) || !strings.Contains(html, "<script>") {
+	if !strings.Contains(html, `class="contrib-tip"`) || !strings.Contains(html, `class="day" data-day=`) || !strings.Contains(html, "<script>") || !strings.Contains(html, `id="ne-contrib-data">{"obs_name":"{OBS_NAME}","unit_km2":0.0150475,"bands":["1st","2nd","3rd–4th","5th–9th","10th+"],"groups":{"structure":["buildings",`) {
 		t.Fatalf("contrib block lacks hover/pin tip: %s", html)
 	}
 	if rk := neContribRank(rows[:13], 2); !strings.Contains(rk, "busiest of") {

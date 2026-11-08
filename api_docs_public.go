@@ -355,9 +355,19 @@ strong{font-weight:700}
 .muted{color:var(--mut);font-size:.9em;margin-top:2.5rem;padding-top:.8rem;border-top:1px solid var(--rule)}
 figure.contrib{margin:.8rem 0 1.2rem}
 svg.contrib{display:block;width:100%;height:auto;overflow:visible}
-figure.contrib .p0{fill:var(--cov);opacity:.3}figure.contrib .p1{fill:var(--cov);opacity:.6}figure.contrib .p2{fill:var(--cov);opacity:.85}
-figure.contrib .p3{fill:var(--cov)}figure.contrib .p4{fill:var(--fg);opacity:.8}
+figure.contrib .p0{fill:var(--cov);opacity:.26}figure.contrib .p1{fill:var(--cov);opacity:.52}figure.contrib .p2{fill:var(--cov);opacity:.78}
+figure.contrib .p3{fill:var(--cov)}figure.contrib .p4{fill:var(--fg);opacity:.85}
 figure.contrib .hatch{stroke:var(--bg);stroke-width:1;opacity:.6}figure.contrib .dot{fill:var(--bg);opacity:.7}
+svg.contrib g.day rect.seg{stroke:var(--bg);stroke-width:.7;vector-effect:non-scaling-stroke;paint-order:stroke}
+svg.contrib .ctl{display:none}svg.contrib.js .ctl{display:block}svg.contrib.js .dyn .ylab{display:none}svg.contrib .ctl tspan{outline:none;user-select:none;-webkit-user-select:none}
+svg.contrib .ctl .u{cursor:pointer;opacity:.45;transition:opacity .15s}svg.contrib .ctl .u:hover,svg.contrib .ctl .u:focus-visible{opacity:.8}svg.contrib .ctl .u.on{opacity:1;text-decoration:underline dotted;text-underline-offset:3px}
+svg.contrib .ctl .nav{cursor:pointer;opacity:.55;transition:opacity .2s}svg.contrib .ctl .nav .nh{fill:transparent}svg.contrib .ctl .nav .nd{fill:var(--bg);stroke:var(--mut);stroke-opacity:.35;stroke-width:1;vector-effect:non-scaling-stroke}svg.contrib .ctl .nav .nc{fill:none;stroke:var(--fg);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+svg.contrib .ctl .nav:hover,svg.contrib .ctl .nav:focus-visible{opacity:1}svg.contrib .ctl .nav:hover .nd,svg.contrib .ctl .nav:focus-visible .nd{stroke-opacity:.7}svg.contrib .ctl .nav:active .nd{fill:var(--line)}svg.contrib .ctl .nav.off{opacity:0;cursor:default;pointer-events:none}svg.contrib .ctl .nav *{outline:none}
+@media(hover:none){svg.contrib .ctl .nav{opacity:.7}}
+svg.contrib.js{touch-action:pan-y;cursor:default}svg.contrib.js.drag{cursor:grabbing}svg.contrib.js.drag g.day{cursor:grabbing}
+svg.contrib.js g.day rect,svg.contrib.js g.day .chev{transition:x .32s cubic-bezier(.2,.7,.2,1),y .32s cubic-bezier(.2,.7,.2,1),width .32s cubic-bezier(.2,.7,.2,1),height .32s cubic-bezier(.2,.7,.2,1),transform .32s cubic-bezier(.2,.7,.2,1),opacity .2s}
+svg.contrib.js g.day .hit,svg.contrib.js g.day .mark{transition:x .32s cubic-bezier(.2,.7,.2,1),width .32s cubic-bezier(.2,.7,.2,1),opacity .15s,fill .15s}
+.contrib-tip .dd.syn a.open{color:var(--chg);text-decoration:none;border-bottom:1px dotted var(--chg);pointer-events:auto}.contrib-tip .dd.syn .dc .st a.open{font-weight:700}
 svg.contrib .swatch{fill:none;stroke:var(--rule);stroke-width:1;vector-effect:non-scaling-stroke}
 svg.contrib .zero{fill:var(--rule)}svg.contrib .hit{fill:transparent}
 svg.contrib g.day{outline:none}svg.contrib.js g.day{cursor:pointer}
@@ -384,7 +394,7 @@ figure.contrib{position:relative}
 .contrib-tip .qc{margin-top:.2rem;font-size:.9em;color:var(--mut);white-space:normal}
 .contrib-tip .ds{font-size:.88em;white-space:normal;overflow-wrap:anywhere;margin-top:.25rem;padding-top:.15rem;border-top:1px dashed var(--rule)}
 svg.contrib.js.focus g.day:not(.hov):not(.sel){opacity:.45}svg.contrib g.day{transition:opacity .18s}
-@media(prefers-reduced-motion:reduce){.contrib-tip{transition:none}}
+@media(prefers-reduced-motion:reduce){.contrib-tip{transition:none}svg.contrib.js g.day rect,svg.contrib.js g.day .chev,svg.contrib.js g.day .hit,svg.contrib.js g.day .mark{transition:none}}
 svg.contrib .cap{fill:var(--chg)}svg.contrib .chev{fill:var(--chg)}svg.contrib g.flag .hit{fill:transparent}
 .contrib-tip.dock{position:static;width:100%;max-width:100%;box-sizing:border-box;margin-top:.5rem}
 .contrib-tip .dc{margin-top:.25rem;padding-top:.2rem;border-top:1px dashed var(--rule);white-space:normal}.contrib-tip .dc.none .qc{margin-top:.05rem}.contrib-tip .dc.none{color:var(--mut)}

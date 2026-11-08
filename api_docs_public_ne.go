@@ -904,7 +904,7 @@ func neContribChartSVG(daily []neDayStat) string {
 	y := func(chunks int) float64 { return plotH * float64(chunks) / float64(maxC) }
 	// segment: solid tint + optional hatch overlay for the deeper bands
 	seg := func(b *strings.Builder, band int, x, yy, w, h float64) {
-		fmt.Fprintf(b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="p%d"/>`, x, yy, w, h, band)
+		fmt.Fprintf(b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="seg p%d"/>`, x, yy, w, h, band)
 		if band >= 2 && h >= 2 { // a hatch under 2 units is invisible: save the bytes
 			fmt.Fprintf(b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="url(#ne-h%d)"/>`, x, yy, w, h, band)
 		}
@@ -918,10 +918,17 @@ func neContribChartSVG(daily []neDayStat) string {
 		`<pattern id="ne-h3" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" class="hatch"/><line x1="0" y1="0" x2="5" y2="0" class="hatch"/></pattern>` +
 		`<pattern id="ne-h4" patternUnits="userSpaceOnUse" width="4" height="4"><circle cx="2" cy="2" r=".9" class="dot"/></pattern>` +
 		`</defs>`)
+	fmt.Fprintf(&b, `<line x1="0" y1="%.1f" x2="%.0f" y2="%.1f" class="axis"/>`, H-bottom, W, H-bottom)
+	// unit switch: the y label itself ("12 859 km² / day week month"), top
+	// left; pan arrows ‹ › at the plot's left / right edge, mid-height. Script-only (hidden otherwise): the server draws
+	// the 28-day window, the script re-buckets the full history by day / week /
+	// month and pans it.
+	fmt.Fprintf(&b, `<g class="ctl" aria-hidden="true"><text x="0" y="%.1f" class="lbl"><tspan class="yv"></tspan><tspan class="sep"> / </tspan><tspan class="u on" data-u="d">day</tspan><tspan class="u" data-u="w" dx="6">week</tspan><tspan class="u" data-u="m" dx="6">month</tspan></text>`+neContribNav("prev", 14, top+(H-bottom-top)/2)+neContribNav("next", W-14, top+(H-bottom-top)/2)+`</g>`, top-3)
+	// everything below is per-window: the script clears and redraws it
+	b.WriteString(`<g class="dyn">`)
 	// y guide: max value
 	fmt.Fprintf(&b, `<line x1="0" y1="%.1f" x2="%.0f" y2="%.1f" class="grid"/><text x="0" y="%.1f" class="lbl">%s / day</text>`,
 		top, W, top, top-3, neFmtKm2(maxC))
-	fmt.Fprintf(&b, `<line x1="0" y1="%.1f" x2="%.0f" y2="%.1f" class="axis"/>`, H-bottom, W, H-bottom)
 	for i, d := range daily {
 		x := left + float64(i)*cw
 		bw := cw * 0.56
@@ -988,8 +995,13 @@ func neContribChartSVG(daily []neDayStat) string {
 		}
 		b.WriteString(`</g>`)
 		// value label on the tallest bar
+		// (anchored left of the bar when it would run into the controls)
 		if d.Chunks == maxC {
-			fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" class="lbl val" text-anchor="middle">%s</text>`, x+cw/2, H-bottom-y(d.Chunks)-4, neFmtKm2(d.Chunks))
+			lx, anchor := x+cw/2, "middle"
+			if lx > W-130 {
+				lx, anchor = math.Min(bx-4, W-136), "end"
+			}
+			fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" class="lbl val" text-anchor="%s">%s</text>`, lx, H-bottom-y(d.Chunks)-4, anchor, neFmtKm2(d.Chunks))
 		}
 		// x labels: Mondays, plus the last day when it is not itself a Monday-label neighbour
 		if t, err := time.Parse("2006-01-02", d.Day); err == nil {
@@ -1006,6 +1018,7 @@ func neContribChartSVG(daily []neDayStat) string {
 			}
 		}
 	}
+	b.WriteString(`</g>`)
 	// legend: one swatch per pass band, right-aligned under the x labels
 	{
 		const sw, gap, ly = 11.0, 12.0, H - 11
@@ -1174,6 +1187,15 @@ func neContribChartHTML() string {
 		}
 		cum[i] += d.Passes[0]
 	}
+	// the full history goes to the script as one compact blob (day / week /
+	// month buckets, panning); cards are pre-rendered for the last
+	// neContribCardDays days, the script synthesises the rest.
+	data := neContribDataJSON(daily, obsDaily)
+	if len(daily) > neContribCardDays {
+		daily = daily[len(daily)-neContribCardDays:]
+		cum = cum[len(cum)-neContribCardDays:]
+	}
+	cards := neContribDetailHTML(daily, cum, obsDaily)
 	// pad to a fixed window so the chart keeps its shape from day one
 	if len(daily) > neContribDays {
 		daily = daily[len(daily)-neContribDays:]
@@ -1189,9 +1211,88 @@ func neContribChartHTML() string {
 	}
 	return `<p><strong>Declared layer digested by peers</strong> — land area whose <em>declared</em> (survey) cells a peer re-digested from the BEV tiles, per day (res-10 chunks, ~1.5 ha each). Each bar is split by how often that land had been digested up to then — first digest on top, 2nd, 3rd–4th, 5th–9th, 10th+ pass below; only land seen before can show change, and the deeper the pass, the longer its history. The <em>observed</em> layer (satellite &amp; LiDAR, {OBS_NAME}) is a separate measurement: it is not in the bars, each day's card lists it on its own line.</p>
 <figure class="contrib">` + neContribChartSVG(daily) + `
-` + neContribDetailHTML(daily, cum, obsDaily) + `
+` + cards + `
 <figcaption>` + neContribSummaryText(daily, ever) + neChangeCaption("") + ` · <code>POST /contrib/api/v1/ne/{kg}/report</code></figcaption></figure>
+<script type="application/json" id="ne-contrib-data">` + data + `</script>
 ` + neContribScript + "\n"
+}
+
+// neContribNav — one pan chip (‹ / ›): a faint disc with a chevron, a generous
+// invisible hit area (≈ 44 css px on the landing page) so it is tappable.
+func neContribNav(dir string, cx, cy float64) string {
+	chev := "M2.5 -4.5L-2 0l4.5 4.5"
+	if dir == "next" {
+		chev = "M-2.5 -4.5L2 0l-4.5 4.5"
+	}
+	return fmt.Sprintf(`<g class="nav %s" transform="translate(%.1f %.1f)"><rect x="-22" y="-28" width="44" height="56" class="nh"/><circle r="11" class="nd"/><path d="%s" class="nc"/></g>`, dir, cx, cy, chev)
+}
+
+// neContribCardDays — days with a pre-rendered card (the full card: change
+// stacks, QC, observed layer). Older days and week / month buckets get a
+// synthesised card in the browser from the data blob.
+const neContribCardDays = 90
+
+// neContribDataJSON — the whole history for the script, one row per day:
+// [day, chunks, kgs, reports, p1, p2, p3, p4, p5, flag, moved m², obs cells,
+// confirmed, candidate] — the last two 0 or [cells, roof Δm², outlines Δ,
+// {"from>to": m²}] so week / month cards can draw the same transition stack.
+// Days without reports are kept (zero rows) so the client can bucket by
+// position. "flag" and "moved" are the chart's own figures (neChangeSignal)
+// so day / week / month agree with the server-drawn window.
+func neContribDataJSON(daily []neDayStat, obsDaily map[string]neObsDay) string {
+	var b strings.Builder
+	b.WriteString(`{"obs_name":"{OBS_NAME}","unit_km2":`)
+	fmt.Fprintf(&b, "%.7f", neChunkAreaKm2)
+	b.WriteString(`,"bands":[`)
+	for i, l := range nePassBandLabel {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		fmt.Fprintf(&b, "%q", l)
+	}
+	b.WriteString(`],"groups":{`)
+	for i, g := range neGroupNames {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		fmt.Fprintf(&b, `%q:[%q,%q]`, g, neGroupLabel(g), neGroupTitle(g))
+	}
+	fmt.Fprintf(&b, `},"outline_title":%q,"days":[`, neOutlineTitle)
+	tot := func(t *neChangeTotals) string {
+		if t == nil {
+			return "0"
+		}
+		keys := make([]string, 0, len(t.Transitions))
+		for k := range t.Transitions {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var x strings.Builder
+		fmt.Fprintf(&x, `[%d,%d,%d,{`, t.Cells, t.DCover, t.DN)
+		for i, k := range keys {
+			if i > 0 {
+				x.WriteByte(',')
+			}
+			fmt.Fprintf(&x, `%q:%d`, k, t.Transitions[k])
+		}
+		x.WriteString(`}]`)
+		return x.String()
+	}
+	for i, d := range daily {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		sig := neChangeSignal(daily, i)
+		flag := 0
+		if sig.Unusual {
+			flag = 1
+		}
+		fmt.Fprintf(&b, `["%s",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%s,%s]`, d.Day, d.Chunks, d.KGs, d.Reports,
+			d.Passes[0], d.Passes[1], d.Passes[2], d.Passes[3], d.Passes[4], flag, sig.MovedM2, obsDaily[d.Day].Cells,
+			tot(sig.Confirmed), tot(sig.Candidate))
+	}
+	b.WriteString(`]}`)
+	return b.String()
 }
 
 // neChangeCaption — " · confirmed change since …" (ne_change.go) after the
@@ -1331,12 +1432,13 @@ func neFmtKm2Cells(cells int) string {
 }
 
 // neContribRank — "#6 of 14 days · ≈ 7-day median": the day's place in the
-// window and its size against the trailing median of reporting days.
+// 28 days ending that day and its size against the trailing median of
+// reporting days.
 func neContribRank(daily []neDayStat, i int) string {
 	d := daily[i]
 	var parts []string
 	rank, active := 1, 0
-	for _, o := range daily {
+	for _, o := range daily[max(0, i-neContribDays+1) : i+1] {
 		if o.Chunks > 0 {
 			active++
 			if o.Chunks > d.Chunks {
@@ -1399,9 +1501,10 @@ func neContribShape(d neDayStat) string {
 // rate. Rate = m² of land use that changed group (paired from→to transitions
 // of the cell deltas whose new version arrived that day, confirmed + candidate)
 // per km² the day could compare (re-observed chunks), so a big first-sight day
-// does not dilute it. Usual = median over the other days of the window that
-// compared anything. Unusual = ≥ 3× the usual with at least 1 ha moved, or
-// any confirmed delta on the day. Candidate figures are shown but labelled —
+// does not dilute it. Usual = median over the other days of the ±14-day window
+// that compared anything. Unusual = ≥ 3× the usual with at least 1 ha moved
+// (a confirmed delta alone flags only while fewer than two days compare —
+// after a full pass every day confirms something). Candidate figures are shown but labelled —
 // the public totals in the caption stay confirmed-only (docs/ne-change.md §5).
 type neChangeSig struct {
 	Rate, Usual, Ratio   float64 // ha moved per km² compared
@@ -1444,15 +1547,22 @@ func neChangeDayRate(d neDayStat) (rate float64, compared, moved int, conf, cand
 	return
 }
 
+// neChangeSignalWindow — the days on either side of i that make up a day's
+// "usual": ±14 days = the 28-day default chart window, whichever slice of the
+// history the caller passed (the full-history data blob and the 90-day card
+// slice must flag the same days as the 28-day chart does).
+const neChangeSignalWindow = neContribDays / 2
+
 func neChangeSignal(daily []neDayStat, i int) neChangeSig {
 	var sig neChangeSig
 	sig.Rate, sig.Compared, sig.MovedM2, sig.Confirmed, sig.Candidate = neChangeDayRate(daily[i])
 	var rates []float64
-	for j, o := range daily {
+	lo, hi := max(0, i-neChangeSignalWindow), min(len(daily), i+neChangeSignalWindow+1)
+	for j := lo; j < hi; j++ {
 		if j == i {
 			continue
 		}
-		if r, re, _, _, _ := neChangeDayRate(o); re > 0 {
+		if r, re, _, _, _ := neChangeDayRate(daily[j]); re > 0 {
 			rates = append(rates, r)
 		}
 	}
@@ -1470,7 +1580,18 @@ func neChangeSignal(daily []neDayStat, i int) neChangeSig {
 	default:
 		sig.Ratio = sig.Rate / sig.Usual
 	}
-	sig.Unusual = sig.Confirmed != nil || (sig.MovedM2 >= 10000 && len(rates) >= 2 && sig.Ratio >= 3)
+	// Outstanding, not merely present: with a full pass behind us confirmed
+	// deltas land every day, so a day is flagged only when its rate stands
+	// out from the window (≥ 3× the median, ≥ 1 ha moved). Before there are
+	// two comparing days to form a median, a confirmed delta is the news.
+	switch {
+	case sig.MovedM2 < 10000:
+		sig.Unusual = false
+	case len(rates) < 2:
+		sig.Unusual = sig.Confirmed != nil
+	default:
+		sig.Unusual = sig.Ratio >= 3
+	}
 	return sig
 }
 
@@ -1658,50 +1779,212 @@ func neAbs(x int) int {
 	return x
 }
 
-// neContribScript — progressive enhancement of the chart: hover floats the
-// day's card above its bar when it fits, else docks it below the chart (never
-// over the bars; always docked on touch/narrow screens), click/Enter pins it (click again or Esc releases),
-// arrow keys walk the days while pinned. Without script the <title> tooltips
-// remain; with it they are dropped (the card replaces them). Nothing is shown
-// until the pointer or focus reaches a bar.
+// neContribScript — progressive enhancement of the chart (source of truth is
+// this const; `node --check` it after edits, docs/ne-change.md §6d):
+//   · redraws the bars from the #ne-contrib-data blob (full history) by day /
+//     week / month — the switch sits inside the chart (top right), bars keep
+//     their slot share so a longer unit shows more, thinner columns;
+//   · pans: ‹ › (half a window), horizontal wheel / shift+wheel, drag,
+//     ArrowLeft/Right past the edge; the window is padded to a minimum width
+//     (28 days · 26 weeks · 24 months) so the shape holds from day one;
+//   · hover floats the bucket's card above its bar when it fits, else docks it
+//     below (always docked on touch/narrow screens); click/Enter pins a day
+//     (again or Esc releases); clicking a week/month whose card is in view
+//     opens its days (touch: second tap); the card's flagged days link down;
+//   · cards: the server's pre-rendered day cards where they exist, otherwise
+//     synthesised from the blob (same classes, same hatches).
+// Without script the server's 28-day window and its <title> tooltips remain.
 const neContribScript = `<script>(function(){
 var fig=document.querySelector('figure.contrib');if(!fig)return;
-var svg=fig.querySelector('svg.contrib'),tip=fig.querySelector('.contrib-tip');if(!svg||!tip)return;
-var days=[].slice.call(svg.querySelectorAll('g.day')),cards={},byDay={};
+var svg=fig.querySelector('svg.contrib'),tip=fig.querySelector('.contrib-tip'),dyn=svg&&svg.querySelector('g.dyn'),el=document.getElementById('ne-contrib-data');
+if(!svg||!tip||!dyn||!el)return;
+var D;try{D=JSON.parse(el.textContent)}catch(e){return}
+if(!D.days||!D.days.length)return;
+var NS='http://www.w3.org/2000/svg',W=840,H=176,TOP=18,BOT=50,PLOT=H-TOP-BOT,KM2=D.unit_km2,BANDS=D.bands,NB=BANDS.length;
+var rows=D.days,cards={},hoverable=window.matchMedia('(hover:hover)').matches;
 [].forEach.call(tip.querySelectorAll('.dd'),function(c){cards[c.dataset.day]=c});
-days.forEach(function(g){byDay[g.dataset.day]=g;var t=g.querySelector('title');if(t)g.removeChild(t)});
-var pinned=null,shown=null,hideT=0;
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function ymd(s){return new Date(Date.UTC(+s.slice(0,4),+s.slice(5,7)-1,+(s.slice(8,10)||1)))}
+function iso(t){return t.toISOString().slice(0,10)}
+function thin(n){return String(n).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')}
+function km2(c){var v=c*KM2;return v===0?'0 km²':v<10?v.toFixed(1)+' km²':thin(Math.round(v))+' km²'}
+function km2c(cells){var v=cells*307/1e6;return v<10?v.toFixed(1)+' km²':thin(Math.round(v))+' km²'}
+function area(m){return m<1e4?m+' m²':m<1e6?(m/1e4).toFixed(1)+' ha':(m/1e6).toFixed(2)+' km²'}
+function pct(p){return p>0&&p<.5?'<1 %':Math.round(p)+' %'}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+// ── buckets: day · ISO week (keyed by its Monday) · month ─────────────────
+function keyOf(day,u){if(u==='d')return day;if(u==='m')return day.slice(0,7);var t=ymd(day);t.setUTCDate(t.getUTCDate()-(t.getUTCDay()+6)%7);return iso(t)}
+function blank(k,u){return{key:k,days:u==='d'?[k]:[],c:0,k:0,r:0,p:[0,0,0,0,0],flag:[],moved:0,obs:0,obsDays:0,active:0,conf:null,cand:null}}
+function addTot(a,t){if(!t)return a;a=a||{cells:0,cover:0,n:0,tr:{}};a.cells+=t[0];a.cover+=t[1];a.n+=t[2];for(var k in t[3])a.tr[k]=(a.tr[k]||0)+t[3][k];return a}
+function buckets(u){var out=[],by={};
+ rows.forEach(function(r){var k=keyOf(r[0],u),b=by[k];if(!b){b=by[k]=blank(k,u);b.days=[];out.push(b)}
+  b.days.push(r[0]);b.c+=r[1];b.k=Math.max(b.k,r[2]);b.r+=r[3];for(var i=0;i<NB;i++)b.p[i]+=r[4+i];if(r[9])b.flag.push(r[0]);b.moved+=r[10];if(r[11]){b.obs+=r[11];b.obsDays++}if(r[1])b.active++;b.conf=addTot(b.conf,r[12]);b.cand=addTot(b.cand,r[13])});
+ var min=u==='d'?28:u==='w'?26:24;
+ while(out.length<min){var t=ymd(out[0].key);if(u==='d')t.setUTCDate(t.getUTCDate()-1);else if(u==='w')t.setUTCDate(t.getUTCDate()-7);else t.setUTCMonth(t.getUTCMonth()-1);
+  var k=u==='m'?iso(t).slice(0,7):iso(t);var b=blank(k,u);b.pad=true;out.unshift(b)}
+ return out}
+function span(b){var u=state.u;if(u==='d')return b.key;if(u==='m'){var t=ymd(b.key);return MON[t.getUTCMonth()]+' '+t.getUTCFullYear()}
+ var a=ymd(b.key),z=new Date(a);z.setUTCDate(z.getUTCDate()+6);return iso(a)+' → '+iso(z).slice(5)}
+function head(b){var u=state.u;if(u==='d')return WD[ymd(b.key).getUTCDay()];if(u==='m')return 'month';
+ var t=ymd(b.key),d=new Date(Date.UTC(t.getUTCFullYear(),0,4));d.setUTCDate(d.getUTCDate()-(d.getUTCDay()+6)%7);var wk=1+Math.round((t-d)/6048e5);return 'week '+wk}
+// ── state + drawing ────────────────────────────────────────────────────────
+var state={u:'d',end:null},all=[],vis=[],groups={},order=[],N=28,cw=30,bw=16.8;
+function mk(tag,cls,parent){var e=document.createElementNS(NS,tag);if(cls)e.setAttribute('class',cls);(parent||dyn).appendChild(e);return e}
+function attrs(e,a){for(var k in a)e.setAttribute(k,a[k])}
+function unitWord(){return{d:'day',w:'week',m:'month'}[state.u]}
+function winN(){return state.u==='d'?28:state.u==='w'?26:24}
+function newGroup(b,x){var g=mk('g','day');g.setAttribute('tabindex','0');g.setAttribute('role','button');
+ g.hit=mk('rect','hit',g);g.mark=mk('rect','mark',g);g.zero=mk('rect','zero',g);g.segs=[];g.hat=[];
+ for(var i=NB-1;i>=0;i--){g.segs[i]=mk('rect','seg p'+i,g);if(i>=2){g.hat[i]=mk('rect','',g);g.hat[i].setAttribute('fill','url(#ne-h'+i+')')}}
+ g.cap=mk('rect','cap',g);g.chev=mk('path','chev',g);g.chev.setAttribute('d','M0 0l3.5 -4.5h-7z');
+ // grow from the axis so a new column animates into place
+ var yy=H-BOT;[g.hit].forEach(function(r){attrs(r,{x:x,y:TOP,width:cw,height:PLOT})});
+ attrs(g.mark,{x:x,y:yy+1,width:bw,height:2.5});attrs(g.zero,{x:x,y:yy-1,width:bw,height:0});
+ for(i=0;i<NB;i++){attrs(g.segs[i],{x:x,y:yy,width:bw,height:0});if(g.hat[i])attrs(g.hat[i],{x:x,y:yy,width:bw,height:0})}
+ attrs(g.cap,{x:x,y:yy,width:bw,height:0});g.chev.style.transform='translate('+(x+cw/2)+'px,'+(yy+8)+'px)';
+ g.addEventListener('mouseenter',function(){if(!drag.moved)show(g.key)});
+ g.addEventListener('focus',function(){show(g.key)});
+ g.addEventListener('blur',function(){if(!pinned)hide()});
+ g.addEventListener('click',function(e){e.preventDefault();if(drag.moved)return;click(g)});
+ g.addEventListener('keydown',function(e){var k=e.key,i=order.indexOf(g.key);
+  if(k==='Enter'||k===' '){e.preventDefault();click(g)}
+  else if(k==='ArrowLeft'){e.preventDefault();if(i>0){groups[order[i-1]].focus();if(pinned)pin(order[i-1])}else if(pan(-1))groups[order[0]].focus()}
+  else if(k==='ArrowRight'){e.preventDefault();if(i<order.length-1){groups[order[i+1]].focus();if(pinned)pin(order[i+1])}else if(pan(1))groups[order[order.length-1]].focus()}
+  else if(k==='Escape'){e.preventDefault();pin(null)}});
+ return g}
+function render(){
+ all=buckets(state.u);N=winN();
+ if(state.end==null||state.end>all.length-1)state.end=all.length-1;if(state.end<N-1)state.end=N-1;
+ vis=all.slice(state.end-N+1,state.end+1);cw=W/N;bw=cw*(state.u==='d'?.56:state.u==='w'?.46:.38);
+ var maxC=1;vis.forEach(function(b){if(b.c>maxC)maxC=b.c});var y=function(c){return PLOT*c/maxC};
+ // static per window: y guide, labels
+ [].forEach.call(dyn.querySelectorAll('.win'),function(e){dyn.removeChild(e)});
+ var keep={},first=dyn.firstChild;
+ vis.forEach(function(b,i){var key=state.u+':'+b.key,x=i*cw,bx=x+(cw-bw)/2,g=groups[key];keep[key]=1;
+  if(!g){g=groups[key]=newGroup(b,bx);g.key=key;void g.getBoundingClientRect()}
+  g.bucket=b;g.classList.toggle('flag',b.flag.length>0);g.classList.toggle('pad',!!b.pad);
+  g.setAttribute('aria-label',label(b));
+  attrs(g.hit,{x:x,width:cw});attrs(g.mark,{x:bx,width:bw});
+  var yy=H-BOT,thin=b.c>0&&y(b.c)<1.5;attrs(g.zero,{x:bx,width:bw,height:b.c===0?1:0});
+  var best=0;for(var k=1;k<NB;k++)if(b.p[k]>b.p[best])best=k;
+  for(k=NB-1;k>=0;k--){var h=thin?(k===best?1.5:0):y(b.p[k]);if(b.c===0)h=0;yy-=h;attrs(g.segs[k],{x:bx,y:yy,width:bw,height:h});if(g.hat[k])attrs(g.hat[k],{x:bx,y:yy,width:bw,height:h>=2?h:0})}
+  var on=b.flag.length>0,capY=H-BOT-Math.max(y(b.c),1.5);attrs(g.cap,{x:bx,y:on?capY:H-BOT,width:bw,height:on?2.5:0});
+  g.chev.style.transform='translate('+(x+cw/2)+'px,'+(H-BOT+8)+'px)';g.chev.style.opacity=on?1:0;
+  if(b.c===maxC&&b.c>0){var t=mk('text','lbl val win'),cx=x+cw/2,right=cx>W-130;attrs(t,{x:right?Math.min(bx-4,W-136):cx,y:H-BOT-y(b.c)-4,'text-anchor':right?'end':'middle'});t.textContent=km2(b.c)}
+  var xl=xlabel(b,i);if(xl){var ln=mk('line','tick win');attrs(ln,{x1:x+cw/2,y1:H-BOT,x2:x+cw/2,y2:H-BOT+4});var tx=mk('text','lbl win');attrs(tx,{x:x+cw/2,y:H-BOT+17,'text-anchor':i===N-1?'end':i===0?'start':'middle'});tx.textContent=xl}
+ });
+ order=vis.map(function(b){return state.u+':'+b.key});
+ // drop columns that left the window
+ for(var key in groups)if(!keep[key]){var g=groups[key];if(g.parentNode)g.parentNode.removeChild(g);delete groups[key]}
+ // keep DOM order = time order (focus walk)
+ order.forEach(function(k){dyn.appendChild(groups[k])});
+ var gl=mk('line','grid win');attrs(gl,{x1:0,y1:TOP,x2:W,y2:TOP});dyn.insertBefore(gl,dyn.firstChild);
+ svg.querySelector('.ctl .yv').textContent=km2(maxC);
+ // controls
+ [].forEach.call(svg.querySelectorAll('.ctl .u'),function(t){t.classList.toggle('on',t.dataset.u===state.u)});
+ svg.querySelector('.ctl .prev').classList.toggle('off',state.end<=N-1);
+ svg.querySelector('.ctl .next').classList.toggle('off',state.end>=all.length-1);
+ if(pinned&&!groups[pinned])pinned=null;if(shown&&!groups[shown]){tip.hidden=true;shown=null}
+ if(pinned)pin(pinned)}
+function xlabel(b,i){var u=state.u,t=ymd(b.key);
+ if(u==='d'){var wd=(t.getUTCDay()+6)%7;return wd===0||(i===N-1&&wd>=3)?b.key.slice(5):''}
+ if(u==='w'){if(t.getUTCDate()<=7||i===0)return MON[t.getUTCMonth()]+(t.getUTCMonth()===0||i===0?' '+t.getUTCFullYear():'');return ''}
+ return MON[t.getUTCMonth()]+(t.getUTCMonth()===0||i===0?' '+t.getUTCFullYear():'')}
+function label(b){if(b.c===0)return span(b)+' · no report';var s=span(b)+' · '+km2(b.c)+' in '+thin(b.k)+' KG · '+b.r+' reports';
+ if(b.flag.length)s+=' · unusual land-use change'+(state.u==='d'?'':' on '+b.flag.length+(b.flag.length===1?' day':' days'));return s}
+// ── cards: pre-rendered for recent days, synthesised for the rest ──────────
+function glab(k){var g=D.groups[k];return g?g[0]:k}
+function gtit(k){var g=D.groups[k];return g?g[1]:''}
+function trLab(k){var i=k.indexOf('>');return i<0?(k==='other'?'other transitions':glab(k)):glab(k.slice(0,i))+' → '+glab(k.slice(i+1))}
+function trTit(k){var i=k.indexOf('>');return i<0?(k==='other'?'all smaller transitions together':gtit(k)):'from '+gtit(k.slice(0,i))+' · to '+gtit(k.slice(i+1))}
+function stack(t,cand){var tr=[],total=0;for(var k in t.tr){tr.push([k,t.tr[k]]);total+=t.tr[k]}
+ tr.sort(function(a,b){return b[1]-a[1]||(a[0]<b[0]?-1:1)});
+ if(tr.length>5){var o=0;tr.slice(5).forEach(function(x){o+=x[1]});tr=tr.slice(0,5);tr.push(['other',o])}
+ var h='<div class="stk'+(cand?' c':'')+'"><div class="sh">'+(cand?'<span class="chip cand" title="one sighting so far — awaiting a second sighting before it counts">candidate · 1 sighting</span>':'<span class="chip conf" title="the same delta sighted twice">confirmed ✓ 2 sightings</span>')+' <span class="mut">· '+thin(t.cells)+' cell'+(t.cells===1?'':'s')+'</span>';
+ if(total>0)h+=' · <strong>'+area(total)+'</strong> <span class="mut" title="area whose declared land use moved from one group to another">changed declared use</span>';
+ h+='</div>';
+ if(total>0){h+='<div class="sb">';tr.forEach(function(x,i){h+='<i class="s'+i+'" style="width:'+(100*x[1]/total).toFixed(1)+'%" title="'+esc(trLab(x[0])+' '+area(x[1]))+'"></i>'});
+  h+='</div><div class="sl">';tr.forEach(function(x,i){h+=(i?'<span class="mut"> · </span>':'')+'<span class="band" title="'+esc(trTit(x[0]))+'"><i class="sw s'+i+'"></i>'+esc(trLab(x[0]))+' <span class="mut">'+area(x[1])+'</span></span>'});h+='</div>'}
+ if(t.cover||t.n){var parts=[];if(t.n>0)parts.push('<strong>+'+t.n+'</strong> new');else if(t.n<0)parts.push('<strong>'+t.n+'</strong> removed');
+  if(t.cover)parts.push('roof '+(t.cover>0?'+':'−')+area(Math.abs(t.cover)));h+='<div class="ss"><span class="mut" title="'+esc(D.outline_title||'')+'">building outlines</span> '+parts.join(' · ')+'</div>'}
+ return h+'</div>'}
+var syn={};
+function card(g){var b=g.bucket,u=state.u;if(u==='d'&&cards[b.key])return cards[b.key];var k=u+':'+b.key;if(syn[k])return syn[k];
+ var d=document.createElement('div');d.className='dd syn';d.hidden=true;var h='';
+ h+='<div class="dh"><span class="wd">'+esc(head(b))+'</span> <strong>'+esc(span(b))+'</strong>';
+ if(b.c===0&&b.obs===0){d.innerHTML=h+' <span class="mut">· no report</span></div>';tip.appendChild(d);return syn[k]=d}
+ if(u!=='d')h+=' <span class="rk">'+b.active+' of '+b.days.length+' days reporting</span>';
+ h+='</div><div class="sec dec"><div class="lab"><i class="src"></i>declared <span class="mut">· survey land use · BEV tiles via bevdirect</span></div>';
+ if(b.c===0)h+='<div class="kv mut">no digest</div>';
+ else{h+='<div class="kv"><strong>'+km2(b.c)+'</strong> digested <span class="mut">· up to '+thin(b.k)+' KG a day · '+thin(b.r)+' report'+(b.r===1?'':'s')+'</span></div><div class="pb">';
+  for(var i=0;i<NB;i++)if(b.p[i])h+='<svg style="width:'+(100*b.p[i]/b.c).toFixed(1)+'%" aria-hidden="true"><rect width="100%" height="100%" class="p'+i+'"/>'+(i>=2?'<rect width="100%" height="100%" fill="url(#ne-h'+i+')"/>':'')+'</svg>';
+  h+='</div><div class="pl">';var f=true;
+  for(i=0;i<NB;i++)if(b.p[i]){h+=(f?'':'<span class="mut"> · </span>')+'<span class="band" title="'+km2(b.p[i])+'"><svg class="sw" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" class="p'+i+'"/>'+(i>=2?'<rect width="10" height="10" fill="url(#ne-h'+i+')"/>':'')+'</svg>'+esc(BANDS[i])+' <span class="mut">'+pct(100*b.p[i]/b.c)+'</span></span>';f=false}
+  h+='</div>';var re=b.c-b.p[0];
+  h+=re>0?'<div class="cmp">seen before <strong>'+km2(re)+'</strong> <span class="mut">('+Math.round(100*re/b.c)+' %) → comparable for change</span></div>':'<div class="cmp mut">all first sight — nothing comparable yet</div>';
+  if(b.moved>0){h+='<div class="dc '+(b.conf?'conf':'cand')+'"><div class="dt"><strong>land use changed</strong> on '+area(b.moved);
+   if(b.flag.length)h+=' <span class="tag">unusual</span>';h+='</div>';
+   if(u!=='d')h+='<div class="st">'+(b.flag.length?'stands out on '+b.flag.map(function(x){return'<a href="#" class="open" data-day="'+x+'">'+x.slice(5)+'</a>'}).join(', '):'no day stands out')+'</div>';
+   if(b.conf)h+=stack(b.conf,false);if(b.cand)h+=stack(b.cand,true);h+='</div>'}
+  else if(re>0)h+='<div class="dc none">no change detected in '+km2(re)+' compared</div>';
+  h+='</div>'}
+ h+='<div class="sec obs"><div class="lab"><i class="src"></i>observed <span class="mut">· satellite &amp; LiDAR · '+esc(D.obs_name||'peer')+'</span></div>';
+ h+=b.obs?'<div class="kv"><strong>'+km2c(b.obs)+'</strong> observed layer posted'+(u!=='d'?' <span class="mut">· on '+b.obsDays+' day'+(b.obsDays===1?'':'s')+'</span>':'')+'</div>':'<div class="kv mut">no observed layer posted</div>';
+ h+='</div>';if(u!=='d')h+='<div class="ds mut">'+(hoverable?'click':'tap again')+' to open the days</div>';
+ d.innerHTML=h;tip.appendChild(d);
+ [].forEach.call(d.querySelectorAll('a.open'),function(a){a.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();drill(a.dataset.day,a.dataset.day)})});
+ return syn[k]=d}
+// ── tip placement (unchanged behaviour) ──────────────────────────────────
+var pinned=null,shown=null,hideT=0,cur=null;
 function place(g){tip.classList.remove('dock');if(getComputedStyle(tip).position!=='absolute'){tip.style.transform='';return}
- var fr=fig.getBoundingClientRect(),hit=g.querySelector('.hit').getBoundingClientRect(),top=hit.bottom;
- [].forEach.call(g.querySelectorAll('rect'),function(r){if(r.classList.contains('hit')||r.classList.contains('mark'))return;var b=r.getBoundingClientRect();if(b.top<top)top=b.top});
+ var fr=fig.getBoundingClientRect(),hit=g.hit.getBoundingClientRect(),top=hit.bottom;
+ [].forEach.call(g.querySelectorAll('rect'),function(r){if(r===g.hit||r===g.mark||+r.getAttribute('height')===0)return;var b=r.getBoundingClientRect();if(b.top<top)top=b.top});
  var w=tip.offsetWidth,h=tip.offsetHeight,x=hit.left+hit.width/2-fr.left-w/2,y=top-fr.top-h-8;
  if(y<0){tip.classList.add('dock');tip.style.transform='';return}
- x=Math.max(0,Math.min(x,fr.width-w));
- tip.style.transform='translate('+Math.round(x)+'px,'+Math.round(y)+'px)'}
-function show(day){clearTimeout(hideT);var g=byDay[day];if(!g)return;
- if(shown&&cards[shown])cards[shown].hidden=true;shown=day;if(cards[day])cards[day].hidden=false;
+ x=Math.max(0,Math.min(x,fr.width-w));tip.style.transform='translate('+Math.round(x)+'px,'+Math.round(y)+'px)'}
+function show(key){clearTimeout(hideT);var g=groups[key];if(!g)return;
+ if(cur)cur.hidden=true;cur=card(g);cur.hidden=false;shown=key;
  var fresh=tip.hidden;tip.hidden=false;if(fresh)tip.classList.remove('on');place(g);
  if(fresh){tip.style.transition='none';void tip.offsetWidth;tip.style.transition=''}
- tip.classList.add('on');svg.classList.add('focus');days.forEach(function(x){x.classList.toggle('hov',x===g)})}
-function hide(){if(pinned){show(pinned);return}days.forEach(function(x){x.classList.remove('hov')});tip.classList.remove('on');svg.classList.remove('focus');
+ tip.classList.add('on');svg.classList.add('focus');order.forEach(function(k){groups[k].classList.toggle('hov',k===key)})}
+function hide(){if(pinned){show(pinned);return}order.forEach(function(k){groups[k].classList.remove('hov')});tip.classList.remove('on');svg.classList.remove('focus');
  hideT=setTimeout(function(){tip.hidden=true;shown=null},180)}
-function pin(day){pinned=day;days.forEach(function(g){var on=g.dataset.day===day;g.classList.toggle('sel',on);g.setAttribute('aria-pressed',on?'true':'false')});if(day)show(day);else hide()}
-svg.classList.add('js');
-days.forEach(function(g,i){
- g.addEventListener('mouseenter',function(){show(g.dataset.day)});
- g.addEventListener('focus',function(){show(g.dataset.day)});
- g.addEventListener('blur',function(){if(!pinned)hide()});
- g.addEventListener('click',function(e){e.preventDefault();pin(pinned===g.dataset.day?null:g.dataset.day);g.focus({preventScroll:true})});
- g.addEventListener('keydown',function(e){var k=e.key;
-  if(k==='Enter'||k===' '){e.preventDefault();pin(pinned===g.dataset.day?null:g.dataset.day)}
-  else if(k==='ArrowLeft'&&i>0){e.preventDefault();days[i-1].focus();if(pinned)pin(days[i-1].dataset.day)}
-  else if(k==='ArrowRight'&&i<days.length-1){e.preventDefault();days[i+1].focus();if(pinned)pin(days[i+1].dataset.day)}
-  else if(k==='Escape'){e.preventDefault();pin(null)}});
-});
+function pin(key){pinned=key;order.forEach(function(k){var on=k===key;groups[k].classList.toggle('sel',on);groups[k].setAttribute('aria-pressed',on?'true':'false')});if(key)show(key);else hide()}
+function click(g){var key=g.key;
+ if(state.u==='d'){pin(pinned===key?null:key);g.focus({preventScroll:true});return}
+ // aggregate bar: open its days once the card is in view (hover users at once, touch users on the second tap)
+ if(pinned===key||(hoverable&&shown===key)){var b=g.bucket;drill(b.days.length?b.days[b.days.length-1]:b.key,null,b.days.length);return}
+ pin(key);g.focus({preventScroll:true})}
+function drill(lastDay,pinDay,n){state.u='d';pinned=null;var days=buckets('d'),i=-1;days.forEach(function(b,j){if(b.key===lastDay)i=j});
+ state.end=i<0?null:Math.min(days.length-1,i+Math.floor((28-(n||1))/2));render();
+ if(pinDay&&groups['d:'+pinDay]){pin('d:'+pinDay);groups['d:'+pinDay].focus({preventScroll:true})}}
+function pan(k){var e=Math.max(N-1,Math.min(all.length-1,state.end+k));if(e===state.end)return false;state.end=e;render();return true}
+// ── controls: unit switch, arrows, wheel, drag ────────────────────────────
+svg.classList.add('js');svg.querySelector('.ctl').removeAttribute('aria-hidden');
+[].forEach.call(svg.querySelectorAll('.ctl .u'),function(t){t.setAttribute('role','button');t.setAttribute('tabindex','0');t.setAttribute('aria-label','per '+{d:'day',w:'week',m:'month'}[t.dataset.u]);
+ var go=function(){if(state.u===t.dataset.u)return;state.u=t.dataset.u;state.end=null;pinned=null;tip.hidden=true;shown=null;render()};
+ t.addEventListener('click',go);t.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}})});
+[['prev',-1],['next',1]].forEach(function(p){var t=svg.querySelector('.ctl .'+p[0]);t.setAttribute('role','button');t.setAttribute('tabindex','0');t.setAttribute('aria-label',p[0]==='prev'?'earlier':'later');
+ var go=function(){pan(p[1]*Math.max(1,Math.floor(N/2)))};
+ t.addEventListener('click',go);t.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}})});
+var acc=0;
+svg.addEventListener('wheel',function(e){var dx=Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:(e.shiftKey?e.deltaY:0);if(!dx)return;
+ var canL=state.end>N-1,canR=state.end<all.length-1;if((dx<0&&!canL)||(dx>0&&!canR))return;e.preventDefault();
+ acc+=dx;var px=cw*svg.getBoundingClientRect().width/W,k=Math.trunc(acc/px);if(k){acc-=k*px;pan(k)}},{passive:false});
+var drag={x:0,moved:false,on:false,start:0};
+svg.addEventListener('pointerdown',function(e){if(e.button!==0||e.target.closest('.ctl'))return;drag.on=true;drag.moved=false;drag.x=e.clientX;drag.y=e.clientY;drag.start=state.end;drag.id=e.pointerId});
+svg.addEventListener('pointermove',function(e){if(!drag.on)return;var dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(!drag.moved&&(Math.abs(dx)<6||Math.abs(dx)<Math.abs(dy)))return;
+ if(!drag.moved){drag.moved=true;svg.classList.add('drag');try{svg.setPointerCapture(drag.id)}catch(x){}}
+ var px=cw*svg.getBoundingClientRect().width/W,e2=Math.max(N-1,Math.min(all.length-1,drag.start-Math.round(dx/px)));if(e2!==state.end){state.end=e2;render()}});
+function dragEnd(){if(!drag.on)return;drag.on=false;svg.classList.remove('drag');if(drag.moved)setTimeout(function(){drag.moved=false},0)}
+svg.addEventListener('pointerup',dragEnd);svg.addEventListener('pointercancel',dragEnd);
 svg.addEventListener('mouseleave',hide);
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&pinned)pin(null)});
 document.addEventListener('click',function(e){if(pinned&&!fig.contains(e.target))pin(null)});
-window.addEventListener('resize',function(){if(shown)place(byDay[shown])});
+window.addEventListener('resize',function(){if(shown&&groups[shown])place(groups[shown])});
+// first draw replaces the server's 28-day window with the same picture
+while(dyn.firstChild)dyn.removeChild(dyn.firstChild);
+render();
 })();</script>`
 
 // neCoverageObsText — the observed-layer clause of the coverage line (see peer_ne_ready.go).
