@@ -3,22 +3,29 @@
 // Every in-memory cache behind the landing glyph (tile LRU, tile geometry, filter
 // bins, pass tables) is empty after a restart, so the first reader of a link that
 // was copied and opened directly (`/#kg=…;v=obs;full;…`) waited for every tile
-// to render again. The page therefore tells us, once per DIRECT open (a usable
-// hash at load, not `?trace` / `?dbg` / `?warm` — those are the operator's own
-// loads), which same-origin glyph URLs it fetched in its first 25 s, together
-// with the hash (search term and place name stripped) and the device class
-// (`d` desktop / `m` coarse pointer). Nothing else: no IP, no user agent, no
-// screen size, no time of day finer than the day (docs/ne-glyph.md §warm,
-// Datenschutz 3).
+// to render again. A link enters the store only when somebody actually SHARED
+// it: the click on the link icon of the glyph ("link copied") sends the hash
+// (search term and place name stripped), the device class (`d` desktop / `m`
+// coarse pointer) and the same-origin glyph URLs the page fetched in the last
+// two minutes — the tiles of the view being shared. A DIRECT open of such a
+// link (a usable hash at load, not `?trace` / `?dbg` / `?warm` — those are the
+// operator's own loads) adds the URLs of its first 25 s for its device class
+// and counts the open; opens of hashes nobody shared are dropped unstored.
+// Nothing else: no IP, no user agent, no screen size, no time of day finer than
+// the day (docs/ne-glyph.md §warm, Datenschutz 2.3 + 3).
 //
 // Store: data/ne_glyph_opened.json — ≤ neWarmMaxEntries hashes, each with the
-// URL list per device class (≤ neWarmMaxURLs), the open count and the day of the
-// last open; entries unopened for neWarmKeepDays fall out. Never committed.
+// URL list per device class (≤ neWarmMaxURLs), the copy count `s`, the open
+// count `n` and the day of the last copy/open; entries untouched for
+// neWarmKeepDays fall out. Never committed. The operator seeds a link by hand
+// with the same beacon: `{"hash":"#…","dev":"d","shared":true,"urls":[]}`
+// (then open it once per device class so the URL lists fill).
 //
 // Replay: neWarmDelay (30 min, NE_WARM_DELAY) after start — a development
-// restart every few minutes must not re-render the country — the newest entries
-// are replayed through the in-process mux as `ua=umfeld-warm` requests, one at
-// a time, yielding to real readers (neRenderYield), within neWarmBudget URLs.
+// restart every few minutes must not re-render the country — the newest shared
+// entries (`s` > 0; the rest are never replayed and age out) are replayed through
+// the in-process mux as `ua=umfeld-warm` requests, one at a time, yielding to
+// real readers (neRenderYield), within neWarmBudget URLs.
 // A device class that was never seen for a link is synthesised from the other
 // one: same tiles when the link is not `;screen` (the frame has one aspect
 // ratio everywhere), a taller / wider window around the same centre when it is.
@@ -63,8 +70,9 @@ const (
 
 type neWarmEntry struct {
 	Hash string   `json:"hash"`
-	N    int      `json:"n"`
-	Last string   `json:"last"` // day, UTC
+	N    int      `json:"n"`           // direct opens
+	S    int      `json:"s,omitempty"` // copies of the link ("link copied"); 0 = never shared, never replayed
+	Last string   `json:"last"`        // day of the last copy or open, UTC
 	D    []string `json:"d,omitempty"`
 	M    []string `json:"m,omitempty"`
 }
@@ -75,9 +83,9 @@ var (
 	neWarmLoaded  bool
 	neWarmDirty   bool
 	neWarmStat    = struct {
-		beacons, rejected, replayed, failed, synth int
-		startedAt, doneAt                          time.Time
-		state                                      string
+		beacons, shared, rejected, replayed, failed, synth int
+		startedAt, doneAt                                  time.Time
+		state                                              string
 	}{state: "idle"}
 )
 
@@ -192,9 +200,11 @@ func neWarmURLOK(u string) bool {
 	return false
 }
 
-// handleNEGlyphOpened — POST /api/v1/ne/glyph/opened {hash, dev:"d"|"m", urls:[…]}.
-// 204 always on a well-formed body (the page never reads the answer); the
-// request leaves no trace beyond the store described above.
+// handleNEGlyphOpened — POST /api/v1/ne/glyph/opened {hash, dev:"d"|"m", urls:[…], shared?:true}.
+// `shared:true` = the link icon was clicked (the entry is created or marked
+// shared, urls may be empty); without it = a direct open, folded into an
+// existing shared entry only. 204 always on a well-formed body (the page never
+// reads the answer); the request leaves no trace beyond the store described above.
 func handleNEGlyphOpened(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		apiError(w, "POST only", 405)
@@ -212,15 +222,16 @@ func handleNEGlyphOpened(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Hash string   `json:"hash"`
-		Dev  string   `json:"dev"`
-		URLs []string `json:"urls"`
+		Hash   string   `json:"hash"`
+		Dev    string   `json:"dev"`
+		URLs   []string `json:"urls"`
+		Shared bool     `json:"shared"`
 	}
 	if json.Unmarshal(body, &in) != nil {
 		apiError(w, "bad json", 400)
 		return
 	}
-	if !neWarmRecord(in.Hash, in.Dev, in.URLs) {
+	if !neWarmRecord(in.Hash, in.Dev, in.URLs, in.Shared) {
 		neWarmMu.Lock()
 		neWarmStat.rejected++
 		neWarmMu.Unlock()
@@ -229,8 +240,9 @@ func handleNEGlyphOpened(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// neWarmRecord — fold one open into the store. False = nothing usable.
-func neWarmRecord(hash, dev string, urls []string) bool {
+// neWarmRecord — fold one copy (shared) or open into the store. False = nothing
+// usable, or an open of a link nobody shared (not stored).
+func neWarmRecord(hash, dev string, urls []string, shared bool) bool {
 	hash = neWarmCanonHash(hash)
 	if hash == "" || (dev != "d" && dev != "m") {
 		return false
@@ -247,14 +259,17 @@ func neWarmRecord(hash, dev string, urls []string) bool {
 		seen[u] = true
 		keep = append(keep, u)
 	}
-	if len(keep) == 0 {
+	if len(keep) == 0 && !shared {
 		return false
 	}
 	neWarmMu.Lock()
 	defer neWarmMu.Unlock()
 	neWarmLoad()
-	neWarmStat.beacons++
 	e := neWarmEntries[hash]
+	if !shared && (e == nil || e.S == 0) {
+		return false // an open of a link nobody shared: nothing is kept
+	}
+	neWarmStat.beacons++
 	if e == nil {
 		if len(neWarmEntries) >= neWarmMaxEntries {
 			list := neWarmSorted()
@@ -265,12 +280,19 @@ func neWarmRecord(hash, dev string, urls []string) bool {
 		e = &neWarmEntry{Hash: hash}
 		neWarmEntries[hash] = e
 	}
-	e.N++
-	e.Last = time.Now().UTC().Format("2006-01-02")
-	if dev == "d" {
-		e.D = keep
+	if shared {
+		e.S++
+		neWarmStat.shared++
 	} else {
-		e.M = keep
+		e.N++
+	}
+	e.Last = time.Now().UTC().Format("2006-01-02")
+	if len(keep) > 0 {
+		if dev == "d" {
+			e.D = keep
+		} else {
+			e.M = keep
+		}
 	}
 	if !neWarmDirty {
 		neWarmDirty = true
@@ -446,8 +468,8 @@ func neWarmLoop() {
 	neWarmReplay()
 }
 
-// neWarmPlan — the URL list of one replay: newest entries first, both device
-// classes (the missing one synthesised), deduplicated, within the budget.
+// neWarmPlan — the URL list of one replay: shared entries only, newest first,
+// both device classes (the missing one synthesised), deduplicated, within the budget.
 func neWarmPlan() (urls []string, entries, synth int) {
 	neWarmMu.Lock()
 	neWarmLoad()
@@ -465,6 +487,9 @@ func neWarmPlan() (urls []string, entries, synth int) {
 	for _, e := range list {
 		if entries >= neWarmEntriesMax || len(urls) >= neWarmBudget {
 			break
+		}
+		if e.S == 0 || (len(e.D) == 0 && len(e.M) == 0) {
+			continue // never shared, or shared but not yet opened by anyone (no tile list)
 		}
 		entries++
 		d, m := e.D, e.M
@@ -491,7 +516,7 @@ func neWarmReplay() {
 	neWarmStat.startedAt = time.Now()
 	neWarmStat.synth = synth
 	neWarmMu.Unlock()
-	log.Printf("🔥 warm: replaying %d opened links, %d URLs (%d device classes synthesised)", entries, len(urls), synth)
+	log.Printf("🔥 warm: replaying %d shared links, %d URLs (%d device classes synthesised)", entries, len(urls), synth)
 	t0 := time.Now()
 	ok, bad := 0, 0
 	for _, u := range urls {
@@ -523,13 +548,16 @@ func NEWarmStats() map[string]interface{} {
 	neWarmMu.Lock()
 	defer neWarmMu.Unlock()
 	neWarmLoad()
-	urls := 0
+	urls, shared := 0, 0
 	for _, e := range neWarmEntries {
 		urls += len(e.D) + len(e.M)
+		if e.S > 0 {
+			shared++
+		}
 	}
 	m := map[string]interface{}{
-		"entries": len(neWarmEntries), "max_entries": neWarmMaxEntries, "urls": urls, "max_urls": neWarmMaxEntries * neWarmMaxURLs * 2,
-		"beacons": neWarmStat.beacons, "rejected": neWarmStat.rejected, "state": neWarmStat.state,
+		"entries": len(neWarmEntries), "shared_entries": shared, "max_entries": neWarmMaxEntries, "urls": urls, "max_urls": neWarmMaxEntries * neWarmMaxURLs * 2,
+		"beacons": neWarmStat.beacons, "shared_beacons": neWarmStat.shared, "rejected": neWarmStat.rejected, "state": neWarmStat.state,
 		"replayed": neWarmStat.replayed, "failed": neWarmStat.failed, "synth": neWarmStat.synth,
 		"delay": neWarmDelay().String(),
 	}

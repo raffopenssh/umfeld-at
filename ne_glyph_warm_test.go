@@ -75,16 +75,27 @@ func TestNEWarmRecordStore(t *testing.T) {
 		neWarmLoaded, neWarmEntries, neWarmDirty = false, nil, false
 		neWarmMu.Unlock()
 	}()
-	if neWarmRecord("#kg=1;v=obs", "x", []string{"/api/v1/ne/glyph/kgs"}) {
+	if neWarmRecord("#kg=1;v=obs", "x", []string{"/api/v1/ne/glyph/kgs"}, true) {
 		t.Fatal("bad dev accepted")
 	}
-	if neWarmRecord("#kg=1;v=obs", "d", []string{"http://x/"}) {
+	if neWarmRecord("#kg=1;v=obs", "d", []string{"http://x/"}, false) {
 		t.Fatal("no usable url accepted")
 	}
-	if !neWarmRecord("#kg=1;v=obs;q=a", "d", []string{"/api/v1/ne/glyph/kgs", "/api/v1/ne/glyph/kgs"}) {
+	// an open of a link nobody shared is dropped unstored
+	if neWarmRecord("#kg=9;v=obs", "d", []string{"/api/v1/ne/glyph/kgs"}, false) || len(neWarmEntries) != 0 {
+		t.Fatal("unshared open stored")
+	}
+	// the share click: urls may be empty; nothing to replay yet
+	if !neWarmRecord("#kg=1;v=obs;q=a", "d", nil, true) {
+		t.Fatal("share rejected")
+	}
+	if _, entries, _ := neWarmPlan(); entries != 0 {
+		t.Fatal("entry without urls planned")
+	}
+	if !neWarmRecord("#kg=1;v=obs;q=a", "d", []string{"/api/v1/ne/glyph/kgs", "/api/v1/ne/glyph/kgs"}, false) {
 		t.Fatal("rejected")
 	}
-	if !neWarmRecord("#kg=1;v=obs", "m", []string{"/api/v1/ne/glyph/kgs"}) {
+	if !neWarmRecord("#kg=1;v=obs", "m", []string{"/api/v1/ne/glyph/kgs"}, false) {
 		t.Fatal("rejected")
 	}
 	urls, entries, synth := neWarmPlan()
@@ -92,7 +103,7 @@ func TestNEWarmRecordStore(t *testing.T) {
 		t.Fatalf("plan %d %d %v", entries, synth, urls)
 	}
 	e := neWarmEntries["kg=1;v=obs"]
-	if e == nil || e.N != 2 || len(e.D) != 1 || len(e.M) != 1 {
+	if e == nil || e.N != 2 || e.S != 1 || len(e.D) != 1 || len(e.M) != 1 {
 		t.Fatalf("entry %+v", e)
 	}
 }
