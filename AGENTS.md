@@ -62,6 +62,10 @@ show `Search index ready: 7850 KGs`. Env: `/etc/umfeld-at.env` (0600; template i
 (`name:MB,…`), `UMFELD_PEER_OBS_NAME/_API/_WEB`, `UMFELD_PEER_SUB_NAME/_API`,
 `UMFELD_PEER_MAP_NAME`; the unit sets `PORT=8000`, `GOMEMLIMIT`. Long passes (`-ne-train-dict`,
 `-osm-import`, `-toponyms-import`, `-kg-universe-build`) run as a separate process.
+Go build cache: this is ONE main package, so every edit adds ~40 MB of cache objects (build +
+test binary) that Go keeps 5 days → GBs under agent iteration. `go-cache-trim.timer` (daily,
+`scripts/go_cache_trim.sh`) deletes entries unused > 6 h; don't `go clean -cache` by hand (it
+throws away the 1-min cgo sqlite3 build too).
 
 ## Invariants
 

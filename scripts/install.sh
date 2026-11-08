@@ -68,5 +68,34 @@ sed "s|^User=.*|User=$RUN_USER|;s|^Group=.*|Group=$RUN_GROUP|;s|^WorkingDirector
 sudo systemctl daemon-reload
 sudo systemctl enable umfeld-at
 sudo systemctl restart umfeld-at
+
+# Go build cache trim: this repo is one big main package, every edit leaves
+# ~40 MB of new cache objects that Go only evicts after 5 days. Daily timer
+# drops entries unused for 6 h (see scripts/go_cache_trim.sh).
+GOBIN_DIR="$(dirname "$(command -v go)")"
+sudo tee /etc/systemd/system/go-cache-trim.service >/dev/null <<UNIT
+[Unit]
+Description=Trim Go build cache
+
+[Service]
+Type=oneshot
+User=$RUN_USER
+Environment=HOME=$(eval echo "~$RUN_USER")
+Environment=PATH=$GOBIN_DIR:/usr/bin:/bin
+ExecStart=$ROOT_DIR/scripts/go_cache_trim.sh
+UNIT
+sudo tee /etc/systemd/system/go-cache-trim.timer >/dev/null <<UNIT
+[Unit]
+Description=Daily Go build cache trim
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+sudo systemctl daemon-reload
+sudo systemctl enable --now go-cache-trim.timer
 echo "  started on port 8000 — journalctl -u umfeld-at -f"
 echo "  docs: http://localhost:8000/api/v1/docs/llm.txt"
