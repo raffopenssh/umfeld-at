@@ -200,8 +200,9 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   `zoomAt` per rAF, events older than 250 ms dropped — slow office PCs otherwise replay a stale
   backlog after the hand stopped or reversed, which looked like inverted zoom.
 - **Card buttons** (`.glyph-tip`, right of the header): dock toggle `.glyph-dk` (desktop; `;below`), minimiser
-  `.glyph-mn` (phones/touch and docked desktop cards; `;min`; folds to the header line, header or chevron unfolds,
-  undocking unfolds), × `.glyph-x` (`dismiss`). A docked sheet (phones, `;below`) **rests on the in-view legend**:
+  `.glyph-mn` (phones/touch, docked desktop cards and every full-screen card; `;min`; folds to the header line, header or chevron unfolds,
+  undocking unfolds), × `.glyph-x` (`dismiss` — **always a close, in full screen too**; the way back is the ⓘ in-view note in the
+  lower right corner. Folding and closing are two controls, never one button doing either). A docked sheet (phones, `;below`) **rests on the in-view legend**:
   `sheetRest()` = hint line + `hiLegendHTML()` at full res — `hide()` folds whatever is on it back to that (never
   to the bare hint, which had no way back), the chevron folds it to the legend's header line (`IN VIEW · OBSERVED ·
   n cells` = the phone's ⓘ note). The × is `visibility:hidden` while the card is not `.x` — faded out it still
@@ -476,6 +477,7 @@ All from one `const m = await import('/api/v1/ne/glyph/soak.js?'+Date.now())` on
 | `m.stress(kg?)` | `await m.stress('63330')` | long-session path: lod-1 spiral walk (views alternate) past the tile budget (lowered to 24 cost units for the walk, `{keep:n}` / `{steps:n}` override) → budget held (`mem.load`), `left=0`, under-LOD hidden, decode drained, eviction ran, no JS error; one line `keep/peak/evicted/shownMax/maxLeft`. ~20 s. |
 | `m.offline(hash?)` | `await m.offline('#kg=63330;full;v=obs;trees;z=300')` | fail-soft under faults (§offline): for `offline`, `5xx`, `peer` — inject, then pin / view / trees / subsidy / relief / pan, settle → **no uncaught error, no `.busy` button, `left=0`, no tile `ok=false`, offline noted, card `.rw.off`, faults reached tiles/peer**; lift → pan + re-ask subsidies + pin → tiles complete, apex back, no offline row, a real card, no busy, no errors. ~30 s. Checks that no fetch happened under a mode (all cached) become `warn:`. |
 | `neGlyph.log()` | `JSON.stringify(window.neGlyph.log())` | `{errors:[{t,m,at}], fetch:{tile:{200:n,204:n,404:n,abort:n,err:n}, relief:{…}, peer:{…}, api:{…}}, dbg:[…]}` — the page's own counters since load / `logReset()`; `dbg` is the 40-line gesture/nav trace (`?dbg` only puts it on screen). |
+| trees | `neGlyph.apices()` → `[{x,y,h,lon,lat,k,i}]` apices on screen (client px, filter applied) · `neGlyph.tree(n)` / `tree(lon,lat)` pins the n-th / nearest one through `apPin` (the tap path) · `tree()` = the pinned apex with `dist` card ↔ tree and `covered` · `tree(null)` unpins · `neGlyph.tap(x,y[,touch])` a real pointerdown/up at client px · `neGlyph.cardBox()` = card rect, classes, `anchor`, `moved`, `min`, `fs`, the ⓘ note text, head line, and `tree{dist,covered,onScreen}` | tree card behaviour without a screenshot: a tree tap must give `dist` ≈ 20 px, `covered:false`; × → `on:false` and `note` set; chevron → `min:true`. |
 | filter | `?dbgveil` in the URL, then `window.__fv(lon,lat)` (overview preview, above) · `svg.glyph` classes `v-fv` (preview) / `v-flt` (cell-exact veil) · `.gf-n` innerText = the readout · `neGlyph.log().dbg` lines `filter overview share rows=… exact=… skipped=…` | the filter's state at any zoom without a screenshot; magenta = veiled in both modes. |
 | server side | `journalctl -u umfeld-at --since -10m \| grep glyph/tile \| grep -oE '→ [0-9]{3}' \| sort \| uniq -c` | tile status counts without a browser. |
 
