@@ -166,7 +166,10 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   `(e, a.i)`. `apWhat` accepts the words the columns carry (`spruce`, `vital`) and the codes of the
   cell layer alike. Check: `#pt=10.0875,47.1375;v=obs;full;trees;z=260` and `;f=ht=20..25` →
   trees drawn, `left=0`, `neGlyph.apN()` non-zero, no `error` events; `z=900` for LOD 1; a tap on
-  a ring opens the card with species · vitality · crown · KG. **Relief**: `relView/relStatus/setRelief` (`mtWant(z,n)` = the Web-Mercator squares touching the view, shared).
+  a ring opens the card with species · vitality · crown · KG. **Picked tree** = `use.tp` in `#ng-tr`
+  (never `.sel` — that class is the KG outline and is hidden at full res): the crown ring filled
+  white at .42 over the dark glow, plus the cursor `.cur.cap` as a hairline white halo at 1.9× the
+  crown (its `.g` twin the dark underlay, `trpk` contraction on pick, off under reduced motion). **Relief**: `relView/relStatus/setRelief` (`mtWant(z,n)` = the Web-Mercator squares touching the view, shared).
   **Photo** (`ot`, `/* ── ortho`): `otZ` (one step finer than `relZ`) · `otView/otTile/otPump/otFetch/otSettle/otClear` (relief's shape; URL `ORTHO` = mapsneu.wien.gv.at WMTS `{z}/{y}/{x}.jpeg`, 404 = outside coverage, ≤ 6 in flight, `OT_KEEP` 240) · `setOrtho(on,quiet)` · `setOrthoOp(v,quiet)` + `otApply` (group opacity + `--otf`) · popover `otPop(on,ms)/otPopSync` (`otHeld` swallows the click after a hold) · fetch class `ortho`, mark `the photo`, group `basemap.at`.
   **Roads** (`rd`, `/* ── roads`): `RD_OP` .7 · `setRoads(on,quiet)` · `setRoadsOp(v,quiet)` + `rdApply` (group opacity on `.ov-rd`) · `rdPop = mkPop({…})` · `rdLine()` legend line from `hiSum('rd')` (`km rd rdc`; `rm` = Σ rm·Σrmb / Σ Σrmb is aggregated for scripts, not shown — the remoteness reading is the one-time hint on enable, never legend clutter); tiles ride the ordinary `hiTile(t,'rd')` path (key `rd/<lod>/<i>/<j>`, no `~` suffix — the weight is CSS, never a refetch).
   **Popover factory** `mkPop({btn, panel, on, turnOn, get, set, commit})` → callable `pop(on, ms)` with `.sync()` and `.held()` (swallows the click after a hold); `otPop` and `rdPop` are its two instances.
