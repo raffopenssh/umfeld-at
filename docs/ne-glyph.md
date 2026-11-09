@@ -148,13 +148,20 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   0.1 m²; ~6–8 B/apex gz; `limit` default = max = 100 000, so a dense alpine 0.025° tile — ~31 k
   apices — is one ~250–280 KB response, ~70 ms server / ~110 ms wall warm; a 0.01° LOD-1 tile
   ~5 k apices, ~30 KB, ~60 ms). `truncated:true` → `e.trunc` + `apex truncated <key>` in the `?dbg`
-  log; `ready:false` (+ `retry_after_s`) → thrown as 503 → `hiRetry`. The same endpoint, QA
+  log; bare `ready:false` (+ `retry_after_s`) → thrown as 503 → `hiRetry`; with apices → drawn, refreshed (below). The same endpoint, QA
   (`realistic=1`) and fields at both LODs, so zooming between them never changes a tree (LOD 1
   used to read the res-12 `/cells` tree layer — slower, larger, and a different set).
   **Caching is the browser's HTTP cache**: the server sends a strong ETag (per-KG NE file state +
-  query) and `Cache-Control: public, max-age=86400` when ready (`no-store` while pending); a
+  query) and `Cache-Control: public, max-age=86400` when ready; a
   re-fetch within max-age costs no request, after it the browser revalidates with `If-None-Match`
-  (304 in ~2 ms). Keep the query string byte-identical per tile (it is part of the ETag) and never
+  (304 in ~2 ms). While a KG of the tile is still **pending** the peer answers `ready:false` +
+  `pending_kgs` + `retry_after_s` **with the other KGs' apices** and `Cache-Control: public,
+  no-cache` (since its `trees-c2`; the ETag hashes the pending list, so it flips the moment the KG
+  lands): `hiApex` draws the partial tile (`e.part`), re-asks after ≤ `APEX_REFRESH` (60 s) — the
+  browser revalidates, a 304 is the same body (still pending), a 200 the whole tile; `hiRetry`
+  caps a long `Retry-After` the same way for a bare `ready:false`. A bbox inside the peer's
+  envelope but touching no KG is `ready:true`, empty columns, cacheable for a day; `no-store` only
+  on a transient index error (`error` + `retry_after_s`, retried like a failed tile). Keep the query string byte-identical per tile (it is part of the ETag) and never
   add a `cache:` option or a custom header to the fetch (a custom header forces a CORS preflight).
   **No height bands any more**: the filter window (`fltTreeRange`, 0.5 m units) is applied
   client-side by `apKeep` to the cached tile, so changing `ht`/`htmax` never refetches; the key is
