@@ -138,7 +138,25 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   `addV`; `docs/ne-change.md` §6a) · `hiPeekHTML` ·
   `hiShow/hiPick/hiUnpin/hiGoto(cell)`.
 - **Diff**: `df`, `setDif(on,quiet,raw)`, `difBlock` (legend), `difCellLine` (card row + open block), `difSw` (swatches: solid · `ng-h4` dots · hollow hexagon), `difAge` (`flown 2022 · 4 y ago`), `DIF_L/DIF_T/DIF_K`; `hiSum('dif')` reads `dif cmp als mix`; `hiCull` hides a dif tile whose `raw` does not match `df.raw`; the legend's `a.raw` link toggles raw (delegated click on `inner`).
-- **Trees**: `hiApex/apRender/apCard/apUnpin/setTree`. **Relief**: `relView/relStatus/setRelief` (`mtWant(z,n)` = the Web-Mercator squares touching the view, shared).
+- **Trees**: `hiApex/apRender/apCard/apUnpin/setTree`.
+  **Tree sprites at LOD 0 — `/trees/bbox` contract** ({OBS_NAME}, CC BY, CORS, no key; `AP_BANDS`,
+  `apWin`, `apexKey` next to `hiApex`): the endpoint returns apices tallest first, `limit` ≤ 20 000
+  (default 2 000), `min_height`/`max_height` a half-open window `min ≤ h < max`, `truncated:true`
+  only when more exist beyond `limit`, `ready:false` + `retry_after_s` when a KG is not on disk.
+  A 0.025° alpine tile holds ~31 k apices ≥ 3 m (~10 k in 3–8 m, 3–4 k per 5 m band above), so
+  one call cannot carry a whole tile. **Without a filter** the tile is fetched as four parallel
+  bands `3–8 · 8–14 · 14–20 · 20+` (`limit=20000` each, ~0.15–0.8 s, ~170 KB gz per 8 k) and merged —
+  every apex ≥ 3 m, the same inventory LOD 1 draws from `/cells`. **Under a single `ht`/`htmax`
+  term** (`fltTreeRange`, 0.5 m units) one call = that band: `min_height=(lo−0.5)/2`,
+  `max_height=(hi+0.5)/2` — the half-open server window meets `apKeep`'s `round(2h)` quantisation
+  exactly, so a window below the old 2 000-tallest cut (`ht=20..25` in dense forest) draws every
+  tree. The key carries the band (`apex/<k>~h<lo>..<hi>`), so a filter change refetches; `hiCull`
+  keeps the stale apex tile on until the wanted one is `ok` (like `flt`/`dif` twins); `fltView`'s
+  timer and `fltSet(off)` re-ask (`hiApex`/`hiView(true)`). Worker point sets are keyed by `e.key`.
+  `ready:false` → thrown as 503 → `hiRetry`; a band that still truncates sets `e.trunc` and writes
+  `apex truncated <key> band …` to the `?dbg` log. An empty window (`lo > hi`) fetches nothing.
+  Check: `#v=obs;full;trees;relief;f=off:ht=20..25;screen;at=502,2443,268` and `f=ht=40..55` →
+  trees drawn, `left=0`, no console errors; measured 63 k apices in view at 65 ms draw. **Relief**: `relView/relStatus/setRelief` (`mtWant(z,n)` = the Web-Mercator squares touching the view, shared).
   **Photo** (`ot`, `/* ── ortho`): `otZ` (one step finer than `relZ`) · `otView/otTile/otPump/otFetch/otSettle/otClear` (relief's shape; URL `ORTHO` = mapsneu.wien.gv.at WMTS `{z}/{y}/{x}.jpeg`, 404 = outside coverage, ≤ 6 in flight, `OT_KEEP` 240) · `setOrtho(on,quiet)` · `setOrthoOp(v,quiet)` + `otApply` (group opacity + `--otf`) · popover `otPop(on,ms)/otPopSync` (`otHeld` swallows the click after a hold) · fetch class `ortho`, mark `the photo`, group `basemap.at`.
   **Roads** (`rd`, `/* ── roads`): `RD_OP` .7 · `setRoads(on,quiet)` · `setRoadsOp(v,quiet)` + `rdApply` (group opacity on `.ov-rd`) · `rdPop = mkPop({…})` · `rdLine()` legend line from `hiSum('rd')` (`km rd rdc`; `rm` = Σ rm·Σrmb / Σ Σrmb is aggregated for scripts, not shown — the remoteness reading is the one-time hint on enable, never legend clutter); tiles ride the ordinary `hiTile(t,'rd')` path (key `rd/<lod>/<i>/<j>`, no `~` suffix — the weight is CSS, never a refetch).
   **Popover factory** `mkPop({btn, panel, on, turnOn, get, set, commit})` → callable `pop(on, ms)` with `.sync()` and `.held()` (swallows the click after a hold); `otPop` and `rdPop` are its two instances.

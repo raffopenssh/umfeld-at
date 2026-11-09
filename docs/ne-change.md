@@ -560,7 +560,7 @@ only, own dot-loader on the tree button): at LOD 1 the res-12 cell layer
 `GET …:8100/api/v1/cells?bbox=&layers=trees&format=columns&centres=1&fields=tree_n` — every
 apex ≥ 3 m with `crown_m2`, species, vitality (~7–10 k trees, ~95 KB gz, 0.15 s per full
 forest tile; the fast path {MAP_NAME} uses); at LOD 0 the sampled giant index
-`GET …/trees/bbox` (h ≥ 20 m, the tallest few per ~0.1 ha). Each tree is a hollow ring of
+`GET …/trees/bbox` (every apex ≥ 3 m, four parallel height bands of ≤ 20 000 — `docs/ne-glyph.md` *Tree sprites at LOD 0*). Each tree is a hollow ring of
 its **true crown size** (r = √(A/π), floor 2.4 px), hairline, in a light green ramp by
 height (`AP_COL`, the `g-tr*` legend swatches share it), always the same light sprites on
 every ground. Density rule from the forestry peer: crowd = Σ circumference / tile area,
