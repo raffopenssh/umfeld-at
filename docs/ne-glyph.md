@@ -30,7 +30,9 @@ public via the `/api/v1/ne/` prefix + `publicAllowListGolden` (`api_tiers_test.g
 ## Page anatomy
 
 Tool bar `.glyph-tools`: find `/`, recent, link, full screen (no separators between them) · status
-slot `.gt-n`. The full-res button `tD` (`.gt-d`) is still wired (busy spinner, aria state, soak)
+slot `.gt-n`. Recent (`neg-hist`, localStorage, 10 rows) keeps places (KG · admin · point · cell · res 12)
+AND filters: every expression the Worker accepted lands as `{k:'f',f:canon,n:words}` (the build-up steps
+collapse into the finished one, prefix rule in `pushHist`); a tap on a filter row re-applies it (`fltSet`). The full-res button `tD` (`.gt-d`) is still wired (busy spinner, aria state, soak)
 but `hidden`: full resolution is automatic (`hiAuto`), the status slot took its room.
 **In-view note / card** (`iv`, `ivNote/ivShow/ivPlace/ivClose/ivToggle`): with a **floating** card
 (desktop) nothing picked meant no legend at all. Once the tiles are in, the loading note in `.gt-n`
