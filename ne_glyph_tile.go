@@ -1121,11 +1121,11 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	L := neGlyphLODs[lod]
-	neFidxWarmNoteTile(lod, i, j) // the filter index warms behind the near tiles (ne_glyph_fidx.go)
 	if tw, ts, te, tn := neGlyphTileBox(L, i, j); te < 9.4 || tw > 17.3 || tn < 46.3 || ts > 49.1 {
 		apiError(w, "tile outside Austria", 404)
 		return
 	}
+	neFidxWarmNoteTile(lod, i, j) // the filter index warms behind the near tiles (ne_glyph_fidx.go) — after the box check: a noted bin outside Austria jammed the warmer (one failing pick every 20 s, 2026-11-09)
 	key := fmt.Sprintf("%s/%d/%d/%d", view, lod, i, j)
 	noStore := false
 	if raw {

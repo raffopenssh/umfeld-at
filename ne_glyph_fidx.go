@@ -2064,6 +2064,9 @@ func neFidxWarmLoop() {
 			neFidxWarmDone.Add(1)
 		} else {
 			log.Printf("fidx warm %d/%d: %v", pick[0], pick[1], err)
+			neFidxWarmMu.Lock() // never retry a bin that cannot build (outside Austria, no frame): the pick would jam the warmer
+			delete(neFidxWarmSeen, pick)
+			neFidxWarmMu.Unlock()
 		}
 	}
 }

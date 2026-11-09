@@ -528,6 +528,29 @@ func neGlyphCurrent() *neGlyph {
 	return neGlyphSlot.g
 }
 
+// neGlyphFirstWait — how long a landing request waits for the FIRST glyph
+// build after a start. The coverage memo (neCoverageStats) builds the glyph
+// in the keeper's goroutine; a request landing inside that window used to get
+// a page without the figure (2026-11-09: the phone's first load after a deploy
+// showed the prose only). The glyph must always show, so the page waits for
+// the build (tens of seconds cold at worst) instead of shipping without it.
+const neGlyphFirstWait = 90 * time.Second
+
+// neGlyphWait — the current glyph, or wait up to max for the first one.
+func neGlyphWait(max time.Duration) *neGlyph {
+	if g := neGlyphCurrent(); g != nil {
+		return g
+	}
+	deadline := time.Now().Add(max)
+	for time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+		if g := neGlyphCurrent(); g != nil {
+			return g
+		}
+	}
+	return nil
+}
+
 // neGlyphSVG — one <path> per ink bucket: 16 424 dots in ~25 DOM nodes
 // (zero-length "h0" segments with round caps are dots of the stroke width).
 func neGlyphSVG(g *neGlyph) string {
@@ -813,7 +836,7 @@ func handleNEGlyphKGs(w http.ResponseWriter, r *http.Request) {
 // · change) switches overlays inside the one figure; without script the
 // declared view shows.
 func neGlyphHTML() string {
-	g := neGlyphCurrent()
+	g := neGlyphWait(neGlyphFirstWait)
 	if g == nil {
 		return ""
 	}
