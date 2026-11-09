@@ -1312,7 +1312,7 @@ function chgHTML(c){var n=c[7]||0,nc=c[10]||0,kg=chgDKey(c),st=kg?chgC[kg]:false
  return s+'</div>'}
 var curAt=null;
 var curI=-1;
-function drawCur(x,y,i){curAt=[x,y];curI=i>=0?i:-1;if(hi.on&&(hi.pin||hi.hov)){cur.setAttribute('d',polyD((hi.pin||hi.hov).poly));return}cur.setAttribute('d',!hex?circD(x,y,22):(curI>=0&&data&&W/vb.w>HEX0)?faceD(curI):hexD(x,y,W/vb.w>HEX0?1:1.25))}
+function drawCur(x,y,i){curAt=[x,y];curI=i>=0?i:-1;if(hi.on&&(hi.pin||hi.hov)){cur.setAttribute('d',polyD((hi.pin||hi.hov).poly));return}/* a pinned tree keeps its ring at every zoom: without this a zoom redrew the cursor as the res-7 hexagon around the tree */if(hi.on&&hi.apx){var ta=hi.apx.a,tz=(svg.getBoundingClientRect().width||W)/vb.w;cur.setAttribute('d',circD(ta.x,ta.y,Math.max(ta.r,7/tz)*1.9));return}cur.setAttribute('d',!hex?circD(x,y,22):(curI>=0&&data&&W/vb.w>HEX0)?faceD(curI):hexD(x,y,W/vb.w>HEX0?1:1.25))}
 function ring(c,i){drawCur(c[0],c[1],i);svg.classList.add('on')}
 var swapT=0,swapH=0;
 function floating(){return getComputedStyle(tip).getPropertyValue('--float').trim()!=='0'}
