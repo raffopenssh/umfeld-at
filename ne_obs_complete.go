@@ -39,6 +39,7 @@ type neObsCompleteRow struct {
 	ObsAt      string `json:"obs_at"`
 	ObsDecl    string `json:"obs_declared_source,omitempty"`
 	BBox       string `json:"bbox,omitempty"`
+	DeclETag   string `json:"declared_etag,omitempty"` // ETag GET {kg}/declared answers for the view this row was computed on — send it as If-None-Match (304 = the view has not moved since the snapshot, skip the fetch)
 	identity   string // view identity + obs digest the row was computed for
 	computedAt time.Time
 }
@@ -106,7 +107,7 @@ func neObsCompareKG(kg string) *neObsCompleteRow {
 	}
 	rb := l.RowBytes
 	nv, no := v.CellsN(), len(obs)/rb
-	row := &neObsCompleteRow{KG: kg, ViewN: nv, ObsN: no, ViewSrc: v.Source, ObsAt: e.Obs.BuiltAt, ObsDecl: e.Obs.DeclaredSource, Coverage: e.Obs.Coverage, identity: ident, computedAt: time.Now()}
+	row := &neObsCompleteRow{KG: kg, ViewN: nv, ObsN: no, ViewSrc: v.Source, ObsAt: e.Obs.BuiltAt, ObsDecl: e.Obs.DeclaredSource, Coverage: e.Obs.Coverage, DeclETag: v.etag(false), identity: ident, computedAt: time.Now()}
 	rec := ""
 	if h := k.layerHeader("obs"); h != nil {
 		rec, _ = h["record"].(string)

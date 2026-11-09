@@ -243,7 +243,7 @@ GET  <private>/api/v1/ne/{kg}?format=json              decoded (also on Accept: 
 POST <private>/api/v1/ne/{kg}/obs                      body = one NEO1 section (≤ 32 MB) → stored, replaces previous;
                                                        or NEC1+NEO1 = peer's bevdirect declared build + obs (§NEO1)
 POST <private>/api/v1/ne/{kg}/report                   epoch report (digests only), answers changed chunks
-GET  <private>/api/v1/ne/{kg}/report                   reports received
+GET  <private>/api/v1/ne/{kg}/report                   reports received; ?observer=&since=<RFC3339|date>&limit=N (newest N), ETag/304, total = unfiltered count
 ```
 The reference package is `ne_cells/` + `pyproject.toml` in this repository (and
 inside vtcseamless-py). ETag (`"ne-<sha256[:16]>"`, 304 on If-None-Match),

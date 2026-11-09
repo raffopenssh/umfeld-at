@@ -1781,18 +1781,20 @@ func neAbs(x int) int {
 
 // neContribScript — progressive enhancement of the chart (source of truth is
 // this const; `node --check` it after edits, docs/ne-change.md §6d):
-//   · redraws the bars from the #ne-contrib-data blob (full history) by day /
-//     week / month — the switch sits inside the chart (top right), bars keep
-//     their slot share so a longer unit shows more, thinner columns;
-//   · pans: ‹ › (half a window), horizontal wheel / shift+wheel, drag,
-//     ArrowLeft/Right past the edge; the window is padded to a minimum width
-//     (28 days · 26 weeks · 24 months) so the shape holds from day one;
-//   · hover floats the bucket's card above its bar when it fits, else docks it
-//     below (always docked on touch/narrow screens); click/Enter pins a day
-//     (again or Esc releases); clicking a week/month whose card is in view
-//     opens its days (touch: second tap); the card's flagged days link down;
-//   · cards: the server's pre-rendered day cards where they exist, otherwise
-//     synthesised from the blob (same classes, same hatches).
+//
+//	· redraws the bars from the #ne-contrib-data blob (full history) by day /
+//	  week / month — the switch sits inside the chart (top right), bars keep
+//	  their slot share so a longer unit shows more, thinner columns;
+//	· pans: ‹ › (half a window), horizontal wheel / shift+wheel, drag,
+//	  ArrowLeft/Right past the edge; the window is padded to a minimum width
+//	  (28 days · 26 weeks · 24 months) so the shape holds from day one;
+//	· hover floats the bucket's card above its bar when it fits, else docks it
+//	  below (always docked on touch/narrow screens); click/Enter pins a day
+//	  (again or Esc releases); clicking a week/month whose card is in view
+//	  opens its days (touch: second tap); the card's flagged days link down;
+//	· cards: the server's pre-rendered day cards where they exist, otherwise
+//	  synthesised from the blob (same classes, same hatches).
+//
 // Without script the server's 28-day window and its <title> tooltips remain.
 const neContribScript = `<script>(function(){
 var fig=document.querySelector('figure.contrib');if(!fig)return;

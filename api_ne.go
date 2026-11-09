@@ -156,7 +156,7 @@ func handleNE(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			handleNEReportPost(w, r, parts[0], tokIdx)
 		} else {
-			handleNEReportList(w, parts[0])
+			handleNEReportList(w, r, parts[0])
 		}
 		return
 	}
@@ -1156,7 +1156,60 @@ func handleNEReportPost(w http.ResponseWriter, r *http.Request, kg string, tokId
 // handleNEReportList — the stored lines with the effective verdict: the
 // coverage/layout rules are applied on read (neMarkLossy), so a line stored
 // under an older rule shows what counts today, not what was written.
-func handleNEReportList(w http.ResponseWriter, kg string) {
+//
+//	?observer=<id>   only that observer's lines
+//	?since=<RFC3339> only lines received at or after that instant (prefix compare
+//	                 on received_at works for any truncated form, e.g. 2026-11-09)
+//	?limit=N         the newest N lines after filtering (default all, max 10 000)
+//
+// ETag = hash of the filtered body; If-None-Match → 304. The file is
+// append-only, so a poller that passes ?since=<its last received_at> plus the
+// ETag transfers nothing while nothing new arrived.
+func handleNEReportList(w http.ResponseWriter, r *http.Request, kg string) {
+	q := r.URL.Query()
 	rows := neMarkLossy(neReadReports(kg))
-	writeJSON(w, 200, map[string]interface{}{"kg": kg, "reports": rows, "count": len(rows)})
+	total := len(rows)
+	if obs := q.Get("observer"); obs != "" {
+		keep := rows[:0]
+		for _, s := range rows {
+			if s.Report.Observer == obs {
+				keep = append(keep, s)
+			}
+		}
+		rows = keep
+	}
+	if since := q.Get("since"); since != "" {
+		keep := rows[:0]
+		for _, s := range rows {
+			if s.ReceivedAt >= since {
+				keep = append(keep, s)
+			}
+		}
+		rows = keep
+	}
+	limit := 0
+	if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 {
+		limit = min(n, 10000)
+		if len(rows) > limit {
+			rows = rows[len(rows)-limit:]
+		}
+	}
+	if rows == nil {
+		rows = []neStoredReport{}
+	}
+	body, err := json.Marshal(map[string]interface{}{"kg": kg, "reports": rows, "count": len(rows), "total": total,
+		"filter": map[string]interface{}{"observer": q.Get("observer"), "since": q.Get("since"), "limit": limit}})
+	if err != nil {
+		apiError(w, "encode", 500)
+		return
+	}
+	sum := sha256.Sum256(body)
+	w.Header().Set("Cache-Control", "no-cache")
+	if neNotModified(w, r, `"ner-`+hex.EncodeToString(sum[:12])+`"`) {
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(200)
+	_, _ = w.Write(body)
 }

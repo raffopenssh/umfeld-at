@@ -343,7 +343,12 @@ steers revisits — it does not touch the baseline, the confirm rule or any stor
 - `obs_on_index[] = {kg, obs_at, has_view, view_source, bbox}` — KGs whose observed layer was
   validated against the index epoch's cell set: re-post NEO1 built on `GET /contrib/api/v1/ne/{kg}/declared`
   (`has_view`), or NEC1+NEO1. `totals.kgs_no_log`, `totals.kgs_obs_on_index`.
-- `obs_missing[] = {kg, view_n, obs_n, missing_n, extra_n, blank_n, nodata_n, coverage, view_source, obs_at, obs_declared_source, bbox}` —
+- `obs_missing[] = {kg, view_n, obs_n, missing_n, extra_n, blank_n, nodata_n, coverage, view_source, obs_at, obs_declared_source, bbox, declared_etag}` —
+  `declared_etag` is the ETag `GET {kg}/declared` answers for the view the row was computed on:
+  send it as `If-None-Match` on the fetch — a 304 means the view has not moved since the snapshot
+  (nothing to refetch, your stored copy is current); a 200 carries the moved view. Same for
+  `GET {kg}/report`: it has an ETag and `?observer=&since=&limit=` (ne-cells.md §API) —
+  poll it with `?since=<your last received_at>` + `If-None-Match`, never the whole history hourly.
   **is the observed layer complete?** The NEO1 cell set was validated against the declared layer of
   its POST day; the declared *view* (§4b) moves afterwards — a re-baseline, the bevdirect v0.3.6
   edge-cell fix, another observer's edge cells. `missing_n` = view cells without an observed row,
