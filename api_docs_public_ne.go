@@ -291,6 +291,12 @@ GET /api/v1/ne/mvt/{z}/{x}/{y}.pbf          the cells as VECTOR TILES for QGIS /
                                             z 12–13 hexagons with ≥ 1 match, aggregates over the matching cells + n_all, match_pct,
                                             area_ha = the matching share; z 9–11 the same from the national 1-in-49 sample (approx=true,
                                             sample=49; every term, k>= excepted). /api/v1/ne/mvt.json?f= = a TileJSON with the filter baked in.
+GET /api/v1/ne/mvt.qgs?bbox=|kg=|adm=|share=[&f=][&key=]
+                                            a QGIS PROJECT (.qgs, a few KB): opens on the box (share= with ;at= = the page's view),
+                                            the live tile layer with a legend of the page's toggles (declared/observed · change ·
+                                            diff · trees · subsidy · roads, ticked as the hash says), relief ({OBS_NAME}), basemap.at
+                                            orthophoto, OSM. /api/v1/ne/mvt.qml?for=tiles|ogr[&share=] = the style alone (ogr: sidecar
+                                            for a PMTiles archive opened through GDAL — QGIS has no native PMTiles vector source).
 GET /api/v1/ne/pmtiles?bbox=|austria|kg=|h3=|adm=|share=[&minz=9&maxz=14][&f=]
                                             the same tiles for one area as a PMTiles v3 archive (offline QGIS); bbox=austria&maxz=11
                                             = the national overview (~30 MB). 202 + progress (HTML page for browsers, JSON for

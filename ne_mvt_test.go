@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/paulmach/orb/encoding/mvt"
@@ -207,7 +210,7 @@ func TestNEMVTGate(t *testing.T) {
 }
 
 func TestNEMVTPublicAndContrib(t *testing.T) {
-	for _, p := range []string{"/api/v1/ne/mvt/14/8876/5732.pbf", "/api/v1/ne/mvt.json", "/api/v1/ne/mvt/status", "/api/v1/ne/pmtiles", "/api/v1/ne/pmtiles/jobs"} {
+	for _, p := range []string{"/api/v1/ne/mvt/14/8876/5732.pbf", "/api/v1/ne/mvt.json", "/api/v1/ne/mvt/status", "/api/v1/ne/pmtiles", "/api/v1/ne/pmtiles/jobs", "/api/v1/ne/mvt.qgs", "/api/v1/ne/mvt.qml"} {
 		if !isPublicPath(p) {
 			t.Errorf("%s must be public (key optional, like the unit export)", p)
 		}
@@ -236,5 +239,78 @@ func TestNEMVTPublicAndContrib(t *testing.T) {
 	handleNEMVT(w, httptest.NewRequest("GET", "/api/v1/ne/mvt/14/x/y.pbf", nil), "mvt/14/x/y.pbf")
 	if w.Code != 400 {
 		t.Errorf("bad coords → %d", w.Code)
+	}
+}
+
+// TestNEMVTProject — the QGIS project: well-formed XML, layer ids QGIS binds
+// (name_uuid shape), the box as the default view, the share hash's toggles as
+// enabled styles, raw ';' in share= survives, the public word ban.
+func TestNEMVTProject(t *testing.T) {
+	for _, f := range []string{"ne_mvt_qgs.go"} {
+		b, _ := os.ReadFile(f)
+		if bad := nePublicBannedWords(string(b)); len(bad) > 0 {
+			t.Errorf("%s: banned words %v", f, bad)
+		}
+	}
+	get := func(p string) (*httptest.ResponseRecorder, string) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", p, nil)
+		handleNEMVT(w, r, strings.TrimPrefix(r.URL.Path, "/api/v1/ne/"))
+		return w, w.Body.String()
+	}
+	w, body := get("/api/v1/ne/mvt.qgs?bbox=10.07,47.13,10.10,47.145")
+	if w.Code != 200 || !strings.Contains(w.Header().Get("Content-Disposition"), "umfeld-at-cells-bbox.qgs") {
+		t.Fatalf("bbox project → %d %s", w.Code, w.Header().Get("Content-Disposition"))
+	}
+	if err := xml.Unmarshal([]byte(body), new(struct{})); err != nil {
+		t.Fatalf("project is not XML: %v", err)
+	}
+	idRe := regexp.MustCompile(`<layer-tree-layer id="([a-z]+_[0-9a-f]{8}_[0-9a-f]{4}_4[0-9a-f]{3}_8[0-9a-f]{3}_[0-9a-f]{12})"`)
+	ids := idRe.FindAllStringSubmatch(body, -1)
+	if len(ids) < 3 {
+		t.Fatalf("layer ids not in QGIS shape: %d found", len(ids))
+	}
+	for _, m := range ids {
+		if strings.Count(body, m[1]) < 3 { // tree + maplayer + layerorder
+			t.Errorf("id %s not bound everywhere", m[1])
+		}
+	}
+	x0, _ := neQGSMerc(10.07, 47.13)
+	if !strings.Contains(body, fmt.Sprintf(`DefaultViewExtent xmin="%.2f"`, x0)) {
+		t.Errorf("default view is not the box")
+	}
+	if !strings.Contains(body, `enabled="1" name="declared · forest (wald)"`) || !strings.Contains(body, `enabled="0" name="observed · forest (wald)"`) {
+		t.Errorf("default profile must be declared")
+	}
+	if !strings.Contains(body, `name="OpenStreetMap" source="type=xyz`) || !strings.Contains(body, `checked="Qt::Unchecked" expanded="0"`) {
+		t.Errorf("basemaps: OSM on, orthophoto off by default")
+	}
+	if strings.Contains(body, "colorizeOn=\"0\" grayscaleMode") { // the short form paints the photo blue
+		t.Errorf("huesaturation must spell out every attribute")
+	}
+	// share with a view and toggles, raw ';' (Go drops such a pair unless re-encoded)
+	if neGlyphLoadFrame() == nil {
+		w, body = get("/api/v1/ne/mvt.qgs?share=v=obs;trees;ortho=0.7;subsidy;f=ht>=20;at=504,2442,324")
+		if w.Code != 200 {
+			t.Fatalf("share project → %d %s", w.Code, body)
+		}
+		for _, want := range []string{`enabled="1" name="observed · forest (wald)"`, `enabled="0" name="declared · forest (wald)"`, `enabled="1" name="trees · 10–20 m"`, `enabled="1" name="subsidy · arable (acker)"`, `enabled="0" name="change · confirmed"`, `f=ht%3E%3D20`, `opacity="1.00"`, `name="trees · `, `providerKey="ogr"`, `trees/bbox?bbox=`, `osm/geometry?bbox=`, `max-zoom="24"`, "umfeld-at-cells-view-filtered.qgs"} {
+			if !strings.Contains(body, want) && !strings.Contains(w.Header().Get("Content-Disposition"), want) {
+				t.Errorf("share project lacks %q", want)
+			}
+		}
+		if vb := neShareViewBox("v=obs;at=504,2442,324"); vb == nil || !(vb[0] > 10.06 && vb[0] < 10.08 && vb[3] > 47.13 && vb[3] < 47.15) {
+			t.Errorf("view box from at= = %v", vb)
+		}
+	}
+	w, body = get("/api/v1/ne/mvt.qml?for=ogr")
+	if w.Code != 200 || !strings.Contains(body, `type="categorizedSymbol" attr="d"`) {
+		t.Errorf("ogr qml → %d", w.Code)
+	}
+	if _, body = get("/api/v1/ne/mvt.qml?for=tiles&share=v=obs"); !strings.Contains(body, `enabled="1" name="observed · forest (wald)"`) {
+		t.Errorf("tiles qml ignores share")
+	}
+	if w, _ = get("/api/v1/ne/mvt.qgs"); w.Code != 400 {
+		t.Errorf("no box → %d", w.Code)
 	}
 }
