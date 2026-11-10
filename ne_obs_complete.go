@@ -21,6 +21,7 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -89,11 +90,20 @@ func neObsCompareKG(kg string) *neObsCompleteRow {
 	}
 	ident := v.Identity + "/" + e.Obs.Digest + "/" + e.Obs.Coverage
 	neObsComplete.mu.Lock()
-	if r := neObsComplete.rows[kg]; r != nil && r.identity == ident {
+	prev := neObsComplete.rows[kg]
+	if prev != nil && prev.identity == ident {
 		neObsComplete.mu.Unlock()
-		return r
+		return prev
 	}
 	neObsComplete.mu.Unlock()
+	// counts_at: a recount inside this process is "now"; the FIRST count after a start is not a
+	// recount — it is dated by its inputs (obs post, chunk log), else every restart stamped all
+	// 7 850 KGs "now" and each ?since= delta of the next quarter hour carried the whole manifest
+	// (2–6 MB gz per poll, 2026-11-10)
+	computedAt := time.Now()
+	if prev == nil {
+		computedAt = neObsCountsEpoch(kg, e.Obs.BuiltAt)
+	}
 	l := k.Hdr.Layers["obs"]
 	if l == nil || l.RowBytes < 8 {
 		return nil
@@ -107,7 +117,7 @@ func neObsCompareKG(kg string) *neObsCompleteRow {
 	}
 	rb := l.RowBytes
 	nv, no := v.CellsN(), len(obs)/rb
-	row := &neObsCompleteRow{KG: kg, ViewN: nv, ObsN: no, ViewSrc: v.Source, ObsAt: e.Obs.BuiltAt, ObsDecl: e.Obs.DeclaredSource, Coverage: e.Obs.Coverage, DeclETag: v.etag(false), identity: ident, computedAt: time.Now()}
+	row := &neObsCompleteRow{KG: kg, ViewN: nv, ObsN: no, ViewSrc: v.Source, ObsAt: e.Obs.BuiltAt, ObsDecl: e.Obs.DeclaredSource, Coverage: e.Obs.Coverage, DeclETag: v.etag(false), identity: ident, computedAt: computedAt}
 	rec := ""
 	if h := k.layerHeader("obs"); h != nil {
 		rec, _ = h["record"].(string)
@@ -341,4 +351,17 @@ func neObsCompleteCounts(kg string) (blank, nodata int, at time.Time, ok bool) {
 		return 0, 0, time.Time{}, false
 	}
 	return r.BlankN, r.NodataN, r.computedAt, true
+}
+
+// neObsCountsEpoch — the date of a count made from stored inputs: the later of the obs post and
+// the chunk log's last append (the declared view moves with the log). Stable across restarts.
+func neObsCountsEpoch(kg, obsBuiltAt string) time.Time {
+	t, _ := time.Parse(time.RFC3339, obsBuiltAt)
+	if fi, err := os.Stat(neChangeLogPath(kg)); err == nil && fi.ModTime().After(t) {
+		t = fi.ModTime()
+	}
+	if t.IsZero() {
+		return time.Now()
+	}
+	return t
 }
