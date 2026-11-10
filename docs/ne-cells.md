@@ -297,12 +297,13 @@ full ETag moves with every build because `queue_position`s change):
   declared view can move without the obs file moving), whichever is later; so a
   KG moving queued → built, a new obs post, a rebuild or a recount all show up;
   a KG that only moved in the queue does not. `counts_at` is not persisted:
-  the first pass after a restart recounts every KG, one delta then lists every
-  obs KG (merge, idempotent) — every delta carries `queue` and `frozen` whole (both in the ETag), so a delta-only client needs no full refetch.
+  the first count after a restart is dated by its inputs (obs post / last chunk-log
+  append), so a restart leaves deltas empty; every delta carries `queue` and `frozen` whole (both in the ETag), so a delta-only client needs no full refetch.
 - Fallback to the **full** manifest (`delta:false`, replace your copy): cursor
   older than `neManifestDeltaRetention` (7 d), or later than our current
   `generated_at` (foreign/clock-skewed cursor). Unparseable `since` → 400.
-- ETag `"nem-…-s"` over the changed set + counters + cursor: an unchanged
+- ETag `"nem-…-s"` over the changed set + counters + frozen + queue (not the cursor,
+  which the client advances on every 200): an unchanged
   10-min poll is a 304. `Cache-Control: public, max-age=60`. Cost per request:
   one pass over the in-memory entries outside the lock, no disk, no SQL.
 

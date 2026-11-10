@@ -604,11 +604,13 @@ func (m *neManifestCache) delta(since time.Time) (body []byte, etag string, ok b
 		"queue":  queue,
 	}
 	body, _ = json.Marshal(doc)
-	// ETag over what the client merges (changed entries + counters + cursor), not generated_at
+	// ETag over what the client merges (changed entries + counters + frozen + queue) — not
+	// generated_at and not the cursor: a client advances its cursor on every 200, so a
+	// cursor-bound tag never matched and the idle poll was never a 304 (peer 2026-11-10).
 	sum := sha256.New()
 	eb, _ := json.Marshal(changed)
 	sum.Write(eb)
-	fmt.Fprintf(sum, "|%s|%d|%d|%d|", sinceStr, total, built, obs)
+	fmt.Fprintf(sum, "|%d|%d|%d|", total, built, obs)
 	fb, _ := json.Marshal(neFrozen)
 	sum.Write(fb)
 	qb, _ := json.Marshal(queue)

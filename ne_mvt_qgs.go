@@ -56,7 +56,7 @@ func neQGSFill(name, color, outline, width string) string {
 // profile, change + mismatch on, the rest off.
 type neQGSView struct {
 	obs, change, diff, trees, sub, roads, relief, ortho bool
-	orthoOp                                            float64
+	orthoOp                                             float64
 }
 
 func neQGSViewOf(share string) neQGSView {
@@ -90,6 +90,7 @@ func neQGSViewOf(share string) neQGSView {
 //	trees · <height>       green hatch by "ht" (;trees), z 13+
 //	subsidy · <class>      orange outline by "sub" (;subsidy), z 13+
 //	roads · ≤ 50 m         grey outline, "rd_min" = 0 (;roads), z 13+
+//
 // neQGSStyleMaxZ — a style's zoom ceiling: QGIS overzooms the deepest tile
 // (neMVTMaxZ) when the reader zooms in further, but only paints styles whose
 // range covers that zoom.
@@ -239,7 +240,7 @@ const neQGSCRS4326 = `<spatialrefsys nativeFormat="Wkt"><wkt>GEOGCRS["WGS 84",DA
 // overlapping crowns and the ground read through — the legend is the ramp.
 func neQGSTreeRenderer() string {
 	cls := []struct {
-		lo, hi float64
+		lo, hi   float64
 		label    string
 		col, rim string // translucent disc + a subtle rim of the same hue, darker
 	}{{3, 5, "3–5 m", "244,252,234,120", "190,215,170,110"}, {5, 15, "5–15 m", "220,242,196,120", "160,200,130,120"}, {15, 25, "15–25 m", "191,231,163,125", "130,185,100,130"}, {25, 35, "25–35 m", "159,218,134,135", "100,170,80,140"}, {35, 70, "≥ 35 m", "124,203,110,150", "70,150,60,150"}}
