@@ -295,6 +295,18 @@ Side findings fixed with it: a share link without `;relief` left the relief queu
 entries and drove `inflight` negative; sub tiles did not return after the subsidy overview recovered
 (`subLoad` success now calls `hiView(true)`).
 
+## Tile cache — RAM, disk, ETag
+
+`handleNEGlyphTile` answers in this order: (1) `If-None-Match` equals the key's ETag (`"t"+sha256(key)[:16]`) → 304,
+no cache read, no render (only complete tiles are ever sent with the ETag; the handler's own ETag also keeps its
+`max-age=600` — without it the cache middleware rewrites to 120 s); (2) `neGlyphTileLRU` (64 MB); (3) disk
+(`ne_glyph_tile_disk.go`, `data/ne_tiles/`, ≤ 4 GB and ≤ 400 k files, least recently used first, `NE_TILE_DISK_MB=0`
+= off, off under `go test`); (4) render behind the gate (`NumCPU` slots). The key carries every state the picture
+reads, so a disk tile never needs invalidation — a moved state is a new key and the old file ages out. Survives
+restarts; shared by all readers. Numbers: `debug/inflight` → `ne_glyph_tiles.disk{hits,misses,writes,bytes,files}`
+and `etag_304`. Why (2026-11-10): reader tiles at LOD 2 had p50 1 s / p90 8–17 s — queue time behind two render
+slots — while the same renders unqueued took ~150 ms.
+
 ## Paint budget — phones
 
 Symptom: a phone browser (DuckDuckGo = Android WebView, which rasters on the app's UI thread) froze

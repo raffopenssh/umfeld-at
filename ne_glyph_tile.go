@@ -51,6 +51,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/uber/h3-go/v4"
@@ -1182,9 +1183,20 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 	}
 	w.Header().Set("X-NE-Notice", NENotice())
-	if b, ok := neGlyphTileLRU.get(key); ok {
+	// ETag = the key (it carries every state the picture reads); only complete tiles are sent with it,
+	// so a browser revalidating after max-age gets its 304 here — before the cache, before the render gate
+	etag := `"t` + neGlyphTileHash(key) + `"`
+	if inm := r.Header.Get("If-None-Match"); inm != "" && !noStore && etagMatches(inm, etag) {
+		atomic.AddInt64(&neGlyphTile304, 1)
+		w.Header().Set("ETag", etag)
+		w.Header().Del("Content-Type")
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	if b, ok := neGlyphTileGet(key); ok {
 		// cached: n + ms + pending ride in a tiny trailer header
 		meta, pngb := neGlyphTileSplit(b)
+		w.Header().Set("ETag", etag)
 		if strings.Contains(meta, ";svg=1") {
 			w.Header().Set("Content-Type", "image/svg+xml")
 		}
@@ -1212,8 +1224,9 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { <-neGlyphRenderGate }()
-	if b, ok := neGlyphTileLRU.get(key); ok {
+	if b, ok := neGlyphTileGet(key); ok {
 		meta, pngb := neGlyphTileSplit(b)
+		w.Header().Set("ETag", etag)
 		if strings.Contains(meta, ";svg=1") {
 			w.Header().Set("Content-Type", "image/svg+xml")
 		}
@@ -1255,7 +1268,8 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "image/svg+xml")
 		}
 		if fm.pending == 0 {
-			neGlyphTileLRU.put(key, neGlyphTileJoin(meta, pngb))
+			w.Header().Set("ETag", etag)
+			neGlyphTilePut(key, neGlyphTileJoin(meta, pngb))
 		} else {
 			w.Header().Set("Cache-Control", "no-store")
 		}
@@ -1289,7 +1303,8 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	if m.flt != nil && m.flt.Pending > 0 {
 		w.Header().Set("Cache-Control", "no-store") // bins still building: the client asks again on the next move
 	} else if len(m.pending) == 0 {
-		neGlyphTileLRU.put(key, neGlyphTileJoin(meta, pngb))
+		w.Header().Set("ETag", etag)
+		neGlyphTilePut(key, neGlyphTileJoin(meta, pngb))
 	} else {
 		w.Header().Set("Cache-Control", "public, max-age=60")
 	}
@@ -1341,7 +1356,14 @@ func neGlyphTileSplit(b []byte) (string, []byte) {
 }
 
 // NEGlyphTileStats — size line for /api/v1/debug/inflight.
-func NEGlyphTileStats() map[string]interface{} { return neGlyphTileLRU.stats() }
+func NEGlyphTileStats() map[string]interface{} {
+	m := neGlyphTileLRU.stats()
+	m["disk"] = neGlyphTileDiskStats()
+	m["etag_304"] = atomic.LoadInt64(&neGlyphTile304)
+	return m
+}
+
+var neGlyphTile304 int64 // tiles answered 304 from the key alone (no cache read, no render)
 
 // handleNEGlyphCell — GET /api/v1/ne/glyph/cell?lon=&lat=: the public
 // res-12 cell doc under a point plus its hexagon in viewBox units, so the

@@ -35,3 +35,4 @@ __pycache__/
 .vscode/
 *.bak
 data/ne_geom/
+data/ne_tiles/

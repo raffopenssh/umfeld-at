@@ -196,7 +196,8 @@ curl 'localhost:8000/debug/pprof/goroutine?debug=2'              wedge triage
   index_meta landuse_types kg_landuse fts_admin*` only; `schema/search_index.sql`),
   `data/osm_proximity.db` (lines/points/areas + rtrees), `data/toponyms.db`, `data/addresses.db`,
   `data/feedback.db`, `data/ne_cells/` (the product), `data/ne_fidx/` (filter index cache,
-  ≤ 2 GB, rebuildable — delete freely), `data/osm_remote_grid.bin` (3 MB, rebuilt in a second),
+  ≤ 2 GB, rebuildable — delete freely), `data/ne_tiles/` (rendered glyph tiles behind the
+  RAM LRU, ≤ 4 GB / 400 k files, `NE_TILE_DISK_MB`, delete freely; `ne_glyph_tile_disk.go`), `data/osm_remote_grid.bin` (3 MB, rebuilt in a second),
   `data/ne_mvt/nat.bin`.
 - Shipped static data: `natura2000_at.geojson.gz`, `nationalparks_wdpa.geojson`, `gemeinden_v2.geojson.gz`,
   `statistik_austria*`, `edm_*.json`, `gadm41_AUT_3.json`, `kg_universe.json.gz`, `kg_universe_bbox_diff.json.gz`,

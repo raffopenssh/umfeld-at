@@ -18,7 +18,7 @@ Rules:
    7 850 KGs and millions of cells; "one entry per KG" is a leak with a delay.
    Current lines: `kg_universe`, `kg_bbox_diff`, `ne_manifest`, `ne_store`,
    `ne_change`, `ne_declared_view`, `ne_reports`, `ne_revisit`, `ne_glyph`,
-   `ne_glyph_admin`, `ne_glyph_tiles`, `ne_glyph_sub`, `ne_glyph_dif`,
+   `ne_glyph_admin`, `ne_glyph_tiles` (64 MB RAM + `disk`: 4 GB / 400 k files), `ne_glyph_sub`, `ne_glyph_dif`,
    `ne_passes`, `ne_fidx` (48 MB RAM + 2 GB disk), `ne_stats` (16 MB; unit
    envelopes + peer answers, 10 min), `ne_mvt`, `ne_mvt_gate`, `export_gate`, `public_gate` (≤ 20 000 client identities × ~100 B, swept every 5 min)
    (≤ 2 000 identities, idle swept), `osm_remote_grid`.
