@@ -236,7 +236,7 @@ Public, tokenless, H3-keyed read path: `docs/ne-public-api.md`.
 ```
 GET  <private>/api/v1/ne                               endpoints, frozen pin
 GET  <private>/api/v1/ne/manifest                      all KGs: {kgs:{kg:{lu,bev,obs,updated_at,status,…}}, queue, frozen}; gzip + ETag/304
-GET  <private>/api/v1/ne/manifest?since=<generated_at> delta: kgs with updated_at ≥ since + counters, delta:true (§manifest)
+GET  <private>/api/v1/ne/manifest?since=<generated_at> delta: kgs with updated_at ≥ since + counters + frozen + queue, delta:true (§manifest)
 GET  <private>/api/v1/ne/{kg}                          binary container, all stored layers (NEC1 then NEO1)
 GET  <private>/api/v1/ne/{kg}?layers=lu|bev|obs        one layer (lu = index epoch, bev = bevdirect baseline); X-NE-Layers-Missing lists absent ones
 GET  <private>/api/v1/ne/{kg}?format=json              decoded (also on Accept: application/json) — debugging
@@ -298,7 +298,7 @@ full ETag moves with every build because `queue_position`s change):
   KG moving queued → built, a new obs post, a rebuild or a recount all show up;
   a KG that only moved in the queue does not. `counts_at` is not persisted:
   the first pass after a restart recounts every KG, one delta then lists every
-  obs KG (merge, idempotent) — deltas carry no `queue`/`frozen`, read the full body for those.
+  obs KG (merge, idempotent) — every delta carries `queue` and `frozen` whole (both in the ETag), so a delta-only client needs no full refetch.
 - Fallback to the **full** manifest (`delta:false`, replace your copy): cursor
   older than `neManifestDeltaRetention` (7 d), or later than our current
   `generated_at` (foreign/clock-skewed cursor). Unparseable `since` → 400.

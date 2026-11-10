@@ -573,7 +573,7 @@ func handleNEManifest(w http.ResponseWriter, r *http.Request) {
 // mutated in place, so the pass runs outside the lock.
 func (m *neManifestCache) delta(since time.Time) (body []byte, etag string, ok bool) {
 	m.mu.Lock()
-	entries, built, obs, obsOnBev, total, generatedAt := m.entries, m.built, m.obs, m.obsOnBev, len(m.kgs), m.generatedAt
+	entries, built, obs, obsOnBev, total, generatedAt, queue := m.entries, m.built, m.obs, m.obsOnBev, len(m.kgs), m.generatedAt, m.queue
 	m.mu.Unlock()
 	if generatedAt == "" || time.Since(since) > neManifestDeltaRetention {
 		return nil, "", false
@@ -599,12 +599,19 @@ func (m *neManifestCache) delta(since time.Time) (body []byte, etag string, ok b
 		"kgs_changed":    len(changed),
 		"kgs":            changed,
 		"retention_s":    int(neManifestDeltaRetention.Seconds()),
+		// small and whole in every delta, so a delta-only client never holds a stale pin (peer 2026-11-10)
+		"frozen": neFrozen,
+		"queue":  queue,
 	}
 	body, _ = json.Marshal(doc)
 	// ETag over what the client merges (changed entries + counters + cursor), not generated_at
 	sum := sha256.New()
 	eb, _ := json.Marshal(changed)
 	sum.Write(eb)
-	fmt.Fprintf(sum, "|%s|%d|%d|%d", sinceStr, total, built, obs)
+	fmt.Fprintf(sum, "|%s|%d|%d|%d|", sinceStr, total, built, obs)
+	fb, _ := json.Marshal(neFrozen)
+	sum.Write(fb)
+	qb, _ := json.Marshal(queue)
+	sum.Write(qb)
 	return body, `"nem-` + hex.EncodeToString(sum.Sum(nil)[:8]) + `-s"`, true
 }

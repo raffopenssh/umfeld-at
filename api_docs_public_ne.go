@@ -62,7 +62,7 @@ layer © {OBS_NAME} (CC BY 4.0)". Rate: 20 r/s per client (burst 60) → 429
 
 GET /api/v1/ne                              frozen{} pin, endpoints, counts, dictionary ids
 GET /api/v1/ne/manifest[?fields=digests]    per-KG status/digests (ETag; digests ≈ 60 KB gz)
-GET /api/v1/ne/manifest?since=<generated_at>   delta: only kgs with updated_at ≥ since + counters, delta:true; cursor = generated_at
+GET /api/v1/ne/manifest?since=<generated_at>   delta: only kgs with updated_at ≥ since + counters + frozen + queue, delta:true; cursor = generated_at
                                             of your last answer; older than retention_s (7 d) → full body, delta:false (replace).
                                             updated_at = latest built_at or obs.counts_at (last blank_n/nodata_n recount), whichever is later
 GET /api/v1/ne/{kg}[?layers=lu,bev,obs][&format=json]   whole-KG container (application/vnd.ne-cells,
