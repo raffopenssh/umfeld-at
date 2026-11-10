@@ -59,7 +59,7 @@ show `Search index ready: 7850 KGs`. Env: `/etc/umfeld-at.env` (0600; template i
 `scripts/install.sh`): `UMFELD_PUBLIC_ONLY`, `UMFELD_PUBLIC_URL`, `UMFELD_PRIVATE_PREFIX`,
 `UMFELD_TOKEN` + `UMFELD_TOKEN_NAMES` (parallel lists), `CONTRIBUTOR_TOKEN` +
 `CONTRIBUTOR_TOKEN_NAMES`, `NE_WRITER`, `NE_WRITE_BUDGET_MB`, `NE_WRITE_BUDGET_MB_OVERRIDES`
-(`name:MB,…`), `UMFELD_PEER_OBS_NAME/_API/_WEB`, `UMFELD_PEER_SUB_NAME/_API`,
+(`name:MB,…`), `UMFELD_PEER_OBS_NAME/_API/_WEB`, `UMFELD_PEER_SUB_NAME/_API/_TOKEN`,
 `UMFELD_PEER_MAP_NAME`; the unit sets `PORT=8000`, `GOMEMLIMIT`. Long passes (`-ne-train-dict`,
 `-osm-import`, `-toponyms-import`, `-kg-universe-build`) run as a separate process.
 Go build cache: this is ONE main package, so every edit adds ~40 MB of cache objects (build +
@@ -130,11 +130,12 @@ Cross-cutting
     VTC; parcels z15, footprints/landuse z16). The Katasterservice search/info JSON API is NOT
     CC BY — never ingest from it, tell peers the same. `BEVNotice()` carries the year.
 15. Every request to the subsidy peer carries `User-Agent: umfeld-at/<component> (+<public URL>)` and
-    must come back with `X-RateLimit-Tier: friendly` (else we are throttled as anonymous). In Go
+    `X-Peer-Token: $UMFELD_PEER_SUB_TOKEN`, and must come back with `X-RateLimit-Tier: peer`
+    (`friendly` without a token; else we are throttled as anonymous). In Go
     this is automatic — `peer_http.go` wraps `http.DefaultTransport` (UA, 429 → Retry-After +
     backoff, tier check on `debug/inflight` → `peer_http`); never give a client its own
     `Transport` without wrapping it. Ad-hoc `curl`/python probes must pass the same UA by hand
-    (`curl -A 'umfeld-at/probe (+$UMFELD_PUBLIC_URL)'`) — library defaults (`Python-urllib`,
+    (`curl -A 'umfeld-at/probe (+$UMFELD_PUBLIC_URL)' -H "X-Peer-Token: $UMFELD_PEER_SUB_TOKEN"`) — library defaults (`Python-urllib`,
     `python-requests`) get rate-limited and show up in the peer's logs.
 
 ## Routing table — read before touching

@@ -114,7 +114,7 @@ NE_WRITER=peer-y                # token NAME allowed on /{kg}/obs (the observed-
 NE_WRITE_BUDGET_MB=4096         # optional; per-token daily disk-write budget
 NE_WRITE_BUDGET_MB_OVERRIDES=peer-y:5120   # optional; per token-name overrides
 UMFELD_PEER_OBS_NAME= / _API= / _WEB=      # observed-layer peer (peers.go)
-UMFELD_PEER_SUB_NAME= / _API=              # subsidy-claims peer
+UMFELD_PEER_SUB_NAME= / _API= / _TOKEN=    # subsidy-claims peer (token → X-Peer-Token, tier "peer")
 UMFELD_PEER_MAP_NAME=                      # the map client reporting declared chunks
 ```
 Token transport: `Authorization: Bearer <tok>` (preferred), `X-API-Key: <tok>`,

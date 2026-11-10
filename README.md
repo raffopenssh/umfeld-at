@@ -78,7 +78,7 @@ defaults and the repository names no host. See the header of `peers.go` and
 | `NE_WRITER` | token name allowed to upload the observed layer (`/{kg}/obs`) |
 | `NE_WRITE_BUDGET_MB`, `NE_WRITE_BUDGET_MB_OVERRIDES` | daily write budget per token (`name:MB,…`) |
 | `UMFELD_PEER_OBS_NAME` / `_API` / `_WEB` | observed-layer peer: name, server-side base URL, browser base URL |
-| `UMFELD_PEER_SUB_NAME` / `_API` | subsidy-claims peer (INVEKOS per cell) |
+| `UMFELD_PEER_SUB_NAME` / `_API` / `_TOKEN` | subsidy-claims peer (INVEKOS per cell); the token is sent as `X-Peer-Token` (own rate bucket there) |
 | `UMFELD_PEER_MAP_NAME` | the map client that reports declared chunks (docs only) |
 | `PORT`, `GOMEMLIMIT` | listener port (default 8000), Go memory limit |
 

@@ -35,11 +35,15 @@ func TestPeerUserAgent(t *testing.T) {
 // Retry-After is retried — POST bodies replayed — instead of surfacing.
 func TestPeerTransportRetries429(t *testing.T) {
 	var hits int32
-	var uas, bodies []string
+	var uas, bodies, toks []string
+	oldTok := peerHTTPToken
+	peerHTTPToken = func() string { return "s3cret" }
+	defer func() { peerHTTPToken = oldTok }()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		uas, bodies = append(uas, r.Header.Get("User-Agent")), append(bodies, string(b))
-		w.Header().Set(peerHTTPTierHdr, peerHTTPTierWant)
+		toks = append(toks, r.Header.Get(peerHTTPTokenHdr))
+		w.Header().Set(peerHTTPTierHdr, "peer")
 		if atomic.AddInt32(&hits, 1) <= 2 {
 			w.Header().Set("Retry-After", "0.05")
 			w.WriteHeader(429)
@@ -68,7 +72,15 @@ func TestPeerTransportRetries429(t *testing.T) {
 			t.Errorf("attempt %d: ua=%q body=%q", i, uas[i], bodies[i])
 		}
 	}
-	if req.Header.Get("User-Agent") != "" {
+	for i, k := range toks {
+		if k != "s3cret" {
+			t.Errorf("attempt %d: token header %q", i, k)
+		}
+	}
+	if n := PeerHTTPStats()["not_friendly"]; peerHTTPTierWant() != "peer" || n != int64(0) {
+		t.Errorf("tier want=%q not_friendly=%v", peerHTTPTierWant(), n)
+	}
+	if req.Header.Get(peerHTTPTokenHdr) != "" || req.Header.Get("User-Agent") != "" {
 		t.Error("caller's request was modified")
 	}
 

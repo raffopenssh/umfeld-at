@@ -55,6 +55,7 @@ UMFELD_PEER_OBS_API=
 UMFELD_PEER_OBS_WEB=
 UMFELD_PEER_SUB_NAME=
 UMFELD_PEER_SUB_API=
+UMFELD_PEER_SUB_TOKEN=
 UMFELD_PEER_MAP_NAME=
 TPL
   echo "  wrote template $ENV_FILE — edit it, then: sudo systemctl restart umfeld-at"

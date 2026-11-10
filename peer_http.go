@@ -11,8 +11,10 @@
 //   - 429 → honour Retry-After (else exponential backoff), pause ALL requests
 //     to the host until then, retry up to peerHTTPRetries times within the
 //     caller's deadline;
-//   - every response must carry X-RateLimit-Tier: friendly; anything else is
-//     counted and logged (at most once a minute) and shows on debug/inflight
+//   - X-Peer-Token: $UMFELD_PEER_SUB_TOKEN when set — our own concurrency
+//     bucket at the peer, independent of address and User-Agent;
+//   - every response must carry X-RateLimit-Tier: peer (with the token) or
+//     friendly (without); anything else is counted and logged (at most once a minute) and shows on debug/inflight
 //     as peer_http.
 //
 // Scripts and one-off probes (curl, python) are outside this transport: they
@@ -24,6 +26,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,8 +37,19 @@ const (
 	peerHTTPRetries  = 5
 	peerHTTPMaxWait  = 60 * time.Second
 	peerHTTPTierHdr  = "X-RateLimit-Tier"
-	peerHTTPTierWant = "friendly"
+	peerHTTPTokenHdr = "X-Peer-Token"
 )
+
+// peerHTTPToken — UMFELD_PEER_SUB_TOKEN; a var so tests can set it.
+var peerHTTPToken = sync.OnceValue(func() string { return strings.TrimSpace(os.Getenv("UMFELD_PEER_SUB_TOKEN")) })
+
+// peerHTTPTierWant — the tier the peer must answer with.
+func peerHTTPTierWant() string {
+	if peerHTTPToken() != "" {
+		return "peer"
+	}
+	return "friendly"
+}
 
 type peerTransport struct {
 	next http.RoundTripper
@@ -108,6 +122,9 @@ func (t *peerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	req = req.Clone(req.Context()) // a RoundTripper must not modify the caller's request
 	req.Header.Set("User-Agent", peerUserAgent(req.Header.Get("User-Agent")))
+	if tok := peerHTTPToken(); tok != "" {
+		req.Header.Set(peerHTTPTokenHdr, tok)
+	}
 	ctx := req.Context()
 	for attempt := 0; ; attempt++ {
 		t.mu.Lock()
@@ -173,14 +190,14 @@ func (t *peerTransport) noteTier(req *http.Request, resp *http.Response) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.lastTier = tier
-	if tier == peerHTTPTierWant {
+	if tier == peerHTTPTierWant() {
 		return
 	}
 	t.notTier++
 	if time.Since(t.lastWarn) > time.Minute {
 		t.lastWarn = time.Now()
 		log.Printf("peer_http: subsidy peer answered %s=%q (want %q) status=%d path=%s ua=%q",
-			peerHTTPTierHdr, tier, peerHTTPTierWant, resp.StatusCode, req.URL.Path, req.Header.Get("User-Agent"))
+			peerHTTPTierHdr, tier, peerHTTPTierWant(), resp.StatusCode, req.URL.Path, req.Header.Get("User-Agent"))
 	}
 }
 
@@ -191,7 +208,8 @@ func PeerHTTPStats() map[string]interface{} {
 	defer t.mu.Unlock()
 	m := map[string]interface{}{
 		"requests": t.requests, "got_429": t.got429, "retried": t.retried, "gave_up": t.gaveUp,
-		"not_friendly": t.notTier, "last_tier": t.lastTier, "user_agent": peerUserAgent("umfeld-at/<component>"),
+		"not_friendly": t.notTier, "last_tier": t.lastTier,
+		"want_tier": peerHTTPTierWant(), "token": peerHTTPToken() != "", "user_agent": peerUserAgent("umfeld-at/<component>"),
 	}
 	if d := time.Until(t.pauseUntil); d > 0 {
 		m["paused_s"] = int(d.Seconds()) + 1
