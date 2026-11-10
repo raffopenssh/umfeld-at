@@ -89,6 +89,7 @@ func RegisterDebugAPI(mux *http.ServeMux) {
 			"ne_glyph_sub":     NEGlyphSubStats(),    // ne_glyph_sub.go: INVEKOS H3 bins (LRU 8 MB) + .poly outline bins (LRU 24 MB), 24 h TTL
 			"ne_fidx":          NEFidxStats(),        // ne_glyph_fidx.go: filter index bins (LRU 48 MB + disk 2 GB)
 			"ne_stats":         NEStatsUnitStats(),   // api_ne_stats_unit.go: envelope + peer memo (LRU 16 MB, 10 min)
+			"peer_http":        PeerHTTPStats(),      // peer_http.go: subsidy-peer UA / 429 retries / X-RateLimit-Tier check
 			"ne_mvt":           NEMVTStats(),         // ne_mvt.go: cell tiles LRU, ids LRU, build queue, archive jobs
 			"ne_mvt_gate":      NEMVTGateStats(),     // ne_mvt_gate.go: per-name tiles/km² budgets
 			"public_gate":      PublicGateStats(),    // public_gate.go: per-client requests/bytes/compute budgets, top talkers

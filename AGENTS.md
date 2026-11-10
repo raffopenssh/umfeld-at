@@ -129,6 +129,13 @@ Cross-cutting
     `kataster.bev.gv.at/at.gv.bev.kataster/tiles/{kataster|symbole}/{z}/{x}/{y}.pbf` (CC BY 4.0
     VTC; parcels z15, footprints/landuse z16). The Katasterservice search/info JSON API is NOT
     CC BY — never ingest from it, tell peers the same. `BEVNotice()` carries the year.
+15. Every request to the subsidy peer carries `User-Agent: umfeld-at/<component> (+<public URL>)` and
+    must come back with `X-RateLimit-Tier: friendly` (else we are throttled as anonymous). In Go
+    this is automatic — `peer_http.go` wraps `http.DefaultTransport` (UA, 429 → Retry-After +
+    backoff, tier check on `debug/inflight` → `peer_http`); never give a client its own
+    `Transport` without wrapping it. Ad-hoc `curl`/python probes must pass the same UA by hand
+    (`curl -A 'umfeld-at/probe (+$UMFELD_PUBLIC_URL)'`) — library defaults (`Python-urllib`,
+    `python-requests`) get rate-limited and show up in the peer's logs.
 
 ## Routing table — read before touching
 

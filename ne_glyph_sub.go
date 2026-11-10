@@ -290,7 +290,7 @@ func neSubGet(key, url string, cached *neSubRaw) (*neSubRaw, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "umfeld-at glyph")
+	req.Header.Set("User-Agent", "umfeld-at/glyph-sub") // peer_http.go completes it for the subsidy peer
 	req.Header.Set("Accept-Encoding", neSubAcceptEncoding)
 	if cached != nil && cached.ETag != "" {
 		req.Header.Set("If-None-Match", cached.ETag)
@@ -560,7 +560,7 @@ func neSubBlockFetch(poly, full bool, I, J int) ([]*neSubRaw, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "umfeld-at glyph")
+	req.Header.Set("User-Agent", "umfeld-at/glyph-sub") // peer_http.go completes it for the subsidy peer
 	req.Header.Set("Accept-Encoding", neSubAcceptEncoding)
 	if all != nil {
 		req.Header.Set("If-None-Match", etag)
