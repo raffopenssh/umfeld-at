@@ -211,7 +211,7 @@ func handleNE(w http.ResponseWriter, r *http.Request) {
 		defFormat = "zstd"
 	}
 	// the filter endpoint has its own format vocabulary (count|cells|h3|geojson)
-	if rest == "mvt.json" || strings.HasPrefix(rest, "mvt/") { // cell tiles (ne_mvt.go)
+	if rest == "mvt.json" || rest == "mvt.qgs" || rest == "mvt.qml" || strings.HasPrefix(rest, "mvt/") { // cell tiles (ne_mvt.go)
 		handleNEMVT(w, r, rest)
 		return
 	}

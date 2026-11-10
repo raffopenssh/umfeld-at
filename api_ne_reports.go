@@ -102,7 +102,7 @@ func contributorPathAllowed(p string) bool {
 		return false
 	}
 	// the cell tile layer + archives (ne_mvt.go): public with an optional key, also under /contrib
-	if rest == "mvt.json" || strings.HasPrefix(rest, "mvt/") || rest == "pmtiles" || strings.HasPrefix(rest, "pmtiles/") {
+	if rest == "mvt.json" || rest == "mvt.qgs" || rest == "mvt.qml" || strings.HasPrefix(rest, "mvt/") || rest == "pmtiles" || strings.HasPrefix(rest, "pmtiles/") {
 		return true
 	}
 	// /{kg}/obs is the declared+observed layer upload; only the token named

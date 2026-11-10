@@ -101,7 +101,7 @@ This API answers "what is AROUND this point?" for any WGS84 coordinate in Austri
                                     diff, subsidy, trees — glyph/cell?lon=&lat=  ·  cell/{h3} (the rows)
   Link ▾ / export                   the hash verbatim is an export: stats/unit?share=<hash>&format=json|flat|csv — one row
                                     per unit (KG, admin unit, h3, bbox, point) with the SAME filter applied, federated with
-                                    {OBS_NAME} and {SUB_NAME}; QGIS: mvt/{z}/{x}/{y}.pbf (+ ?f=) · pmtiles?share=
+                                    {OBS_NAME} and {SUB_NAME}; QGIS: mvt.qgs?share= (project) · mvt/{z}/{x}/{y}.pbf (+ ?f=) · pmtiles?share=
 
   Filter grammar  f=<group>(,<group>)*  group=<term>(|<term>)*  term=<field><op><value>
     , = AND between groups · | = OR inside a group · >=a <=b a..b a.. ..b · sets =m1+m2 · flags bare (n2k) ·
@@ -453,7 +453,7 @@ endpoint, so a client can draw all of it itself (keys in brackets; paths under <
 <tr><td>find (/)</td><td>KG, Gemeinde, Bezirk, Land, Natura 2000 site, address or name · the outline becomes the selection</td><td><code>glyph/kgs</code> · <code>glyph/admin</code> · <code>/api/v1/lookup?q=</code></td></tr>
 <tr><td>filter (f)</td><td>chips over the cells, e.g. <code>h>=8,sl=15..30,n2k</code> · cells that fail are veiled, the readout counts the rest</td><td><code>filter?bbox=&amp;f=</code> · <code>filter/fields</code></td></tr>
 <tr><td>card</td><td>the cell or place under the pointer: use split, structures, change, diff, subsidy, trees</td><td><code>glyph/cell?lon=&amp;lat=</code> · <code>cell/{h3}</code></td></tr>
-<tr><td>link ▾</td><td>the view as a link, with everything in it (profile, overlays, time window, filter, selection) · export of the selection: JSON, CSV, flat, a Sheets formula · for QGIS: vector tiles or a PMTiles archive</td><td><code>stats/unit?share=&amp;format=</code> · <code>mvt/{z}/{x}/{y}.pbf</code> · <code>pmtiles?bbox=</code></td></tr></table>
+<tr><td>link ▾</td><td>the view as a link, with everything in it (profile, overlays, time window, filter, selection) · export of the selection: JSON, CSV, flat, a Sheets formula · for QGIS: a project of this view, vector tiles or a PMTiles archive</td><td><code>stats/unit?share=&amp;format=</code> · <code>mvt.qgs?share=</code> · <code>mvt/{z}/{x}/{y}.pbf</code> · <code>pmtiles?bbox=</code></td></tr></table>
 {FILTER_REF}
 <h2>Around a point</h2>
 <pre>GET /api/v1/context?lon=15.0857&amp;lat=47.0665

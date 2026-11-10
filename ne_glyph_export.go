@@ -7,7 +7,8 @@
 // Menu (two short rows, one URL line — nothing to configure):
 //
 //	EXPORT  JSON · CSV · flat · Sheets        this unit (KG / Gemeinde / cell / point)
-//	QGIS    tiles · PMTiles                   tiles = copy the MVT URL; PMTiles = archive
+//	QGIS    project · tiles · PMTiles         project = .qgs of this view (mvt.qgs, every toggle
+//	                                          as a legend entry); tiles = copy the MVT URL; PMTiles = archive
 //	                                          of the CURRENT VIEW (z 9–14); when the view
 //	                                          would exceed ~100 MB the link is replaced by
 //	                                          "view too big — zoom in" (xArchMB estimate).
@@ -51,6 +52,8 @@ function xURL(fmt,extra){var b=xBase();if(!b)return '';return xK(b+'&format='+fm
    < > | are percent-encoded (mail clients and messengers stop linkifying at them; the server unescapes) */
 function xF(){var t=curHash().replace(/^#/,'').split(';');for(var i=0;i<t.length;i++)if(/^f=/.test(t[i])&&t[i].length>2&&!/^f=off:/i.test(t[i]))return linkSafe(t[i].slice(2).replace(/\+/g,'%2B'));return ''}
 function xMVT(){var f=xF();return xK(pubOrigin()+'/api/v1/ne/mvt/{z}/{x}/{y}.pbf'+(f?'?f='+f:''))}
+/* the QGIS project: the WHOLE hash (view, profile, overlays, filter, unit) — the server turns it into a .qgs that opens on this view with the same layers ticked (ne_mvt_qgs.go) */
+function xProj(){var h=curHash().replace(/^#/,'').split(';').filter(function(t){return t&&t!=='export'&&t!=='open'&&t!=='min'&&t!=='below'&&t!=='screen'}).join(';');return xK(pubOrigin()+'/api/v1/ne/mvt.qgs?share='+encodeURIComponent('#'+h))}
 /* current view as a lon/lat box (the SVG viewBox), its km² and a size estimate for a z 9–14 archive (~0.17 MB/km², measured) */
 function xViewBox(){var a=lonlat(vb.x,vb.y),b=lonlat(vb.x+vb.w,vb.y+vb.h);return[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])]}
 function xViewKm2(b){var la=(b[1]+b[3])/2*Math.PI/180;return (b[2]-b[0])*111.32*Math.cos(la)*(b[3]-b[1])*110.57}
@@ -65,7 +68,7 @@ function xCopy(s,msg){var done=function(ok){showHint(ok?msg:s)};if(navigator.cli
 function xMenu(){var u=xUnit(),t=xArchT(),mb=xArchMB(t),s='';
  if(u)s+='<div class="fm"><span class="lb">export</span><a href="'+esc(xURL('json'))+'" target="_blank" rel="noopener" data-f="json" title="'+u.n+' as JSON">JSON</a><a href="'+esc(xURL('csv','&download=1'))+'" download data-f="csv" title="'+u.n+' as CSV">CSV</a><a href="'+esc(xURL('flat'))+'" target="_blank" rel="noopener" data-f="flat" title="'+u.n+', one flat row">flat</a><button type="button" data-a="sheet" title="copy an =IMPORTDATA() formula for Google Sheets">Sheets</button>'+(u.view?'<span class="off" title="no KG, Gemeinde, cell or point picked: the table covers the cells in view'+(xF()?', matching the filter':'')+(u.approx?' \u2014 estimated from the national 1-in-49 sample (the view spans more than '+XBINS+' bins of 0.025\u00b0); zoom in for cell-exact figures':'')+'">'+(u.approx?'\u2248 ':'')+'the view</span>':'')+'</div>';
  else s+='<div class="fm"><span class="lb">export</span><span class="off">pick a KG, Gemeinde, cell or point</span></div>';
- s+='<div class="fm"><span class="lb">QGIS</span><button type="button" data-a="mvt" title="copy the vector-tile URL \u2014 paste it as a vector tile layer'+(xF()?'; only cells matching the filter':'')+'">tiles</button>'+(xViewKm2(t.box)<=XKM2?'<a href="'+esc(xArch(t))+'" target="_blank" rel="noopener" data-f="pmtiles" title="offline archive of '+t.n+', every cell, zoom 9\u201314 \u2014 about '+(mb<1?'1':Math.round(mb))+' MB">PMTiles</a>':'<a href="'+esc(xArch(t,11))+'" target="_blank" rel="noopener" data-f="pmtiles" data-z="11" title="'+t.n+' spans about '+Math.round(xViewKm2(t.box))+' km\u00b2 \u2014 too large for an archive of every cell (\u2264 '+XKM2+' km\u00b2, about '+Math.round(mb)+' MB); this one holds the overview, zoom 9\u201311, of the whole view. Zoom in for every cell.">PMTiles <span class="off">overview</span></a>')+'</div>';
+ s+='<div class="fm"><span class="lb">QGIS</span><a href="'+esc(xProj())+'" download data-f="qgs" title="QGIS project of this view \u2014 live cells with legend (declared / observed, change, trees, subsidy), relief and orthophoto as in the picture; double-click to open">project</a><button type="button" data-a="mvt" title="copy the vector-tile URL \u2014 paste it as a vector tile layer'+(xF()?'; only cells matching the filter':'')+'">tiles</button>'+(xViewKm2(t.box)<=XKM2?'<a href="'+esc(xArch(t))+'" target="_blank" rel="noopener" data-f="pmtiles" title="offline archive of '+t.n+', every cell, zoom 9\u201314 \u2014 about '+(mb<1?'1':Math.round(mb))+' MB">PMTiles</a>':'<a href="'+esc(xArch(t,11))+'" target="_blank" rel="noopener" data-f="pmtiles" data-z="11" title="'+t.n+' spans about '+Math.round(xViewKm2(t.box))+' km\u00b2 \u2014 too large for an archive of every cell (\u2264 '+XKM2+' km\u00b2, about '+Math.round(mb)+' MB); this one holds the overview, zoom 9\u201311, of the whole view. Zoom in for every cell.">PMTiles <span class="off">overview</span></a>')+'</div>';
  s+='<span class="url" title="copy this URL" data-a="url">'+(u?'<b>\u2026/ne/stats/unit</b>'+u.show+'&amp;format=csv':'<b>\u2026/ne/mvt/</b>{z}/{x}/{y}.pbf'+(xF()?'?f=<b>'+esc(decodeURIComponent(xF()))+'</b>':''))+'&amp;key=<input type="text" autocomplete="off" spellcheck="false" placeholder="your key" value="'+esc(xKey())+'" aria-label="export key, optional, stays in this browser"></span>';
  tXM.innerHTML=s}
 /* ;export in the hash = the menu is open (share links restore it, applyHash passes quiet=true) */
@@ -74,7 +77,7 @@ tKX.addEventListener('click',function(e){e.stopPropagation();closeTools();xOpen(
 tXM.addEventListener('click',function(e){if(e.target.tagName==='INPUT')return;var b=e.target.closest('[data-a],[data-f]');if(!b)return;var a=b.getAttribute('data-a');
  if(a==='sheet'){xCopy('=IMPORTDATA("'+xURL('csv')+'")','Sheets formula copied')}else if(a==='url'){xCopy(xUnit()?xURL('csv'):xMVT(),'URL copied')}else if(a==='mvt'){xCopy(xMVT(),'tile URL copied \u2014 add it as a vector tile layer in QGIS')}else{dbgLog('export '+b.getAttribute('data-f'))}xOpen(false)});
 tXM.addEventListener('input',function(e){if(e.target.tagName!=='INPUT')return;try{var v=e.target.value.trim();if(v)localStorage.setItem(XK,v);else localStorage.removeItem(XK)}catch(x){}
- var as=tXM.querySelectorAll('a[data-f]');for(var i=0;i<as.length;i++){var f=as[i].getAttribute('data-f');as[i].href=f==='pmtiles'?xArch(xArchT(),as[i].getAttribute('data-z')?11:14):xURL(f,f==='csv'?'&download=1':'')}});
+ var as=tXM.querySelectorAll('a[data-f]');for(var i=0;i<as.length;i++){var f=as[i].getAttribute('data-f');as[i].href=f==='pmtiles'?xArch(xArchT(),as[i].getAttribute('data-z')?11:14):f==='qgs'?xProj():xURL(f,f==='csv'?'&download=1':'')}});
 tXM.addEventListener('keydown',function(e){if(e.key==='Escape'){xOpen(false);tKX.focus();e.stopPropagation()}});
 document.addEventListener('pointerdown',function(e){if(!tXM.hidden&&!tXM.contains(e.target)&&!tKX.contains(e.target))xOpen(false)});
 `

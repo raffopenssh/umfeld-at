@@ -905,3 +905,48 @@ func neWhereText(o map[string]interface{}) string {
 	p("peer  %v   notice  %v", o["peer"], o["notice"])
 	return sb.String()
 }
+
+// neShareViewBox — the lon/lat box a share hash's `at=cx,cy,z` (or `z=`)
+// shows at the landing page's aspect ratio; nil when the hash carries no view.
+// Used by the QGIS exports (`mvt.qgs`, `pmtiles`) when a share link has no
+// unit key (kg/h3/adm/pt) — the user wants what they were looking at.
+func neShareViewBox(raw string) *[4]float64 {
+	sv := neWhereParseShare(raw)
+	if sv.at == nil && sv.z <= 0 {
+		return nil
+	}
+	if neGlyphLoadFrame() != nil { // the frame is lazy: a share link may be the first thing after start
+		return nil
+	}
+	fr := &neGlyphFrame
+	cx, cy, z := float64(neGlyphW)/2, float64(fr.h)/2, sv.z
+	if sv.at != nil {
+		cx, cy, z = sv.at[0], sv.at[1], sv.at[2]
+	}
+	if z <= 0 {
+		return nil
+	}
+	vw := float64(neGlyphW) / z
+	vh := vw * float64(fr.h) / float64(neGlyphW)
+	w0, s0 := neGlyphUnproj(cx-vw/2, cy+vh/2)
+	e0, n0 := neGlyphUnproj(cx+vw/2, cy-vh/2)
+	if !(w0 < e0 && s0 < n0) {
+		return nil
+	}
+	return &[4]float64{w0, s0, e0, n0}
+}
+
+// neQuery — r.URL.Query() that survives a raw ';' in a value. Go drops any
+// pair containing a semicolon, which is exactly what an unencoded share hash
+// (`share=v=obs;full;at=…`) pasted into a URL looks like; here ';' is
+// re-encoded first so the pair reads as the caller meant.
+func neQuery(r *http.Request) url.Values {
+	if !strings.Contains(r.URL.RawQuery, ";") {
+		return r.URL.Query()
+	}
+	q, err := url.ParseQuery(strings.ReplaceAll(r.URL.RawQuery, ";", "%3B"))
+	if err != nil {
+		return r.URL.Query()
+	}
+	return q
+}

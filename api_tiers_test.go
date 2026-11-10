@@ -27,6 +27,8 @@ var publicAllowListGolden = []string{
 	"/api/v1/kg/63349/toponyms",
 	"/api/v1/docs/ne.md", "/api/v1/docs/ne-change.md", "/api/v1/ne", "/api/v1/ne/manifest", "/api/v1/ne/glyph", "/api/v1/ne/glyph/kgs", "/api/v1/ne/glyph/tile", "/api/v1/ne/glyph/cell", "/api/v1/ne/glyph/kg", "/api/v1/ne/glyph/sub", "/api/v1/ne/glyph/fnat", "/api/v1/ne/glyph/fidx", "/api/v1/ne/glyph/filter.js", "/api/v1/ne/filter", "/api/v1/ne/filter/fields", "/api/v1/ne/where", "/api/v1/ne/stats/unit", "/api/v1/docs/stats-envelope.md", "/api/v1/docs/qgis-layer.md", "/api/v1/ne/glyph/passes", "/api/v1/ne/glyph/soak.js", "/api/v1/ne/glyph/opened", "/api/v1/ne/63330", "/api/v1/ne/63330/head", "/api/v1/ne/dict/lu-1",
 	"/api/v1/ne/chunk/891e108cc93ffff", "/api/v1/ne/cell/8c1e108cc922dff", "/api/v1/ne/cells",
+	// QGIS family (ne_mvt*.go, ne_mvt_qgs.go): tiles, TileJSON, readiness, archives, project, style
+	"/api/v1/ne/mvt/14/8876/5732.pbf", "/api/v1/ne/mvt.json", "/api/v1/ne/mvt/status", "/api/v1/ne/pmtiles", "/api/v1/ne/pmtiles/jobs", "/api/v1/ne/mvt.qgs", "/api/v1/ne/mvt.qml",
 }
 
 // cadastrePathsMustBePrivate — anything that reads the parcel index.

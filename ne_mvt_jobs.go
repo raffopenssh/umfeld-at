@@ -354,7 +354,7 @@ func neMVTTileRetry(z, x, y int, clip *[4]float64, expr *neFiltExpr) ([]byte, st
 // nePMTBox — the box of the request: bbox= or the unit keys of the stats
 // export; the filter (`f=`, or the `;f=` of a share hash) as its canonical form.
 func nePMTBox(r *http.Request) ([4]float64, string, string, string, int) {
-	q := r.URL.Query()
+	q := neQuery(r)
 	canon := func() string {
 		if f := q.Get("f"); f != "" {
 			if e := neFiltParse(f); !e.empty() {
@@ -369,6 +369,21 @@ func nePMTBox(r *http.Request) ([4]float64, string, string, string, int) {
 		}
 		b, msg := neMVTParseBox(s)
 		return b, "bbox", canon(), msg, 400
+	}
+	if s := q.Get("share"); s != "" {
+		if k, _, _ := neStatsParseShare(s); k == "" { // a view-only share link: what the page showed
+			if vb := neShareViewBox(s); vb != nil {
+				f := q.Get("f")
+				if f == "" {
+					_, _, f = neStatsParseShare(s)
+				}
+				c := ""
+				if e := neFiltParse(f); f != "" && !e.empty() {
+					c = e.Canonical()
+				}
+				return *vb, "view", c, "", 0
+			}
+		}
 	}
 	units, msg, code := neStatsUnits(q)
 	if msg != "" {
@@ -403,7 +418,7 @@ func handleNEPMTiles(w http.ResponseWriter, r *http.Request, rest string) {
 		writeJSON(w, 200, map[string]interface{}{"jobs": jobs, "queue": nePMTJobStats()})
 		return
 	}
-	q := r.URL.Query()
+	q := neQuery(r)
 	box, name, canon, msg, code := nePMTBox(r)
 	if msg != "" {
 		apiError(w, msg, code)
@@ -463,9 +478,28 @@ func handleNEPMTiles(w http.ResponseWriter, r *http.Request, rest string) {
 		apiError(w, msg, http.StatusServiceUnavailable)
 		return
 	}
+	// small archives (a KG, a view, a few hundred tiles) are done within a
+	// second or two: wait a little so the first request already IS the
+	// download instead of a progress page that reloads 8 s later
 	nePMTMu.Lock()
 	c := *j
 	nePMTMu.Unlock()
+	if c.Status == "queued" || c.Status == "building" {
+		deadline := time.Now().Add(nePMTSyncWait(c.Tiles, c.BinsTotal))
+		for time.Now().Before(deadline) {
+			select {
+			case <-r.Context().Done():
+				return
+			case <-time.After(100 * time.Millisecond):
+			}
+			nePMTMu.Lock()
+			c = *j
+			nePMTMu.Unlock()
+			if c.Status == "done" || c.Status == "error" {
+				break
+			}
+		}
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	switch c.Status {
 	case "done":
@@ -484,10 +518,7 @@ func handleNEPMTiles(w http.ResponseWriter, r *http.Request, rest string) {
 		w.Header().Set("Cache-Control", "private, max-age=3600")
 		w.Header().Set("ETag", `"`+c.ID+`"`)
 		http.ServeContent(w, r, c.ID+".pmtiles", fi.ModTime(), f)
-		if gateID == "" {
-			gateID, _ = exportIdentity(r)
-		}
-		exportAccount(gateID, int(fi.Size()))
+		exportAccountFor(r, int(fi.Size()))
 	case "error":
 		apiError(w, "archive failed: "+c.Err+" — request again later", 500)
 		nePMTMu.Lock()
@@ -511,7 +542,7 @@ func handleNEPMTiles(w http.ResponseWriter, r *http.Request, rest string) {
 		w.Header().Set("Retry-After", strconv.Itoa(wait))
 		w.Header().Set("Refresh", strconv.Itoa(wait)) // browsers re-request on their own
 		if strings.Contains(r.Header.Get("Accept"), "text/html") && q.Get("format") != "json" {
-			hw := max(3, min(wait, 8)) // a page can afford to look more often than a script
+			hw := max(3, min(wait, 8)) // the no-script fallback; the page itself polls every second
 			w.Header().Set("Refresh", strconv.Itoa(hw))
 			nePMTProgressPage(w, &c, pos, eta, hw)
 			return
@@ -539,8 +570,22 @@ func nePMTProgressPage(w http.ResponseWriter, c *nePMTJob, pos, eta, wait int) {
 <style>body{font:16px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#222;background:#fbfbf8;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center}
 main{max-width:30em;padding:2em}h1{font-size:1.1em;font-weight:500;margin:0 0 .6em}.bar{height:8px;border-radius:4px;background:#e4e4dd;overflow:hidden;margin:1em 0}.bar i{display:block;height:100%%;width:%d%%;background:#4b7a3f;transition:width .4s}
 p{margin:.4em 0;color:#555}b{color:#222;font-weight:500}small{color:#888}@media(prefers-color-scheme:dark){body{background:#151515;color:#ddd}p{color:#aaa}b{color:#eee}.bar{background:#333}}</style>
-<main><h1>preparing your archive</h1><p><b>%s</b> · %d %% · about %d s left</p><div class="bar"><i></i></div>
-<p>box %.3f, %.3f – %.3f, %.3f · zoom %d–%d · %d of %d tiles</p>
-<p><small>This page reloads itself every %d s and becomes the download when the file is ready. You can close it and open the same link later — the archive stays 48 h.</small></p></main>`,
+<main><h1>preparing your archive</h1><p><b id="st">%s</b> · <span id="pc">%d</span> %% · about <span id="et">%d</span> s left</p><div class="bar"><i></i></div>
+<p>box %.3f, %.3f – %.3f, %.3f · zoom %d–%d · <span id="td">%d</span> of %d tiles</p>
+<p><small>This page watches the build and becomes the download when the file is ready (without JavaScript it reloads every %d s). You can close it and open the same link later — the archive stays 48 h.</small></p></main>
+<script>(function(){var u=new URL(location.href);u.searchParams.set('format','json');var st=document.getElementById('st'),pc=document.getElementById('pc'),et=document.getElementById('et'),td=document.getElementById('td'),bar=document.querySelector('.bar i'),n=0;
+function tick(){fetch(u.toString(),{cache:'no-store'}).then(function(r){if(r.status===200){location.reload();return}if(r.status!==202){if(++n>3)location.reload();return}return r.json()}).then(function(j){if(!j)return;var p=j.progress||{},tot=Math.max((p.bins_total||0)*8+(p.tiles_total||0),1),d=(p.bins_done||0)*8+(p.tiles_done||0),pct=Math.floor(d*100/tot);
+st.textContent=j.status==='queued'?'queued \u00b7 position '+j.queue_position:'preparing';pc.textContent=pct;et.textContent=j.eta_s;td.textContent=p.tiles_done||0;bar.style.width=pct+'%%'}).catch(function(){}).then(function(){setTimeout(tick,1000)})}
+setTimeout(tick,700)})()</script>`,
 		pct, st, pct, eta, c.Box[0], c.Box[1], c.Box[2], c.Box[3], c.MinZ, c.MaxZ, c.TilesDone, c.Tiles, wait)
+}
+
+// nePMTSyncWait — how long a request may hang on for its archive before it
+// gets a progress page: a handful of tiles with warm bins is sub-second, a
+// cold bin costs seconds, a big archive is not worth holding the connection.
+func nePMTSyncWait(tiles, bins int) time.Duration {
+	if tiles > 2000 || bins > 6 {
+		return 1500 * time.Millisecond
+	}
+	return 6 * time.Second
 }

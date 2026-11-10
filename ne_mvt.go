@@ -17,9 +17,10 @@
 // Zoom → resolution: z 9 → res 7 … z ≥ 14 → res 12 (neMVTZoomRes). Below
 // res 12 a feature is the parent cell with aggregates of its res-12 children
 // (counts, dominant groups + shares, means, maxima) — never a sample. The
-// parent is kept when its CENTRE lies in the tile; its children are gathered
-// from the bins under the tile box padded by one parent radius, so the same
-// parent gets the same figures in every tile that shows it.
+// parent is kept when its CENTRE lies in the tile padded by one parent radius
+// (neMVTKeepBox: a hexagon on a tile edge is in both tiles, no seams); its
+// children are gathered from the bins under the tile box padded by two parent
+// radii, so the same parent gets the same figures in every tile that shows it.
 //
 // Loading: bins are built on demand (≈ 9 s each, peers included). A tile
 // whose bins are all ready answers at once (LRU ne_mvt, gzip'd, ETag); a
@@ -120,6 +121,15 @@ func neMVTResPadDeg(r int) (float64, float64) {
 	edgeKm := []float64{1281, 483, 183, 69, 26, 9.85, 3.72, 1.41, 0.53, 0.2, 0.076, 0.029, 0.011, 0.004, 0.002, 0.001}[r]
 	km := edgeKm * 1.15
 	return km / 74.0, km / 111.0
+}
+
+// neMVTKeepBox — the box a feature's CENTRE must fall in to be in the tile:
+// the tile padded by one cell radius, so a cell straddling a tile edge is in
+// both tiles (its polygon runs past the edge; the client clips to the tile)
+// and no half-hexagons go missing along tile seams.
+func neMVTKeepBox(w, s, e, n float64, res int) (float64, float64, float64, float64) {
+	px, py := neMVTResPadDeg(res)
+	return w - px, s - py, e + px, n + py
 }
 
 // ── H3 without cgo ──────────────────────────────────────────────────────────
@@ -688,7 +698,7 @@ func neMVTRenderNat(nat *neNat, z, x, y int, clip *[4]float64, expr *neFiltExpr)
 		return nil
 	}
 	layer := newMVTLayer(neMVTLayerName)
-	for _, q := range l.inBox(w, s, e, n) {
+	for _, q := range l.inBox(neMVTKeepBox(w, s, e, n, res)) {
 		p := l.IDs[q]
 		f := layer.feature(p)
 		f.str("h3", neCellHex(p))
@@ -728,8 +738,9 @@ func neMVTRenderSample(sp *neSamp, z, x, y int, w, s, e, n float64, res int, exp
 	px, py := neMVTResPadDeg(res)
 	aggs := map[uint64]*neMVTAgg{}
 	keep := map[uint64]bool{}
-	inTile := func(lon, lat float64) bool { return lon >= w && lon < e && lat >= s && lat < n }
-	for _, k := range sp.rowsNear(w-px, s-py, e+px, n+py) {
+	kw, ks, ke, kn := neMVTKeepBox(w, s, e, n, res)
+	inTile := func(lon, lat float64) bool { return lon >= kw && lon < ke && lat >= ks && lat < kn }
+	for _, k := range sp.rowsNear(w-2*px, s-2*py, e+2*px, n+2*py) {
 		p := neH3ParentFast(sp.id(k), res)
 		ok, seen := keep[p]
 		if !seen {
@@ -798,7 +809,7 @@ func neMVTRenderSample(sp *neSamp, z, x, y int, w, s, e, n float64, res int, exp
 // neMVTTileKey — LRU key / ETag input: z/x/y + every bin state (+ clip).
 func neMVTTileKey(z, x, y int, states []string) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "mvt1;%d/%d/%d;", z, x, y)
+	fmt.Fprintf(h, "mvt2;%d/%d/%d;", z, x, y) // mvt2: seam-free (neMVTKeepBox)
 	for _, s := range states {
 		h.Write([]byte(s))
 		h.Write([]byte{';'})
@@ -817,6 +828,7 @@ func neMVTTileBins(z, x, y int, clip *[4]float64) [][2]int {
 		}
 	}
 	px, py := neMVTResPadDeg(neMVTZoomRes(z))
+	px, py = 2*px, 2*py // a parent kept one radius out (neMVTKeepBox) has children another radius out
 	if neMVTZoomRes(z) == 12 {
 		px, py = 0.0004, 0.0003 // one cell: polygons of edge cells reach over the tile edge
 	}
@@ -833,7 +845,8 @@ func neMVTRenderFromBlobs(z, x, y int, bins [][2]int, blobs [][]byte, states []s
 	}
 	res := neMVTZoomRes(z)
 	layer := newMVTLayer(neMVTLayerName)
-	inTile := func(lon, lat float64) bool { return lon >= w && lon < e && lat >= s && lat < n }
+	kw, ks, ke, kn := neMVTKeepBox(w, s, e, n, res)
+	inTile := func(lon, lat float64) bool { return lon >= kw && lon < ke && lat >= ks && lat < kn }
 	proj := func(f *mvtFeature, id uint64) {
 		bd, err := h3.Cell(id).Boundary()
 		if err != nil || len(bd) < 3 {
@@ -960,7 +973,7 @@ func neMVTTile(z, x, y int, inline int, clip *[4]float64, expr *neFiltExpr) (gz 
 	}
 	if neMVTZoomRes(z) <= neNatRes {
 		if nat := neNatGet(); nat != nil { // low zooms: the national table, never a bin
-			key = fmt.Sprintf("nat/%s/%d/%d/%d", nat.State, z, x, y)
+			key = fmt.Sprintf("nat2/%s/%d/%d/%d", nat.State, z, x, y) // nat2: seam-free (neMVTKeepBox)
 			if clip != nil {
 				key += fmt.Sprintf("/clip%.5f,%.5f,%.5f,%.5f", clip[0], clip[1], clip[2], clip[3])
 			}
@@ -1044,6 +1057,12 @@ func handleNEMVT(w http.ResponseWriter, r *http.Request, rest string) {
 	case "mvt.json":
 		handleNEMVTJSON(w, r)
 		return
+	case "mvt.qgs": // QGIS project: view + styled live layer (ne_mvt_qgs.go)
+		handleNEMVTProject(w, r)
+		return
+	case "mvt.qml":
+		handleNEMVTStyle(w, r)
+		return
 	case "mvt/status":
 		handleNEMVTStatus(w, r)
 		return
@@ -1067,7 +1086,7 @@ func handleNEMVT(w http.ResponseWriter, r *http.Request, rest string) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	gateID, ok := neMVTGate(w, r, 1, bw, bs, be, bn)
+	_, ok := neMVTGate(w, r, 1, bw, bs, be, bn)
 	if !ok {
 		return
 	}
@@ -1111,7 +1130,7 @@ func handleNEMVT(w http.ResponseWriter, r *http.Request, rest string) {
 		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Set("Content-Length", strconv.Itoa(len(gz)))
 		w.Write(gz)
-		exportAccount(gateID, len(gz))
+		exportAccountFor(r, len(gz))
 		return
 	}
 	zr, err := gzip.NewReader(bytes.NewReader(gz))
@@ -1123,7 +1142,7 @@ func handleNEMVT(w http.ResponseWriter, r *http.Request, rest string) {
 	raw.ReadFrom(zr)
 	w.Header().Set("Content-Length", strconv.Itoa(raw.Len()))
 	w.Write(raw.Bytes())
-	exportAccount(gateID, raw.Len())
+	exportAccountFor(r, raw.Len())
 }
 
 // neMVTParseBox — bbox=w,s,e,n inside Austria.

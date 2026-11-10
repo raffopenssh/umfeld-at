@@ -199,12 +199,38 @@ func exportGate(w http.ResponseWriter, r *http.Request) (string, bool) {
 	return id, true
 }
 
-// exportAccount — bytes served to an identity.
+// exportAccount — bytes served to an identity. Endpoints that are not gated
+// (tiles, archives, projects — their own gate is ne_mvt_gate.go) still show
+// up here: an unseen identity gets a row so a key's usage is one list.
 func exportAccount(id string, n int) {
+	exportAccountTier(id, nil, n)
+}
+
+// exportAccountFor — exportAccount with the identity resolved from the
+// request, so a fresh key's first tile/archive/project creates its row.
+func exportAccountFor(r *http.Request, n int) string {
+	id, tier := exportIdentity(r)
+	exportAccountTier(id, tier, n)
+	return id
+}
+
+func exportAccountTier(id string, tier *exportTier, n int) {
+	now := time.Now()
 	exportGateMu.Lock()
-	if e := exportIdents[id]; e != nil {
-		e.bytes += int64(n)
+	e := exportIdents[id]
+	if e == nil {
+		if tier == nil || len(exportIdents) >= exportIdentMax {
+			exportGateMu.Unlock()
+			return
+		}
+		e = &exportIdent{tier: tier, tokens: tier.burst, last: now, day: now.UTC().Format("2006-01-02"), first: now}
+		exportIdents[id] = e
 	}
+	if tier != nil { // ungated endpoint: count the request too (bytes-only call = the gate already counted it)
+		e.requests++
+		e.last = now
+	}
+	e.bytes += int64(n)
 	exportGateMu.Unlock()
 }
 

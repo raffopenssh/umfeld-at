@@ -1355,7 +1355,7 @@ func neStatsCSVCell(v interface{}) string {
 
 // handleNEStatsUnit — GET /api/v1/ne/stats/unit
 func handleNEStatsUnit(w http.ResponseWriter, r *http.Request, gateID string) {
-	q := r.URL.Query()
+	q := neQuery(r)
 	units, msg, code := neStatsUnits(q)
 	if msg != "" {
 		apiError(w, msg, code)
