@@ -29,7 +29,7 @@ public via the `/api/v1/ne/` prefix + `publicAllowListGolden` (`api_tiers_test.g
 
 ## Page anatomy
 
-Tool bar `.glyph-tools`: find `/`, recent, link, full screen (no separators between them) · status
+Tool bar `.glyph-tools`: find `/`, recent (places · cells · filters · dwell views: `vpKeep`, 15 s after the last state change while zoomed in, whole hash stored, restored through `applyHash`), link, full screen (no separators between them) · status
 slot `.gt-n`. Recent (`neg-hist`, localStorage, 10 rows) keeps places (KG · admin · point · cell · res 12)
 AND filters: every expression the Worker accepted lands as `{k:'f',f:canon,n:words}` (the build-up steps
 collapse into the finished one, prefix rule in `pushHist`); a tap on a filter row re-applies it (`fltSet`). The full-res button `tD` (`.gt-d`) is still wired (busy spinner, aria state, soak)

@@ -432,7 +432,9 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     the text carries a house number. Pick a KG or an admin unit → fly to its bbox, outline filled + stroked, white
     veil under full res; pick an address or a name → fly to the point, a dot that stays, the KG under it selected
     (from /ne/glyph/cell?lon&lat) with the same outline. Every landing ends in full resolution when the fit is
-    deep enough. "recent" = past picks (localStorage).
+    deep enough. "recent" = past picks (localStorage): found places, tapped cells, filters, and VIEWS — a view the
+    reader stayed at for 15 s (zoomed in, nothing changed) is kept with its whole state (centre, zoom, profile,
+    overlays, filter), labelled by the KG under the centre; one entry per place × zoom octave, updated in place.
   7 Share link / deep link ("link" button copies the URL of what is on screen; opening it restores the view,
     also on hashchange — so an agent explores the page by WRITING the hash, no clicks needed: set location.hash
     or open /#… and every token below is applied live). Grammar, one string, tokens joined by ";":

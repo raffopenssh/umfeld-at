@@ -122,7 +122,7 @@ und damit in einem von Ihnen geteilten Link; ein drittes Antippen beendet die St
 den Hintergrund gewechselter Tab beendet die Abfrage ebenfalls, solange die Position nicht als Punkt gesetzt ist.</p>
 <h2>3. Cookies und lokale Speicherung</h2>
 <p>Diese Website verwendet <strong>keine Cookies</strong> und keine Tracking- oder Analysedienste. Die interaktive Karte merkt sich
-Anzeige-Einstellungen (ein-/ausgeblendete Ebenen, Vollauflösung, die letzten zehn Suchen) im <code>localStorage</code> Ihres Browsers;
+Anzeige-Einstellungen (ein-/ausgeblendete Ebenen, Vollauflösung, die letzten zwölf Suchen und Kartenausschnitte) im <code>localStorage</code> Ihres Browsers;
 diese Werte verlassen Ihr Gerät nicht und können Sie jederzeit über die Browser-Einstellungen löschen. Geteilte Ansichten stehen als
 Parameter in der Adresszeile (<code>#q=…</code>). Wenn Sie in der Karte das Link-Symbol antippen („link copied“), meldet die Karte
 einmalig die geteilte Ansicht (ohne Suchbegriff und Ortsnamen) und die Liste der dafür geladenen Kartenkacheln an den Server; wird
