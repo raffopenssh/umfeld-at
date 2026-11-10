@@ -441,6 +441,23 @@ block); a bin miss fetches its block once, the 15 sibling bins of the same view 
 peer request (≈ 80 ms a bin). Same bytes on the wire as 16 single bins, 1/16 of the requests, no disk. A missing column is `255/65535` (*unknown*,
 never matches), so the filter ships before they do and degrades to "no data" chips, never to errors.
 
+**Block generations (2026-11-10, `ne_glyph_fidx_blocks.go`).** The observed-layer peer rebuilds blocks
+without a new product epoch (the sweep-strip fix: 199 bins got obs rows, `X-Cells-Epoch` stayed
+`2026-10`). The epoch alone therefore does not key a bin's srtm input any more: we poll the peer's
+manifest `GET /api/v1/cells/blocks` (one `gen` per block = its `X-Cells-Gen` / ETag; 45 KB gz, every
+10 min with `If-None-Match`, 304 when nothing moved; `NE_FIDX_BLOCKS=0` off), persist bi/bj → gen in
+`data/ne_fidx/blocks.json`, and put the gen of the block a bin lies in into `neFidxState` (`;blk=`).
+A gen change moves the state of exactly those 16 bins, drops the parsed block from `neFidxSrtmBlk`
+(a cached body whose `gen` is not the manifest's is a miss anyway) and queues a **refresh build** of
+every bin of the block we hold (a blob on disk at any state, or asked for in the last 24 h): the
+build pool drains that queue with one worker whenever no live request is queued, so the refetch is
+bounded by the pool, not by the next tile or obs POST that happens to touch the bin. Bins never built
+stay unbuilt (first touch fetches, as before). Bandwidth: one block body per changed block we hold;
+nothing for the others. `/debug/inflight` → `ne_fidx.blocks` (`changed`, `refresh_queued/done/pending`);
+the `?dbg` WHERE panel prints `gen=` (cached body) next to `manifest_gen=`. MVT bin states memoise on
+the manifest's `generation` too (`neMVTStateEpochs`). A peer without the manifest (404) keeps the
+epoch + 15 min TTL rule.
+
 What it costs them, worst case (every bin of Austria asked once): 12 k bins × one request × ~20–60 KB
 ≈ 0.3–0.7 GB egress **per epoch**, stored per release like their H3 tiles (obs peer: ≈ 8 B/cell × 273 M
 cells ≈ 2 GB raw, ~0.5 GB zstd on disk — or zero if computed from the H3B products they already keep,

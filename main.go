@@ -87,6 +87,7 @@ func main() {
 	go neTreeHLoop()       // hourly probe: ask the observed-layer peer for apex height lists once it serves them prebuilt (ne_tree_h.go)
 	go neObsCompleteLoop() // observed layer vs declared view per KG (ne_obs_complete.go; /ne/revisit kind obs_missing)
 	go func() { neFidxPurgeEmpty(); neFidxWarmLoop() }()
+	go neFidxBlocksLoop()  // the observed-layer peer's block manifest: a rebuilt 0.1° block moves its 16 bins' state + refresh builds (ne_glyph_fidx_blocks.go)
 	go neWarmLoop()        // opened share links replayed 30 min after start (ne_glyph_warm.go)
 	go feedbackPurgeLoop() // glyph-trace records live 24 h (api_feedback.go) // filter index: prebuild the bins behind recent near tiles (ne_glyph_fidx.go)
 	go func() {

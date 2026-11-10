@@ -639,8 +639,9 @@ func handleNEWhere(w http.ResponseWriter, r *http.Request) {
 	out["fidx"] = bin
 	// the peer's cells block as we parsed it (LRU only — never a fetch on a read)
 	sb := map[string]interface{}{"url": fmt.Sprintf("%s/api/v1/cells?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&block=1&fields=%s", pr.ObsAPI, math.Floor(lon/0.1)*0.1, math.Floor(lat/0.1)*0.1, math.Floor(lon/0.1)*0.1+0.1, math.Floor(lat/0.1)*0.1+0.1, neTreeHFields())}
+	sb["manifest_gen"] = neFidxBlockGen(int(math.Floor(lon/0.1)), int(math.Floor(lat/0.1)))
 	if sr, ok := neFidxSrtmBlk.get(fmt.Sprintf("%d/%d", bi, bj)); ok && sr != nil {
-		sb["cached"], sb["epoch"], sb["n"] = true, sr.epoch, len(sr.ids)
+		sb["cached"], sb["epoch"], sb["gen"], sb["n"] = true, sr.epoch, sr.gen, len(sr.ids)
 		if x := sr.find(id); x >= 0 {
 			raw := map[string]interface{}{}
 			for name, c := range sr.cols {
@@ -856,9 +857,9 @@ func neWhereText(o map[string]interface{}) string {
 	}
 	if s, ok := o["peer_block"].(map[string]interface{}); ok {
 		if s["cached"] == true {
-			p("peer block cached epoch=%v n=%v row=%s", s["epoch"], s["n"], js(s["row"]))
+			p("peer block cached epoch=%v gen=%v manifest_gen=%v n=%v row=%s", s["epoch"], s["gen"], s["manifest_gen"], s["n"], js(s["row"]))
 		} else {
-			p("peer block not cached (fetched at the next fidx build)")
+			p("peer block not cached (fetched at the next fidx build; manifest_gen=%v — a gen change at the peer queues a refresh build of held bins)", s["manifest_gen"])
 		}
 		p("peer block url  %v", s["url"])
 	}

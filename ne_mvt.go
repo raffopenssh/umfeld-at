@@ -88,7 +88,16 @@ type neMVTStateMemo struct {
 	at time.Time
 }
 
-func neMVTStateEpochs() string { return neFidxSrtmEpoch() + "|" + neSubReleaseSeen() }
+func neMVTStateEpochs() string {
+	return neFidxSrtmEpoch() + "|" + neSubReleaseSeen() + "|" + neFidxBlocksGeneration()
+}
+
+// neMVTStateMemoDrop — the peer block manifest moved: every memoised bin state may be stale.
+func neMVTStateMemoDrop() {
+	neMVTStateMu.Lock()
+	neMVTStateMm = map[[2]int]neMVTStateMemo{}
+	neMVTStateMu.Unlock()
+}
 
 // NEMVTStats — /debug/inflight line.
 func NEMVTStats() map[string]interface{} {

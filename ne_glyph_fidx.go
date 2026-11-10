@@ -64,13 +64,13 @@ const (
 	neFidxBinDeg   = 0.025
 	neFidxHaloDeg  = 0.0005 // > one res-12 cell (≈ 16 m ≈ 0.0002°)
 	neFidxDiskCap  = 2 << 30
-	neFidxDiskDir  = "data/ne_fidx"
 	neFidxMaxCells = 1 << 17
 	neFidxGridM    = 25.0 // N2K / distance raster
 	neFidxSrtmFlds = "bld_h_max,bld_h_p50,stories_max,roof_dom,canopy_h_p90,aspect_deg,slope_mean,slope_p90,elev_mean"
 )
 
 var (
+	neFidxDiskDir  = "data/ne_fidx" // var: tests point it at a temp dir (neFidxDiskDirSet)
 	neFidxLRU      = newNELRU(48 << 20)
 	neFidxMu       sync.Mutex
 	neFidxFlight   = map[string]*neFidxCall{}
@@ -101,6 +101,7 @@ func NEFidxStats() map[string]interface{} {
 	m["srtm_epoch"] = neFidxSrtmEpoch()
 	m["tree_h"] = NETreeHStats()
 	m["srtm_blk"] = neFidxSrtmBlk.stats()
+	m["blocks"] = NEFidxBlocksStats()
 	m["warm"] = neFidxWarmStats()
 	m["pool"] = neFidxPoolStats()
 	return m
@@ -134,6 +135,8 @@ func neFidxSrtmEpochStore(ep string) {
 	os.MkdirAll(neFidxDiskDir, 0o755)
 	os.WriteFile(filepath.Join(neFidxDiskDir, "srtm_epoch"), []byte(ep+"\n"), 0o644)
 }
+
+func neFidxDiskDirSet(d string) { neFidxDiskDir = d }
 
 // ── the bin ──────────────────────────────────────────────────────────────────
 
@@ -416,8 +419,9 @@ func neFidxBox(i, j int) (w, s, e, n float64) {
 }
 
 // neFidxState — sha256[:12] over everything the bin reads: the declared/obs
-// state of every KG it touches, the subsidy release, the srtm cells epoch,
-// the layout version.
+// state of every KG it touches, the subsidy release, the srtm cells epoch and
+// the gen of the peer block the bin lies in (ne_glyph_fidx_blocks.go), the
+// layout version.
 func neFidxState(i, j int) string { return neFidxStateTHx(i, j, neFidxStateTH()) }
 
 // neFidxStateTHx — the state with a given tree-height suffix ("" | ";th").
@@ -425,7 +429,7 @@ func neFidxStateTHx(i, j int, th string) string {
 	w, s, e, n := neFidxBox(i, j)
 	h := sha256.New()
 	h.Write([]byte("nfx" + strconv.Itoa(neFidxVer) + ";" + neGlyphTileState(KGCodesInBBoxMem(w-neFidxHaloDeg, s-neFidxHaloDeg, e+neFidxHaloDeg, n+neFidxHaloDeg), true)))
-	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch() + th))
+	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch() + ";blk=" + neFidxBlockGenOfBin(i, j) + th))
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
@@ -441,7 +445,7 @@ func neFidxStateTH() string {
 func neFidxBoxState(w, s, e, n float64) string {
 	h := sha256.New()
 	h.Write([]byte("nfx" + strconv.Itoa(neFidxVer) + ";" + neGlyphTileState(KGCodesInBBoxMem(w-neFidxHaloDeg, s-neFidxHaloDeg, e+neFidxHaloDeg, n+neFidxHaloDeg), true)))
-	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch() + neFidxStateTH()))
+	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch() + neFidxBoxBlockGens(w, s, e, n) + neFidxStateTH()))
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
@@ -784,7 +788,7 @@ func neFidxBuild(i, j int, st string) (*neFidxBin, error) {
 	}
 	// srtm cells bin: structure heights, roof, canopy, aspect_deg; terrain for cells without an obs row
 	if sr := neFidxSrtmFetch(w, s, e, n); sr != nil {
-		bin.Hdr.Srtm = map[string]interface{}{"epoch": sr.epoch}
+		bin.Hdr.Srtm = map[string]interface{}{"epoch": sr.epoch, "gen": sr.gen}
 		var th *neTreeH
 		if sr.th != nil {
 			th = &neTreeH{Off: make([]uint32, 1, len(ord)+1), H: make([]byte, 0, len(sr.th.H))}
@@ -1386,6 +1390,7 @@ func neFidxDist(bin *neFidxBin, cells []neFidxCell, ord []int, w, s, e, n float6
 
 type neFidxSrtm struct {
 	epoch string
+	gen   string // X-Cells-Gen of the block body (manifest-checked in neFidxSrtmBlkLRU.get)
 	ids   []uint64
 	cols  map[string][]byte
 	th    *neTreeH // tree_h_n + tree_h when asked for and served
@@ -1494,7 +1499,7 @@ func (l *neFidxSrtmBlkLRU) get(k string) (*neFidxSrtm, bool) {
 	if e == nil {
 		return nil, false
 	}
-	if time.Since(e.at) > l.ttl {
+	if time.Since(e.at) > l.ttl || l.staleGen(k, e.v) {
 		delete(l.m, k)
 		for p := range l.order {
 			if l.order[p] == k {
@@ -1517,12 +1522,32 @@ func (l *neFidxSrtmBlkLRU) get(k string) (*neFidxSrtm, bool) {
 	return e.v, true
 }
 
+// staleGen — the manifest knows the block's gen and the parsed body carries another: a miss (bin key "i/j").
+func (l *neFidxSrtmBlkLRU) staleGen(k string, v *neFidxSrtm) bool {
+	if v == nil || v.gen == "" {
+		return false
+	}
+	var i, j int
+	if _, err := fmt.Sscanf(k, "%d/%d", &i, &j); err != nil {
+		return false
+	}
+	g := neFidxBlockGenOfBin(i, j)
+	return g != "" && g != v.gen
+}
+
+// drop — forget one bin (a block the manifest says was rebuilt).
+func (l *neFidxSrtmBlkLRU) drop(k string) {
+	l.mu.Lock()
+	delete(l.m, k)
+	l.mu.Unlock()
+}
+
 // has — is the bin parsed and live? Does not touch the LRU order.
 func (l *neFidxSrtmBlkLRU) has(k string) bool {
 	l.mu.Lock()
 	e := l.m[k]
 	l.mu.Unlock()
-	return e != nil && time.Since(e.at) <= l.ttl
+	return e != nil && time.Since(e.at) <= l.ttl && !l.staleGen(k, e.v)
 }
 
 func (l *neFidxSrtmBlkLRU) put(k string, v *neFidxSrtm) {
@@ -1610,12 +1635,12 @@ func neFidxSrtmBlockFetch(i, j int) bool {
 			return false
 		}
 		neFidxSrtmBlkFetches.Add(1)
-		ep := resp.Header.Get("X-Cells-Epoch")
+		ep, gen := resp.Header.Get("X-Cells-Epoch"), resp.Header.Get("X-Cells-Gen")
 		empty := func() bool {
 			neFidxSrtmEpochStore(ep)
 			for a := 0; a < 4; a++ {
 				for b := 0; b < 4; b++ {
-					neFidxSrtmBlk.put(fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+b), &neFidxSrtm{epoch: ep, cols: map[string][]byte{}})
+					neFidxSrtmBlk.put(fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+b), &neFidxSrtm{epoch: ep, gen: gen, cols: map[string][]byte{}})
 				}
 			}
 			return true
@@ -1657,18 +1682,19 @@ func neFidxSrtmBlockFetch(i, j int) bool {
 		seen := map[string]bool{}
 		for k, v := range bins {
 			seen[k] = true
+			v.gen = gen
 			neFidxSrtmBlk.put(k, v)
 		}
 		// bins the header does not list hold no cells
 		for a := 0; a < 4; a++ {
 			for b := 0; b < 4; b++ {
 				if k := fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+b); !seen[k] {
-					neFidxSrtmBlk.put(k, &neFidxSrtm{epoch: ep, cols: map[string][]byte{}})
+					neFidxSrtmBlk.put(k, &neFidxSrtm{epoch: ep, gen: gen, cols: map[string][]byte{}})
 				}
 			}
 		}
 		neFidxSrtmEpochStore(ep)
-		log.Printf("fidx srtm block %d/%d: v%d %d bins %d KB %.0f ms", bi, bj, ver, len(bins), len(body)>>10, float64(time.Since(t0).Milliseconds()))
+		log.Printf("fidx srtm block %d/%d: v%d %d bins %d KB %.0f ms gen=%s", bi, bj, ver, len(bins), len(body)>>10, float64(time.Since(t0).Milliseconds()), gen)
 		return true
 	}
 	return false
@@ -2143,8 +2169,25 @@ func neFidxQueue(i, j int, stamp int64) {
 func neFidxPoolWorker() {
 	for {
 		neFidxPoolMu.Lock()
-		for len(neFidxPoolQ) == 0 {
+		for len(neFidxPoolQ) == 0 && (len(neFidxRefreshQ) == 0 || neFidxRefreshBusy) {
 			neFidxPoolCond.Wait()
+		}
+		if len(neFidxPoolQ) == 0 {
+			// nothing live: one worker refreshes a bin of a block the peer rebuilt (ne_glyph_fidx_blocks.go)
+			rp, ok := neFidxRefreshPick()
+			neFidxPoolMu.Unlock()
+			if ok {
+				neRenderYield()
+				if _, _, err := neFidxGet(rp[0], rp[1]); err != nil {
+					log.Printf("fidx refresh %d/%d: %v", rp[0], rp[1], err)
+				}
+				neFidxBlocksRefDone.Add(1)
+				neFidxPoolMu.Lock()
+				neFidxRefreshBusy = false
+				neFidxPoolMu.Unlock()
+				neFidxPoolCond.Signal()
+			}
+			continue
 		}
 		var pick [2]int
 		var best int64 = -1
@@ -2194,9 +2237,9 @@ func neFidxPoolWorker() {
 
 func neFidxPoolStats() map[string]interface{} {
 	neFidxPoolMu.Lock()
+	defer neFidxPoolMu.Unlock()
 	q, b := len(neFidxPoolQ), neFidxPoolBusy
-	neFidxPoolMu.Unlock()
-	return map[string]interface{}{"workers": neFidxPoolN, "queued": q, "busy": b, "done": neFidxPoolDone.Load(), "stale_skipped": neFidxPoolSkip.Load()}
+	return map[string]interface{}{"workers": neFidxPoolN, "queued": q, "busy": b, "done": neFidxPoolDone.Load(), "stale_skipped": neFidxPoolSkip.Load(), "refresh_pending": len(neFidxRefreshQ)}
 }
 
 // neFidxPeek — the bin from the LRU or disk, never built here: a miss queues
