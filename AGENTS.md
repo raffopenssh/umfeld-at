@@ -145,6 +145,7 @@ Cross-cutting
 | INVEKOS subsidy layer (subsidy-peer H3 + IVP1 outline contracts, `v=sub|subc` tiles, `/ne/glyph/sub`) | `docs/invekos-subsidy-layer.md` | `ne_glyph_sub.go`, `ne_glyph_subpoly.go` |
 | NE public read API (H3-keyed, tokenless, `.nex`, word ban, K bucketing) | `docs/ne-public-api.md` | `ne_store.go`, `ne_h3.go`, `api_ne_public.go`, `api_ne_vocab.go`, `api_docs_public_ne.go` |
 | Tiers, tokens, peers, `/api/v1/context`, public docs | `docs/api-tiers.md` | `api_tiers.go`, `peers.go`, `api_context.go`, `api_docs_public.go` |
+| **Public fair-use gate** (per client address: requests, wire bytes, handler time, in-flight; global daily valve; `PUBLIC_GATE_*` env; 429 + Retry-After) | `docs/api-tiers.md` §Public fair-use gate | `public_gate.go`, `egress_stats.go` |
 | Impressum / Datenschutz / Lizenzen (`/impressum`, `/datenschutz`, `/lizenzen`) — keep in step with what the service really logs/stores | header comment of the file | `api_legal_pages.go`, `LICENSE` |
 | KG universe `/api/v1/kgs` | `docs/api-tiers.md` (last section) | `kg_universe.go`, `kg_universe_bbox.go`, `kg_bbox_index.go` |
 | Licensing, attribution, client caching | `docs/payload-caching-contract.md` | `api_license.go`, `api_cache_policy.go`, `clients/` |

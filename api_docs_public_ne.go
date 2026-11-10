@@ -57,7 +57,8 @@ GET /api/v1/cells?bbox= | ?lon=&lat=&k= | /api/v1/cells/{h3} | /api/v1/kg/{code}
 /api/v1/docs/llm.txt#cells there). We serve the DECLARED layer (lu = BEV survey, bev = bevdirect
 baseline) and the obs rows srtm posts to us opaque. Join = cell_id, client-side. Contract:
 /api/v1/docs/ne.md · attribution "© BEV (CC BY 4.0), bearbeitet · observed
-layer © {OBS_NAME} (CC BY 4.0)". Rate: 20 r/s per client (burst 60) → 429.
+layer © {OBS_NAME} (CC BY 4.0)". Rate: 20 r/s per client (burst 60) → 429
+(+ the fair-use budgets of llm.txt §Meta).
 
 GET /api/v1/ne                              frozen{} pin, endpoints, counts, dictionary ids
 GET /api/v1/ne/manifest[?fields=digests]    per-KG status/digests (ETag; digests ≈ 60 KB gz)

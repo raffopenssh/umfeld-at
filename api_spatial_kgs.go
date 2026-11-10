@@ -37,7 +37,7 @@ func spatialKGsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		// POST: parse GeoJSON polygon from body
 		var body map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<20)).Decode(&body); err != nil {
 			apiError(w, "invalid JSON body: "+err.Error(), 400)
 			return
 		}

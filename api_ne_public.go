@@ -371,7 +371,7 @@ var (
 
 // neClientIP — the hop the exe.dev proxy saw: the LAST X-Forwarded-For entry
 // (the proxy appends the real client; earlier entries are client-supplied and
-// would let a caller pick its own bucket). Without XFF the TCP peer counts.
+// would let a caller pick its own bucket), IPv6 as its /64 (neClientNet). Without XFF the TCP peer counts.
 // Returns "" (= exempt) for loopback without XFF: operator curl, tests, hey —
 // proxied traffic always carries XFF (exe.dev docs/proxy.md), so no public
 // client can reach this carve-out.
@@ -380,7 +380,7 @@ func neClientIP(r *http.Request) string {
 		if i := strings.LastIndexByte(xf, ','); i >= 0 {
 			xf = xf[i+1:]
 		}
-		return strings.TrimSpace(xf)
+		return neClientNet(strings.TrimSpace(xf))
 	}
 	h, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -389,7 +389,24 @@ func neClientIP(r *http.Request) string {
 	if ip := net.ParseIP(h); ip != nil && ip.IsLoopback() {
 		return ""
 	}
-	return h
+	return neClientNet(h)
+}
+
+// neClientNet — the bucket key of an address: IPv4 as is, IPv6 collapsed to
+// its /64 (one subscriber owns the whole /64 and could otherwise rotate
+// through 2^64 buckets). Anything unparseable keys as itself, capped.
+func neClientNet(s string) string {
+	ip := net.ParseIP(s)
+	if ip == nil {
+		if len(s) > 64 {
+			s = s[:64]
+		}
+		return s
+	}
+	if v4 := ip.To4(); v4 != nil {
+		return v4.String()
+	}
+	return ip.Mask(net.CIDRMask(64, 128)).String() + "/64"
 }
 
 // neRateAllow — O(1), no queue; sweeps idle buckets when the map grows.
@@ -404,6 +421,18 @@ const (
 	neGlyphRatePerSec = 40.0
 	neGlyphRateBurst  = 400.0
 )
+
+// neRateSweep — drop request buckets idle for over a minute (they are full
+// again by then); called every few minutes from the public gate.
+func neRateSweep(now time.Time) {
+	neRateMu.Lock()
+	defer neRateMu.Unlock()
+	for k, v := range neRateBuckets {
+		if now.Sub(v.last) > time.Minute {
+			delete(neRateBuckets, k)
+		}
+	}
+}
 
 func neRateAllowN(ip string, now time.Time, perSec, burst float64) (bool, int) {
 	neRateMu.Lock()

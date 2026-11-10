@@ -172,12 +172,14 @@ func main() {
 	// Cache-Control → in-flight tracking → mux.
 	// Outermost: API tiers (api_tiers.go) — public allow-list on /api/v1,
 	// token-gated private prefix for the ops surface. Strips the prefix before
-	// the cache/egress layers so they key on the handler's path.
-	handler := tierMiddleware(egressMiddleware(gzipMiddleware(cacheMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// the cache/egress layers so they key on the handler's path. Inside it, the
+	// fair-use gate for anonymous clients (public_gate.go): requests, wire bytes
+	// and handler time per client address.
+	handler := tierMiddleware(egressMiddleware(publicGateMiddleware(gzipMiddleware(cacheMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		done := TrackRequest(r.Method, r.URL.String())
 		defer done()
 		mux.ServeHTTP(w, r)
-	})))))
+	}))))))
 	neWarmHandler = mux // the warm replay drives the routes directly: no gzip, no inflight row (ne_glyph_warm.go)
 	log.Printf("🔐 API tiers: public_only=%v private_tier=%v", publicOnly(), privateTierOpen())
 

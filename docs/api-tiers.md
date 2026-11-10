@@ -78,6 +78,28 @@ every contributor request is in the journal: `journalctl -u umfeld-at | grep
 (unbucketed K rows) — a data-exposure trade-off for trusted peers, not a
 machine risk.
 
+## Public fair-use gate (`public_gate.go`)
+
+Every anonymous request (public tier, any path except the legal pages and `robots.txt`) passes one
+per-client gate; token tiers and loopback are exempt. Client = last `X-Forwarded-For` hop
+(`neClientIP`), IPv6 collapsed to its /64. Not described with figures in public docs.
+
+| Budget | Burst | Refill | Env |
+|---|---|---|---|
+| requests | 600 | 60/s | `PUBLIC_GATE_BURST`, `PUBLIC_GATE_RPS` |
+| wire bytes (after gzip) | 2 GiB | 256 MiB/h | `PUBLIC_GATE_MB`, `PUBLIC_GATE_MB_PER_H` |
+| compute: wall time − socket-write time, × min(1, NumCPU / client's in-flight) = CPU-second upper bound (summed wall time is useless: a cold large view queues to 6 000 s/min) | 600 s | 1 s/s | `PUBLIC_GATE_CPU_S`, `PUBLIC_GATE_CPU_PER_S` |
+| in flight | 150 | — | — |
+| all anonymous clients, UTC day | 60 GiB | — | `PUBLIC_GATE_GLOBAL_GB` |
+
+Bytes and time are charged after the answer (the bucket goes negative, the next request waits), so
+one client can take at most ~2 GiB + 6 GiB/day. Past the global figure only clients that used
+< 1/8 of their byte burst are served. Refusal: 429 + `Retry-After` (≤ 3600). `PUBLIC_GATE_ENFORCE=0`
+= count only. Watch: `public_gate` on `$P/api/v1/debug/inflight` (`limited` per reason, `top`
+talkers of the day, `anon_mb_today`); per-endpoint bytes: `$P/api/v1/debug/egress`. The NE request
+buckets (`neReadGate` 20/s, glyph tiles 40/s burst 400), `exportGate` and the MVT gate still apply
+inside it.
+
 ## Config (systemd `EnvironmentFile=/etc/umfeld-at.env`, mode 0600)
 
 ```

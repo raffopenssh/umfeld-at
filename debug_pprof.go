@@ -91,6 +91,7 @@ func RegisterDebugAPI(mux *http.ServeMux) {
 			"ne_stats":         NEStatsUnitStats(),   // api_ne_stats_unit.go: envelope + peer memo (LRU 16 MB, 10 min)
 			"ne_mvt":           NEMVTStats(),         // ne_mvt.go: cell tiles LRU, ids LRU, build queue, archive jobs
 			"ne_mvt_gate":      NEMVTGateStats(),     // ne_mvt_gate.go: per-name tiles/km² budgets
+			"public_gate":      PublicGateStats(),    // public_gate.go: per-client requests/bytes/compute budgets, top talkers
 			"export_gate":      ExportGateStats(),    // export_gate.go: identities, budgets, top callers
 			"ne_glyph_dif":     NEGlyphDifStats(),    // ne_glyph_dif.go: lidar epoch per KG from the lidar peer (one table, 24 h)
 		}

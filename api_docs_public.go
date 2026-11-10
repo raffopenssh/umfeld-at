@@ -298,6 +298,11 @@ POST /api/v1/feedback        {"title": "...", "agent": "...", "category": "bug|f
                              "severity": "critical|high|normal|low", "description": "...", "endpoint": "...", "context": {}}
 GET /api/v1/feedback?status=open
 
+Fair use: every client address has a budget of requests, transferred bytes and server time, sized
+so that a person exploring the map (large shared views included) never meets it. A client that
+does gets 429 with Retry-After — wait that long, send Accept-Encoding: gzip, revalidate with
+ETag/If-None-Match (a 304 costs nothing) and cache what you fetched (/api/v1/cache/policy).
+
 ## Recipe: a map client with its own cadastre ({MAP_NAME} pattern)
 
   1. Draw parcels/footprints/land use from the BEV VTC via vtcseamless / bevdirect-serve

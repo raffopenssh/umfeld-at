@@ -32,6 +32,7 @@ import (
 // middleware can print the wire byte count the outer writer measured.
 type egressCounter struct {
 	wire   int64 // bytes written to the socket (post-gzip)
+	wnanos int64 // time spent blocked in socket writes (a slow reader, not our work)
 	body   int64 // bytes the handler wrote (pre-gzip)
 	gzip   bool  // client advertised gzip
 	status int
@@ -51,7 +52,9 @@ type wireCountingWriter struct {
 }
 
 func (w *wireCountingWriter) Write(b []byte) (int, error) {
+	t0 := time.Now()
 	n, err := w.ResponseWriter.Write(b)
+	atomic.AddInt64(&w.c.wnanos, int64(time.Since(t0)))
 	atomic.AddInt64(&w.c.wire, int64(n))
 	return n, err
 }

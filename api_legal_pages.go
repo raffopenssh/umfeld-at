@@ -94,8 +94,9 @@ Antwortstatus, Antwortdauer, Antwortgröße und der Browser-Familie (z.&nbsp;B. 
 (<code>/api/v1/addresses/search?q=…</code>): sie stehen ohne IP im Protokoll und werden sonst nirgends gespeichert. Die Protokolle werden im Systemjournal des Servers gehalten und automatisch verdrängt
 (in der Regel nach wenigen Tagen). Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO (Betrieb, Fehleranalyse, Missbrauchsabwehr).</p>
 <h3>2.2 Ratenbegrenzung</h3>
-<p>Zur Missbrauchsabwehr wird die IP-Adresse des Aufrufers kurzzeitig <em>nur im Arbeitsspeicher</em> einem Zählwerk zugeordnet und nach
-wenigen Minuten Inaktivität verworfen. Sie wird nicht gespeichert, nicht protokolliert und nicht weitergegeben.
+<p>Zur Missbrauchsabwehr und zur fairen Verteilung der Bandbreite wird die IP-Adresse des Aufrufers (bei IPv6 nur das /64-Präfix) kurzzeitig
+<em>nur im Arbeitsspeicher</em> einem Zählwerk zugeordnet (Anzahl der Anfragen, übertragene Datenmenge, Rechenzeit) und nach
+wenigen Minuten Inaktivität verworfen – bei ausgeschöpftem Kontingent erst, sobald es wieder aufgefüllt ist (höchstens einige Stunden). Sie wird nicht gespeichert, nicht protokolliert und nicht weitergegeben.
 Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO.</p>
 <h3>2.3 Feedback</h3>
 <p>Über <code>/api/v1/feedback</code> können Nutzer:innen und automatisierte Agenten freiwillig Rückmeldungen senden (Kategorie, Titel, Text,
