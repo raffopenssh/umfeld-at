@@ -9,7 +9,7 @@
 // EXPORT_KEYS (`key:name:rps:burst:daily,…`, env, 0600) defines issued keys
 // with their own budget; anything else is anonymous = the client IP with
 // the anonymous budget. Budgets: token bucket (rps, burst) + a UTC-day
-// counter. Answers carry the IETF RateLimit headers; 429 + Retry-After.
+// counter, enforced unless EXPORT_GATE_ENFORCE=0 (loopback is only counted). Answers carry the IETF RateLimit headers; 429 + Retry-After.
 //
 // Monitoring: per identity {requests, limited, bytes, last, first} (bounded
 // map, ≤ 2 000 identities, idle entries swept) → the debug inflight page
@@ -57,7 +57,7 @@ var (
 	exportAnon      = &exportTier{name: "anon", rps: 2, burst: 10, daily: 2000}
 	exportNamedTok  = exportTier{name: "token", rps: 10, burst: 60, daily: 200000}
 	exportIdentMax  = 2000
-	exportEnforce   = false // EXPORT_GATE_ENFORCE=1: limits bite; default = count + advertise only
+	exportEnforce   = true // EXPORT_GATE_ENFORCE=0: count + advertise only
 	exportBySrc     = map[string]int64{}
 )
 
@@ -65,7 +65,7 @@ var (
 func exportLoadTiers() {
 	exportTiersOnce.Do(func() {
 		v := strings.ToLower(strings.TrimSpace(os.Getenv("EXPORT_GATE_ENFORCE")))
-		exportEnforce = v == "1" || v == "true" || v == "yes"
+		exportEnforce = !(v == "0" || v == "false" || v == "no") // on unless switched off
 		for _, e := range strings.Split(os.Getenv("EXPORT_KEYS"), ",") {
 			p := strings.Split(strings.TrimSpace(e), ":")
 			if len(p) < 2 || p[0] == "" {
@@ -172,7 +172,7 @@ func exportGate(w http.ResponseWriter, r *http.Request) (string, bool) {
 	w.Header().Set("RateLimit-Policy", strconv.Itoa(int(tier.burst))+";w=1, "+strconv.FormatInt(tier.daily, 10)+";w=86400")
 	if e.tokens < 1 || remainDay <= 0 {
 		e.limited++
-		if !exportEnforce { // counted, advertised, not enforced (yet)
+		if !exportEnforce || id == "ip:local" { // counted and advertised only: gate switched off, or the operator on loopback
 			e.tokens = math.Max(e.tokens, 0)
 			e.dayN++
 			w.Header().Set("RateLimit-Limit", strconv.Itoa(int(tier.burst)))

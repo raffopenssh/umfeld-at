@@ -97,7 +97,12 @@ func feedbackHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		feedbackList(w, r)
 	case http.MethodPatch:
-		// PATCH /api/v1/feedback/{id}
+		// PATCH /api/v1/feedback/{id} — triage (status, resolution) is the
+		// operator's: private tier only, the usual 404 elsewhere.
+		if !isPrivateTier(r) {
+			tierNotFound(w)
+			return
+		}
 		idStr := r.PathValue("id")
 		if idStr == "" {
 			// Fallback: extract from path
@@ -324,6 +329,15 @@ func feedbackList(w http.ResponseWriter, r *http.Request) {
 		wheres = append(wheres, "agent = ?")
 		args = append(args, agent)
 	}
+	// ?trace records (agent glyph-trace: layout samples, debug lines, the
+	// reader's User-Agent and view hash) are triage material for the operator,
+	// never part of the public list or its counts.
+	public := !isPrivateTier(r)
+	notTrace := ""
+	if public {
+		wheres = append(wheres, "agent <> 'glyph-trace'")
+		notTrace = " AND agent <> 'glyph-trace'"
+	}
 
 	query := "SELECT id, created_at, agent, category, severity, status, title, description, endpoint, context, resolution FROM feedback"
 	if len(wheres) > 0 {
@@ -334,7 +348,7 @@ func feedbackList(w http.ResponseWriter, r *http.Request) {
 	limit := 100
 	if l := q.Get("limit"); l != "" {
 		fmt.Sscanf(l, "%d", &limit)
-		if limit > 1000 {
+		if limit > 1000 || limit < 1 {
 			limit = 1000
 		}
 	}
@@ -380,8 +394,8 @@ func feedbackList(w http.ResponseWriter, r *http.Request) {
 
 	// Summary counts
 	var openCount, totalCount int
-	feedbackDB.QueryRow("SELECT COUNT(*) FROM feedback").Scan(&totalCount)
-	feedbackDB.QueryRow("SELECT COUNT(*) FROM feedback WHERE status = 'open'").Scan(&openCount)
+	feedbackDB.QueryRow("SELECT COUNT(*) FROM feedback WHERE 1=1" + notTrace).Scan(&totalCount)
+	feedbackDB.QueryRow("SELECT COUNT(*) FROM feedback WHERE status = 'open'" + notTrace).Scan(&openCount)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

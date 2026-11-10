@@ -364,10 +364,11 @@ deploy — the page is cached) to the URL and keep the tab in front 45 s. Every 
 | visible imgs | relief imgs | all imgs | vb w/h | hi.left | relief pending | fs | innerWxH | vv height | dpr
 | visibility | card head`, keeps the rows that changed and POSTs them with `dbg` and the error list to
 `/api/v1/feedback` (agent `glyph-trace`). Trace records are triage material, not feedback: `feedbackPurgeLoop` (api_feedback.go) deletes
-them 24 h after arrival (at start, then hourly; Datenschutz 2.3). Read the newest record:
+them 24 h after arrival (at start, then hourly; Datenschutz 2.3). They are served on the private tier only
+(the public list and its counts skip them). Read the newest record (`$P` = private prefix, `$T` = a private token):
 
 ```
-curl -s 'localhost:8000/api/v1/feedback?agent=glyph-trace' | python3 -c "import sys,json;fb=sorted(json.load(sys.stdin)['feedback'],key=lambda f:f['created_at']);c=fb[-1]['context'];print(fb[-1]['created_at'],c['ua']);print('\n'.join(c['rows']));print('\n'.join(c['dbg']));print(c['err'])"
+curl -s -H "Authorization: Bearer $T" "localhost:8000$P/api/v1/feedback?agent=glyph-trace" | python3 -c "import sys,json;fb=sorted(json.load(sys.stdin)['feedback'],key=lambda f:f['created_at']);c=fb[-1]['context'];print(fb[-1]['created_at'],c['ua']);print('\n'.join(c['rows']));print('\n'.join(c['dbg']));print(c['err'])"
 ```
 
 The trace also carries `stall Nms` rows (the 120 ms sampler fired late = main thread busy), `longtask Nms`

@@ -1260,6 +1260,17 @@ func handleNEMVTJSON(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
+	// a caller's key travels into the tile URL (like mvt.qgs), so a TileJSON
+	// client's tiles count on the key, not on its address; such an answer is
+	// the caller's own — never in a shared cache.
+	if k := strings.TrimSpace(r.URL.Query().Get("key")); k != "" && len(k) <= 128 {
+		sep := "?"
+		if strings.Contains(tileURL, "?") {
+			sep = "&"
+		}
+		tileURL += sep + "key=" + url.QueryEscape(k)
+		w.Header().Set("Cache-Control", "private, no-store")
+	}
 	writeJSON(w, 200, map[string]interface{}{
 		"tilejson": "3.0.0", "name": name, "scheme": "xyz", "format": "pbf",
 		"description": "H3 cells of the declared/observed land-use product with change, subsidy and LiDAR statistics; res 7 at z 9 to res 12 at z 14+ (aggregates below res 12); ?f=<filter> keeps only matching cells",

@@ -103,7 +103,7 @@ Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO.</p>
 optional Name des sendenden Programms). Diese Einträge werden dauerhaft gespeichert und sind <strong>öffentlich abrufbar</strong>.
 Bitte tragen Sie dort keine personenbezogenen Daten ein. Rechtsgrundlage: Art. 6 Abs. 1 lit. a DSGVO (Einwilligung durch Absenden);
 Löschung auf Anfrage per E-Mail. Ausnahme: technische Ladeprotokolle der Karte, die nur mit dem Zusatz <code>?trace</code> in der
-Adresse entstehen (Betriebs-Diagnose, ohne IP und ohne Personendaten), werden nach 24 Stunden automatisch gelöscht. Ebenso
+Adresse entstehen (Betriebs-Diagnose, ohne IP; mit Browserkennung), sind nicht öffentlich abrufbar und werden nach 24 Stunden automatisch gelöscht. Ebenso
 technisch: das Antippen des Link-Symbols in der Karte („link copied“) meldet die geteilte Ansicht und ihre Kachelliste, damit der
 Link nach einem Neustart schnell bleibt – ohne IP und ohne Personendaten, Details unter Punkt 3.</p>
 <h3>2.4 Peer-Beiträge</h3>

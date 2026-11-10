@@ -135,9 +135,9 @@ func TestNEStatsSortedKeys(t *testing.T) {
 
 func TestExportGateCountsOnly(t *testing.T) {
 	exportLoadTiers()
-	if exportEnforce {
-		t.Skip("enforcement on in this environment")
-	}
+	was := exportEnforce
+	exportEnforce = false
+	defer func() { exportEnforce = was }()
 	for i := 0; i < 15; i++ { // > anon burst of 10 — still admitted, counted as limited
 		rr := httptest.NewRecorder()
 		r := httptest.NewRequest("GET", "/api/v1/ne/stats/unit?kg=63330&src=test", nil)
