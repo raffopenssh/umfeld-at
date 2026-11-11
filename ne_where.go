@@ -48,6 +48,7 @@ type neWhereView struct {
 	FHeld   bool              `json:"f_held,omitempty"`
 	Unit    map[string]string `json:"unit,omitempty"`
 	pt      *[2]float64
+	tree    *[2]float64 // ;tree=lon,lat — the picked tree
 	at      *[3]float64
 	z       float64
 	h3      string
@@ -132,6 +133,14 @@ func neWhereParseShare(raw string) neWhereView {
 				}
 				v.pt = &[2]float64{a[0], a[1]}
 				v.unit("pt", val)
+			}
+		case k == "tree":
+			if a, ok := nums(2); ok {
+				if a[0] > 40 && a[1] < 20 {
+					a[0], a[1] = a[1], a[0]
+				}
+				v.tree = &[2]float64{a[0], a[1]}
+				v.unit("tree", val)
 			}
 		case k == "at":
 			if a, ok := nums(3); ok {
@@ -484,6 +493,8 @@ func handleNEWhere(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		lon, lat, src = a, b, "lon=&lat="
+	case hasShare && sv.tree != nil:
+		lon, lat, src = sv.tree[0], sv.tree[1], "share tree="
 	case hasShare && sv.pt != nil:
 		lon, lat, src = sv.pt[0], sv.pt[1], "share pt="
 	case hasShare && sv.at != nil:

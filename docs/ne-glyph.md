@@ -93,7 +93,7 @@ Overlays combine freely; **z-order** bottom → top: profile fill → change →
 block per overlay in z-order, every head prefixed `in view ·` so it never reads like the picked unit's own `change`/`declared` rows above: `change` (Δ bar, confirmed/candidate, sighting period) · `diff` (`difBlock`: kinds in view, `n of m cells compared`, the *corroborated only / all cells* toggle, mixed-epoch KGs) · `subsidy`
 (claims; "vs the year before" when change is on) · `roads` line (`rdLine`: km in view by rank, source, weight) · `relief` note · `trees` (count, tallest, band bar).
 **Card source order** (`srcs`): change first when on, then the profile's source, then the rest.
-**Hash grammar**: `;v=obs` profile · `;change ;diff[=raw] ;subsidy ;trees ;relief ;ortho[=op] ;roads[=op]` overlays · `;t=2|2..3|2@d1..d2|@d1..d2` time window (implies change; `at=x,y,z` stays the viewport); legacy `;v=chg` reads
+**Hash grammar**: `;tree=lon,lat` the picked tree (6 decimals; implies `;trees;full`, without `at=`/`z=` the view goes to it at 900×; `apWant` pins the apex within 3 m once its tile lands, with the jump-in pulse; a whole tile without one → hint *that tree is not on the map any more* and the token goes; never written for an unsent draft; `/ne/where?share=` reads it as the point) · `;v=obs` profile · `;change ;diff[=raw] ;subsidy ;trees ;relief ;ortho[=op] ;roads[=op]` overlays · `;t=2|2..3|2@d1..d2|@d1..d2` time window (implies change; `at=x,y,z` stays the viewport); legacy `;v=chg` reads
 as declared + change, and `;trees` no longer implies `;v=obs`. **Keys**: `v` flips the profile, `c d s t r o w`
 flip the overlays. **Busy**: the profile word trails dots while its tiles load; an overlay toggle pulses.
 **Soak**: `m.matrix(kg)` walks all 2 × 2⁴ combinations (+ diff and photo each alone / with change / trees / relief) by share link at LOD 1 (and the change/subsidy
@@ -231,7 +231,7 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   The × must always be visible feedback: floating → the card slides
   away; docked → `hide()` folds whatever is on the sheet to the one-line placeholder `PH` with the `setHTML`
   height animation, even when the caller (`hiUnpin`, `apUnpin`) nulled `picked` before `hide()`.
-- **Share links**: `curHash()` writes `kg= cell= h3= q= v= change diff[=raw] full nofull trees relief ortho[=op] roads[=op] subsidy screen info
+- **Share links**: `curHash()` writes `kg= cell= h3= q= tree= v= change diff[=raw] full nofull trees relief ortho[=op] roads[=op] subsidy screen info
   at= open min below card= export`; `applyHash()` parses the same (regex per token, unknown token → ignore
   all) and applies in order `autoSet → setView → setTree → setRelief → setOrthoOp/setOrtho → setRoadsOp/setRoads → setSub → fs → open → dock`.
   **Auto full res on a link** (`hiLand` in `applyHash`): a bare `#kg=`/`#adm=`/`#pt=` switches once the fly

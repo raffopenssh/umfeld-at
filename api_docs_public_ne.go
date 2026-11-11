@@ -454,6 +454,8 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
       ;full               full resolution (res-12 tiles)      ;nofull  no automatic full res at the deepest zoom
       ;trees              every tree as a ring of its crown (srtm apices; any profile; drawn from the near
                           tiles, ≥110×)
+      ;tree=lon,lat       one tree, picked: its crown ring is highlighted and its card opens (the apex within
+                          3 m; implies ;trees;full; without ;at=/;z= the view goes to it). Written when a tree is tapped.
       ;relief             hillshade from the 25 m terrain model blended over full res (any profile; full weight
                           at the coarse tiles, gone by 300×)
       ;subsidy            INVEKOS subsidy claims (any zoom, any profile; the vs-previous-year variant with ;change)
