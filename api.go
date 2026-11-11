@@ -67,6 +67,9 @@ func RegisterAPIv1(mux *http.ServeMux) {
 	v1("/api/v1/search/address_osm", handleV1SearchAddressOSM)
 	v1("/api/v1/addresses/search", handleV1AddressesSearch)
 
+	// Tree reports relayed to the observed-layer peer (api_tree_report.go)
+	v1("/api/v1/trees/report", handleV1TreeReport)
+
 	// Feedback
 	v1("/api/v1/feedback", handleV1Feedback)
 	v1("/api/v1/feedback/{id}", handleV1Feedback)

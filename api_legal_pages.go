@@ -132,10 +132,15 @@ kann der Server geteilte Ansichten nach einem Neustart vorab berechnen, sodass d
 gespeichert; das Öffnen einer nicht geteilten Ansicht hinterlässt nichts. Gespeichert werden nur Ansicht, Kachelliste, Geräteklasse
 („Desktop“/„Touch“), Anzahl der Kopien und Öffnungen und der Tag der letzten – keine IP-Adresse, kein Browser, keine Bildschirmgröße,
 keine Uhrzeit; Einträge ohne Kopie oder Öffnung seit 30 Tagen werden verworfen. Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO (Betrieb).</p>
-<p>Wenn Sie in der Karte einen Baum melden (Schaltfläche in der Baumkarte), erzeugt der Browser einmalig eine zufällige Kennung
-(<code>localStorage</code>-Schlüssel <code>neg-rep</code>) und sendet sie als <code>reporter</code> mit der Meldung an {OBS_NAME}
-(siehe 4), damit dort Meldungen derselben Quelle zusammengefasst werden können. Die Kennung enthält keine Geräte- oder Personendaten,
-wird ausschließlich beim Melden übertragen und kann wie jeder <code>localStorage</code>-Eintrag gelöscht werden.</p>
+<p>Wenn Sie in der Karte einen Baum melden, benennen, vermessen oder einen fehlenden Baum ergänzen (Baumkarte; langes Drücken auf die
+Karte), erzeugt der Browser einmalig eine zufällige Kennung (<code>localStorage</code>-Schlüssel <code>neg-rep</code>) und sendet sie
+als <code>reporter</code> mit der Meldung. Die Meldung (Koordinaten des Baums, Art, Höhe, Durchmesser, Messzeitpunkt, optional eine Notiz)
+geht über diesen Server (<code>/api/v1/trees/report</code>), der sie unverändert und <strong>ohne Ihre IP-Adresse</strong> an {OBS_NAME}
+weiterreicht (siehe 4) und selbst nichts davon speichert; dort wird sie dauerhaft gespeichert und ist <strong>öffentlich abrufbar</strong>,
+als Beitrag dieses Dienstes gekennzeichnet. Die Kennung dient nur dazu, Meldungen derselben Quelle zusammenzufassen und eigene
+Meldungen zurückziehen zu können; sie enthält keine Geräte- oder Personendaten. Welche Bäume Sie gemeldet oder ergänzt haben, die
+zuletzt gewählten Arten und die Messmethode merkt sich nur Ihr Browser (<code>neg-tr</code>, <code>neg-sp</code>, <code>neg-tm</code>,
+<code>neg-trh</code>); alles lässt sich wie jeder <code>localStorage</code>-Eintrag löschen.</p>
 <h2>4. Drittanbieter</h2>
 <p>Die Seiten laden <strong>keine Ressourcen von Drittanbietern</strong>: keine externen Schriften (nur die Systemschriften Ihres Geräts),
 keine externen Stylesheets, Skripte oder Bilder; Kartenkacheln Dritter nur auf Ihre Wahl (Luftbild, unten). Die Flächennutzungs- und Förderdaten der Karte liefert ausschließlich dieser Server.</p>

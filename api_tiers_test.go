@@ -15,7 +15,7 @@ var publicAllowListGolden = []string{
 	"/", "/llm.txt", "/robots.txt", "/sitemap.xml", "/og.jpg",
 	"/impressum", "/imprint", "/datenschutz", "/privacy", "/lizenzen", "/licenses", "/license",
 	"/api/v1/docs", "/api/v1/docs/llm.txt", "/api/v1/docs/cache-client.py", "/api/v1/docs/cache-client.js",
-	"/api/v1/license", "/api/v1/cache/policy", "/api/v1/feedback", "/api/v1/feedback/12",
+	"/api/v1/license", "/api/v1/cache/policy", "/api/v1/feedback", "/api/v1/feedback/12", "/api/v1/trees/report",
 	"/api/v1/context", "/api/v1/lookup", "/api/v1/kgs", "/api/v1/kgs/bbox_changes",
 	"/api/v1/search/municipalities", "/api/v1/search/gadm", "/api/v1/search/protected_area", "/api/v1/search/address_osm", "/api/v1/addresses/search",
 	"/api/v1/osm/point", "/api/v1/osm/geometry",

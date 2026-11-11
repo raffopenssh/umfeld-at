@@ -12,6 +12,7 @@
 //	UMFELD_PEER_OBS_NAME     observed-layer peer (LiDAR / satellite per cell)
 //	UMFELD_PEER_OBS_API      its base URL for server-side calls   (…/api/v1 appended)
 //	UMFELD_PEER_OBS_WEB      its base URL the browser calls (CORS)  (…/api/v1 appended)
+//	UMFELD_PEER_OBS_REPORTER_KEY  its reporter key for relayed tree reports (api_tree_report.go; never sent to a browser)
 //	UMFELD_PEER_SUB_NAME     subsidy-claims peer (INVEKOS per cell)
 //	UMFELD_PEER_SUB_API      its base URL (…/api/v1 appended)
 //	UMFELD_PEER_MAP_NAME     the map client that reports declared chunks (docs only)

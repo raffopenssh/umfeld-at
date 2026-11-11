@@ -1,0 +1,196 @@
+package main
+
+// ne_glyph_treerep.go — TREE REPORTS on the landing glyph (docs/ne-glyph.md §Tree reports).
+//
+// A reader names a tree's species (one tap on a chip), measures it (height, DBH: tap the value),
+// adds a tree the LiDAR inventory misses (hold the map — long press on a phone, hold or right-click
+// with a mouse), withdraws, reads the versions. The trees and every report live at the observed-layer
+// peer (tree contract 2026-11-11): reads go to it straight from the browser (CORS, cacheable), writes
+// go through our relay POST /api/v1/trees/report (api_tree_report.go) which adds the reporter key.
+//
+// A tree has no id here: it is a row of the apex tile's columns (ne_glyph.go hiApex). Reported state is
+// sparse beside the columns — e.u[i] = {taxon,n,v,h,dbh,tid,cid}; trees the inventory has no apex for are
+// appended rows with c.kd[i] = 1 added · 2 reported by id · 3 the reader's draft · 9 gone.
+
+// neGlyphTreeRepCSS — the report rows of the tree card, the hold ring.
+const neGlyphTreeRepCSS = `
+.glyph-tip .tr{margin-top:.15em}
+.glyph-tip .tr .rw{align-items:center;white-space:normal}
+.glyph-tip .tr .rw{align-items:baseline}.glyph-tip .tr .rw .vl{display:flex;flex-wrap:wrap;align-items:baseline;gap:.05em 0;margin-left:-.4em;overflow:visible;white-space:normal}.glyph-tip .tr .rw .vl>span:not(.ms),.glyph-tip .tr .rw .vl>input{margin-left:.4em}.glyph-tip .tr .rw .vl>input+span{margin-left:.2em;margin-right:.3em}
+.glyph-tip .tr button{appearance:none;-webkit-appearance:none;background:none;border:1px solid transparent;border-radius:3px;margin:0;padding:0 .4em;font:inherit;color:var(--mut);cursor:pointer;pointer-events:auto;line-height:1.5;white-space:nowrap;transition:color .15s,background .15s,border-color .15s}
+.glyph-tip .tr button:hover,.glyph-tip .tr button:focus-visible{color:var(--fg);border-color:var(--rule);outline:none}
+.glyph-tip .tr button.c{color:var(--fg)}
+.glyph-tip .tr .ft button.c{border-color:var(--rule)}
+.glyph-tip .tr button.v{color:var(--fg);text-decoration:underline dotted;text-decoration-color:var(--mut);text-underline-offset:.22em}
+.glyph-tip .tr button.v.e{color:var(--mut)}
+.glyph-tip .tr button[aria-pressed=true],.glyph-tip .tr button.go{color:var(--bg);background:var(--fg);border-color:var(--fg)}
+.glyph-tip .tr button:disabled{opacity:.5;cursor:default}
+.glyph-tip .tr input{appearance:none;-webkit-appearance:none;background:transparent;border:0;border-bottom:1px solid var(--rule);border-radius:0;padding:.05em 0;width:3.4em;font:inherit;color:var(--fg);outline:none;pointer-events:auto;text-align:right}
+.glyph-tip .tr input.q{width:9em;flex:1 1 9em;text-align:left}
+.glyph-tip .tr input:focus{border-bottom-color:var(--fg)}
+.glyph-tip .tr input::placeholder{color:var(--mut);opacity:.8}
+.glyph-tip .tr .stp{display:inline-flex;align-items:stretch;margin-left:.4em;margin-right:.5em;border:1px solid var(--rule);border-radius:999px;overflow:hidden}.glyph-tip .tr .stp button{border:0;border-radius:0;padding:0 .55em;color:var(--fg)}.glyph-tip .tr .stp button:hover,.glyph-tip .tr .stp button:focus-visible{background:var(--code)}.glyph-tip .tr .stp button:active{background:var(--rule)}.glyph-tip .tr .stp button.n{padding:0 .15em;min-width:3.6em;text-align:center}.glyph-tip .tr .stp button.e,.glyph-tip .tr .stp button.e b{color:var(--mut);font-weight:400}
+.glyph-tip.open .tr .rw{display:flex}.glyph-tip:not(.open) .tr .xo{display:none!important}.glyph-tip .tr .ft:empty,.glyph-tip:not(.open) .tr .ft:not(:has(>:not(.xo):not(.sp))){display:none}
+.glyph-tip .tr .tx{font-style:italic;color:var(--mut)}
+.glyph-tip .tr .ft{display:flex;flex-wrap:wrap;align-items:center;gap:.1em .3em;margin-top:.3em;font-size:var(--fz2);line-height:1.5;color:var(--mut);white-space:normal}
+.glyph-tip .tr .ft:empty{display:none}
+.glyph-tip .tr .ft button{padding-left:.3em;padding-right:.3em}
+.glyph-tip .tr .ft .sp{flex:1}
+.glyph-tip .tr .er{color:var(--gchg)}
+.glyph-tip .tr .ok{color:var(--fg)}
+.glyph-tip .tr .hv{margin-top:.3em;padding-top:.3em;border-top:1px solid var(--rule);font-size:var(--fz2);line-height:1.5;white-space:normal;max-height:9.5em;overflow:auto;pointer-events:auto}
+.glyph-tip .tr .hv div{display:flex;gap:.6em}.glyph-tip .tr .hv div>span:first-child{flex:0 0 auto;color:var(--mut);min-width:7.2em}
+@media(hover:none) and (pointer:coarse){.glyph-tip .tr button{min-height:2.2em;padding-left:.6em;padding-right:.6em}.glyph-tip .tr .stp button{min-width:2.6em}.glyph-tip .tr input{min-height:2em;font-size:16px}}
+.glyph-lp{position:absolute;z-index:6;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.28),inset 0 0 0 1px rgba(0,0,0,.18);pointer-events:none;opacity:0;transform:scale(.25);animation:trlp .36s .12s cubic-bezier(.2,.7,.3,1) forwards}
+.glyph-lp.done{animation:trlpd .32s ease-out forwards}
+@keyframes trlp{to{opacity:.9;transform:scale(1)}}
+@keyframes trlpd{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(.45)}}
+@media(prefers-reduced-motion:reduce){.glyph-lp{animation:none;opacity:.8;transform:none}.glyph-lp.done{animation:none;opacity:0}}
+`
+
+// neGlyphTreeRepJS — runs inside the glyph IIFE (spliced after the export block); the hooks in
+// ne_glyph.go are trIngest (hiApex), trDraw (apDraw), trCard (apCard), trUnpin (apUnpin), TRP (apSend).
+const neGlyphTreeRepJS = `
+/* ── tree reports (ne_glyph_treerep.go) ── */
+var TRP='/api/v1/trees/report',TR={dict:null,dictP:null,mine:{},rec:[],meth:{},sT:0,lp:null,lpAt:0,hint:0};
+try{TR.mine=JSON.parse(localStorage.getItem('neg-tr')||'{}')||{};TR.rec=JSON.parse(localStorage.getItem('neg-sp')||'[]')||[];TR.meth=JSON.parse(localStorage.getItem('neg-tm')||'{}')||{};TR.hint=+localStorage.getItem('neg-trh')||0}catch(e){}
+function trSave(){try{var k=Object.keys(TR.mine);if(k.length>800)k.slice(0,k.length-800).forEach(function(x){delete TR.mine[x]});localStorage.setItem('neg-tr',JSON.stringify(TR.mine));localStorage.setItem('neg-sp',JSON.stringify(TR.rec.slice(0,4)));localStorage.setItem('neg-tm',JSON.stringify(TR.meth))}catch(e){}}
+function trUUID(){if(window.crypto&&crypto.randomUUID)return crypto.randomUUID();var b=new Uint8Array(16);if(window.crypto&&crypto.getRandomValues)crypto.getRandomValues(b);else for(var i=0;i<16;i++)b[i]=Math.random()*256;b[6]=b[6]&15|64;b[8]=b[8]&63|128;var h='';for(var j=0;j<16;j++){h+=(b[j]+256).toString(16).slice(1);if(j===3||j===5||j===7||j===9)h+='-'}return h}
+function trNorm(s){s=String(s||'').toLowerCase().replace(/\u00df/g,'ss');return s.normalize?s.normalize('NFD').replace(/[\u0300-\u036f]/g,''):s}
+/* the species dictionary, the matching radii and the metadata vocabulary — read once from the peer (max-age 1 d), never hard-coded */
+function trDict(){if(TR.dictP)return TR.dictP;TR.dictP=fetch(SRTM+'/trees/taxa/dict',{credentials:'omit'}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(j){var by={},nx=[];(j.taxa||[]).forEach(function(t){by[t[0]]=t;nx.push([trNorm(t[1]),trNorm(t[2]),trNorm(t[0])])});TR.dict={taxa:j.taxa||[],by:by,nx:nx,lim:j.limits||{},meta:j.metadata||{},mes:j.measures||{}};if(pk&&pk.t==='tree')trRe(pk.a);return TR.dict}).catch(function(){TR.dictP=null;return null});return TR.dictP}
+function trName(tx){var d=TR.dict&&TR.dict.by[tx];return d?d[1]:tx}
+function trLL(lon,lat){return Math.round(lon*1e6)+','+Math.round(lat*1e6)}
+function trMine(a){var u=a.u||{};return!!(u.cid&&TR.mine[u.cid]||u.tid&&TR.mine[u.tid]||TR.mine[trLL(a.lon,a.lat)])}
+/* ── rows beside the columns ── */
+function trGrow(c,need){if(c.cap>=need&&c.kd)return;var cap=need+64,f=function(A,o){var n=new A(cap);n.set(o.length>cap?o.subarray(0,cap):o);return n};c.x=f(Float64Array,c.x);c.y=f(Float64Array,c.y);c.rm=f(Float32Array,c.rm);c.r=f(Float32Array,c.r);c.kd=f(Uint8Array,c.kd||new Uint8Array(0));c.cap=cap}
+function trSize(e,i){var c=e.c,h=c.h[i],A=Math.PI*Math.pow(Math.max(2,h*0.2),2);c.rm[i]=Math.sqrt(A/Math.PI);c.r[i]=c.rm[i]*e.my;var o=e.ob[i];if(o){o.height_m=h;o.r=c.r[i];o.rm=c.rm[i]}}
+function trPush(e,lon,lat,h,kind,u){var c=e.c,i=c.n;trGrow(c,i+1);c.lon[i]=lon;c.lat[i]=lat;c.h[i]=h>0?h:3;if(c.cr)c.cr[i]=null;if(c.sp)c.sp[i]='';if(c.vt)c.vt[i]='';if(c.kg)c.kg[i]='';c.x[i]=px(lon);c.y[i]=py(lat);c.kd[i]=kind;c.n=e.n=i+1;trSize(e,i);e.u[i]=u;if(e.ix)trIxPut(e,i);return i}
+function trGone(e,i){var c=e.c;if(hi.apx&&hi.apx.e===e&&hi.apx.a.i===i)apUnpin();if(c.kd[i]===9)return;c.kd[i]=9;c.x[i]=c.y[i]=1e12;delete e.u[i];apMarks(e);apSched()}
+function trIxPut(e,i){var u=e.u[i],c=e.c;if(c.kd[i]!==3&&c.kd[i]!==9)e.ix[(c.kd[i]?'a':'')+trLL(c.lon[i],c.lat[i])]=i;if(u){if(u.cid)e.ix['c:'+u.cid]=i;if(u.tid)e.ix['t:'+u.tid]=i}}
+function trIx(e){if(e.ix)return e.ix;e.ix={};for(var i=0;i<e.c.n;i++)trIxPut(e,i);return e.ix}
+/* hiApex: the sparse report blocks of /trees/bbox?format=columns */
+function trIngest(e,j){var c=e.c,k,i;c.cap=c.n;c.kd=new Uint8Array(c.n);e.u={};e.ix=null;e.rev=0;var U=j.user;
+ if(U&&U.i)for(k=0;k<U.i.length;k++){i=U.i[k];if(i<c.n)e.u[i]={taxon:U.taxon?U.taxon[k]:null,n:U.n?U.n[k]:0,v:U.v?U.v[k]:0,h:U.h_user_m?U.h_user_m[k]:null,dbh:U.dbh_cm?U.dbh_cm[k]:null,tid:U.tree_id?U.tree_id[k]:null}}
+ var A=j.added;if(A&&A.lon)for(k=0;k<A.lon.length;k++)trPush(e,A.lon[k],A.lat[k],A.h_m?A.h_m[k]:null,1,{taxon:A.taxon?A.taxon[k]:null,n:A.n?A.n[k]:0,v:A.v?A.v[k]:0,h:A.h_m?A.h_m[k]:null,dbh:A.dbh_cm?A.dbh_cm[k]:null,cid:A.client_id?A.client_id[k]:null});
+ var R=j.reported;if(R&&R.lon)for(k=0;k<R.lon.length;k++)trPush(e,R.lon[k],R.lat[k],R.h_m?R.h_m[k]:null,2,{taxon:R.taxon?R.taxon[k]:null,n:R.n?R.n[k]:0,v:R.v?R.v[k]:0,h:R.h_m?R.h_m[k]:null,dbh:R.dbh_cm?R.dbh_cm[k]:null,tid:R.tree_id?R.tree_id[k]:null});
+ trDict();trSyncSoon(700)}
+/* one tree as the peer states it now (a write's answer, a delta row) onto its row */
+function trSet(e,i,t){var c=e.c,u=e.u[i]||(e.u[i]={});u.taxon=t.taxon||null;u.n=t.n||0;u.v=t.v||u.v||0;u.h=t.h_m!=null?t.h_m:null;u.dbh=t.dbh_cm!=null?t.dbh_cm:null;if(t.tree_id)u.tid=t.tree_id;if(t.client_id)u.cid=t.client_id;if(c.kd[i]){c.h[i]=u.h>0?u.h:3;trSize(e,i)}if(e.ob[i])e.ob[i].u=u;if(e.ix)trIxPut(e,i);return u}
+function trTileAt(lon,lat){for(var k in hi.tiles){var e=hi.tiles[k];if(e.v!=='apex'||!e.ok||!e.c)continue;var d=LOD[e.t.lod][0];if(lon>=e.t.i*d&&lon<(e.t.i+1)*d&&lat>=e.t.j*d&&lat<(e.t.j+1)*d&&e.t.lod===hiLOD())return e}return null}
+/* the row a peer tree means: its client id, its tree id, else its own coordinates (the peer hands back the symbol's) */
+function trFind(e,t,added){var ix=trIx(e),i;if(t.client_id&&(i=ix['c:'+t.client_id])!=null)return i;if(t.tree_id&&(i=ix['t:'+t.tree_id])!=null)return i;if(t.lon==null)return-1;i=ix[(added?'a':'')+trLL(t.lon,t.lat)];if(i!=null)return i;if(!added&&(i=ix['a'+trLL(t.lon,t.lat)])!=null&&e.c.kd[i]===2)return i;return-1}
+/* ── delta sync: what changed in the tiles on screen since they were read (≥ 30 s apart; the tile bodies themselves sit in the HTTP cache) ── */
+function trSyncSoon(ms){clearTimeout(TR.sT);TR.sT=setTimeout(trSync,ms||700)}
+function trSync(){clearTimeout(TR.sT);TR.sT=0;if(!apVis()||document.hidden)return;var w=1e9,s=1e9,ea=-1e9,n=-1e9,since=Infinity,L=[];for(var k in hi.tiles){var e=hi.tiles[k];if(e.v!=='apex'||!e.ok||!e.on||!e.c||!e.c.kd)continue;var d=LOD[e.t.lod][0];w=Math.min(w,e.t.i*d);s=Math.min(s,e.t.j*d);ea=Math.max(ea,(e.t.i+1)*d);n=Math.max(n,(e.t.j+1)*d);since=Math.min(since,e.rev||0);L.push(e)}
+ if(!L.length)return;fetch(SRTM+'/trees/taxa?since='+since+'&bbox='+w.toFixed(4)+','+s.toFixed(4)+','+ea.toFixed(4)+','+n.toFixed(4),{credentials:'omit'}).then(function(r){return r.ok?r.json():null}).then(function(j){if(!j||!j.columns)return;var c=j.columns,m=(c.lon||[]).length,ch=0;
+  for(var q=0;q<m;q++){var lon=c.lon[q],lat=c.lat[q],e=null;for(var a=0;a<L.length;a++){var t=L[a].t,d=LOD[t.lod][0];if(hi.tiles[L[a].key]===L[a]&&lon>=t.i*d&&lon<(t.i+1)*d&&lat>=t.j*d&&lat<(t.j+1)*d){e=L[a];break}}if(!e||(c.rev&&c.rev[q]<=(e.rev||0)))continue;
+   var row={lon:lon,lat:lat,taxon:c.taxon[q],n:c.n[q],v:c.v[q],h_m:c.h_m?c.h_m[q]:null,dbh_cm:c.dbh_cm?c.dbh_cm[q]:null,tree_id:c.tree_id?c.tree_id[q]:null,client_id:c.client_id?c.client_id[q]:null},ad=c.added&&c.added[q],i=trFind(e,row,ad),none=row.taxon==null&&row.h_m==null&&row.dbh_cm==null&&!ad;
+   if(i<0){if(none)continue;if(ad)i=trPush(e,lon,lat,row.h_m,1,{});else if(row.tree_id)i=trPush(e,lon,lat,row.h_m,2,{});else continue}else if(e.c.kd[i]===3)continue;
+   if(none&&e.c.kd[i]){trGone(e,i);ch++;continue}trSet(e,i,row);ch++;if(e.fq){apFiltDrop(e);apFilt(e)}}
+  var top=j.truncated&&j.next_since?j.next_since:j.rev;L.forEach(function(e){if(top>(e.rev||0))e.rev=top});if(ch){apSched();if(pk&&pk.t==='tree'&&!(pk.a.tr&&pk.a.tr.mode))trRe(pk.a)}if(j.truncated&&j.next_since)trSyncSoon(1200)}).catch(function(){}).then(function(){if(!TR.sT)TR.sT=setTimeout(trSync,45000)})}
+document.addEventListener('visibilitychange',function(){if(!document.hidden&&apVis())trSyncSoon(1500)});
+/* ── apDraw: the reported trees on the ring canvas — a tree without a LiDAR apex is a dashed ring, a named tree carries a centre dot ── */
+function trDraw(g,zpx,cw,ch,fa,hr,alpha,lw,shown){var D=[],P=[];for(var k in hi.tiles){var e=hi.tiles[k];if(e.v!=='apex'||!e.ok||!e.on||e.hid||!e.u)continue;var c=e.c;for(var s in e.u){var i=+s,kd=c.kd[i];if(kd===9)continue;var X=(c.x[i]-vb.x)*zpx,Y=(c.y[i]-vb.y)*zpx,rp=Math.max(2.4,c.r[i]*zpx);if(X<-rp||X>cw+rp||Y<-rp||Y>ch+rp)continue;if(kd!==3&&!apKeep(e,i,c.h[i],fa,hr))continue;var b=apBand(c.h[i]);if(kd)D.push(b,X,Y,rp);var uu=e.u[i];if((uu.taxon||uu.dbh!=null||uu.h!=null)&&rp>=3)P.push(b,X,Y,rp)}}
+ if(!D.length&&!P.length){if(!TR.hint&&shown>0)trHint();return}var a2=Math.min(1,alpha+0.12);
+ if(D.length){g.save();g.setLineDash([3.2,2.6]);g.lineWidth=lw+0.35;g.globalAlpha=a2;g.strokeStyle='#fff';for(var i2=0;i2<D.length;i2+=4){g.beginPath();g.arc(D[i2+1],D[i2+2],D[i2+3],0,6.2832);g.stroke()}g.restore()}
+ /* a tree somebody named or measured (readers, forestry): a paper dot at the apex over a hairline of shade — readable in a stand of a thousand rings, no colour of its own */g.globalAlpha=a2;g.fillStyle='#fff';g.strokeStyle='rgba(0,0,0,.35)';g.lineWidth=1;for(var i3=0;i3<P.length;i3+=4){var pr=Math.min(2.6,Math.max(1.5,P[i3+3]*0.22));g.beginPath();g.arc(P[i3+1],P[i3+2],pr,0,6.2832);g.fill();g.stroke()}g.globalAlpha=1;if(!TR.hint)trHint()}
+function trHint(){TR.hint=1;try{localStorage.setItem('neg-trh','1')}catch(e){}showHint(coarse?'tap a tree to name it \u00b7 hold the map to add a missing one':'click a tree to name it \u00b7 hold or right-click to add a missing one',5200)}
+/* ── the card ── */
+function trB(act,val,label,cls,pressed,title){return'<button type="button" data-a="'+act+'"'+(val!=null?' data-v="'+esc(val)+'"':'')+(cls?' class="'+cls+'"':'')+(pressed!=null?' aria-pressed="'+(pressed?'true':'false')+'"':'')+(title?' title="'+esc(title)+'"':'')+'>'+label+'</button>'}
+function trNum(v){return(Math.round(v*10)/10).toString()}
+/* ≤ 3 one-tap guesses: what this reader named last, then the dictionary's species of the model class (the nearest apex's for a tree of ours) */
+function trGuess(a){var D=TR.dict,o=[];if(!D)return o;var put=function(t,max){if(D.by[t]&&o.length<max&&o.indexOf(t)<0)o.push(t)};TR.rec.forEach(function(t){put(t,2)});var cl=a.tr&&a.tr.cl||(typeof a.species==='string'?a.species:SP[a.species]||'');cl=cl==='fruit tree'?'fruit':cl;
+ /* the model's class gives ONE chip (its first species); the rest are the trees a reader really meets — the model's "spruce" is often a beech or a grey alder — conifers first under a conifer class, broadleaves first otherwise */
+ if(cl)for(var k=0;k<D.taxa.length;k++){var t=D.taxa[k];if(t[3]===cl&&t[0].indexOf(' ')>0){put(t[0],o.length+1);break}}
+ var con=['Picea abies','Abies alba','Larix decidua','Pinus sylvestris'],brd=['Fagus sylvatica','Alnus incana','Acer pseudoplatanus','Fraxinus excelsior','Quercus robur','Betula pendula'],isC={spruce:1,fir:1,pine:1,larch:1,conifer:1}[cl],A=isC||!cl?con:brd,B=isC||!cl?brd:con;for(var q=0;q<3;q++){if(A[q])put(A[q],4);if(B[q])put(B[q],4)}return o}
+function trMatch(q){var D=TR.dict,o=[];q=trNorm(q).trim();if(!D||!q)return o;var S=[];D.nx.forEach(function(n,i){var b=9;for(var f=0;f<3;f++){var p=n[f].indexOf(q);if(p<0)continue;var sc=p===0?f*0.1:n[f].charAt(p-1)===' '||n[f].charAt(p-1)==='-'?1+f*0.1:2+f*0.1;if(sc<b)b=sc}if(b<9)S.push([b,i])});S.sort(function(x,y){return x[0]-y[0]||x[1]-y[1]});for(var k=0;k<S.length&&k<6;k++)o.push(D.taxa[S[k][1]][0]);return o}
+function trChips(list,act,sel){var s='';list.forEach(function(t){var d=TR.dict&&TR.dict.by[t];s+=trB(act,t,esc(d?d[1]:t),'c',sel!=null?sel===t:null,d?d[0]+' \u00b7 '+d[2]:t)});return s}
+function trMeasure(a,m){var ui=a.tr,u=a.u||{},dr=a.kd===3,v=dr?(m==='h'?ui.h:ui.dbh):(m==='h'?u.h:u.dbh),un=m==='h'?'m':'cm',nm=m==='h'?'height':'dbh';
+ if(ui.mode===m){var ms=TR.dict&&TR.dict.meta[m==='h'?'h_method':'dbh_method']||[],s='<span>'+nm+'</span><input type="text" inputmode="decimal" class="n" data-m="'+m+'" value="'+(ui.pv!=null?trNum(ui.pv):v!=null?trNum(v):m==='h'&&trH(a)!=null?trNum(trH(a)):'')+'" aria-label="'+(m==='h'?'tree height in metres':'stem diameter at breast height in centimetres')+'" autocomplete="off"><span>'+un+'</span>';ms.forEach(function(x){s+=trB('meth',x,esc(x),'',TR.meth[m]===x,'how it was measured (optional)')});return s+trB('mok',m,'set','go')}
+ /* both measures are steppers: − / + move the value by 1 m / 1 cm (for the height that IS "too tall / too short" — sent once the taps rest), the number itself opens the keyboard. Untouched, the height shows what is known — the LiDAR height, the nearby one for a new tree — muted; the DBH stays empty and its first tap starts from what a tree of that height usually has */
+ var own=ui.p&&ui.p[m]!=null?ui.p[m]:v,base=own!=null?own:m==='h'&&!a.kd?a.height_m:null,mine=own!=null&&!(dr&&m==='h'&&ui.hDef);
+ return'<span>'+nm+'</span><span class="stp">'+trB('st',m+'-','\u2212','',null,m==='h'?'shorter \u00b7 1 m':'thinner \u00b7 1 cm')+trB('edit',m,base!=null?'<b>'+trNum(base)+'\u202f'+un+'</b>':'\u2014','n'+(mine?'':' e'),null,m==='dbh'?'stem diameter at breast height (1.3 m) \u00b7 \u2212 / + or tap to type':own==null?(a.kd?'tap to type the height':'the LiDAR height \u00b7 \u2212 / + if the tree is shorter or taller, tap to type your measurement'):dr&&ui.hDef?'as the trees nearby \u00b7 \u2212 / + or tap to type':'your height \u00b7 kept beside the LiDAR height, never merged')+trB('st',m+'+','+','',null,m==='h'?'taller \u00b7 1 m':'thicker \u00b7 1 cm')+'</span>'}
+/* the height this card knows: the reader's pending one, the reported one, the LiDAR one (a new tree: the nearby one) */
+function trH(a){var ui=a.tr||{},u=a.u||{};return ui.p&&ui.p.h!=null?ui.p.h:a.kd===3?ui.h:u.h!=null?u.h:a.kd?null:a.height_m}
+/* the stepper: a new tree changes locally; a tree on the map waits 1.3 s for the taps to rest, then ONE report — the values as estimates and, when the height leaves the LiDAR height by ≥ 2 m and ≥ 10 %, the too tall / too short flag with it (one batch) */
+function trStep(a,m,d){var ui=a.tr,u=a.u||{},dr=a.kd===3,R=TR.dict&&TR.dict.mes[m==='h'?'h_m':'dbh_cm']||(m==='h'?[1,70]:[1,600]),P=ui.p||(ui.p={}),cur=P[m]!=null?P[m]:dr?(m==='h'?ui.h:ui.dbh):(m==='h'?u.h:u.dbh),nv;
+ if(cur==null&&m==='dbh'){var h=trH(a);nv=h?Math.round(h*1.25):30}else{if(cur==null)cur=a.kd?10:a.height_m;nv=d<0?Math.ceil(cur)-1:Math.floor(cur)+1}nv=Math.min(R[1],Math.max(R[0],nv));
+ if(dr){if(m==='h'){ui.h=nv;ui.hDef=false;a.e_.c.h[a.i]=nv;trSize(a.e_,a.i);apSched();apMarks(a.e_)}else ui.dbh=nv;trRe(a);return}P[m]=nv;ui.done='';ui.err='';clearTimeout(ui.hT);ui.hT=setTimeout(function(){trStepSend(a)},1300);trRe(a)}
+function trPend(a){var p=a&&a.tr&&a.tr.p;return!!(p&&(p.h!=null||p.dbh!=null))}
+function trStepSend(a){var ui=a.tr;if(!trPend(a))return;clearTimeout(ui.hT);var p=ui.p,L=a.height_m,fl=null,b={layer:'trees',claim:'tree'};ui.p={};if(p.h!=null){b.h_m=p.h;b.h_method='estimate';if(!a.kd&&Math.abs(p.h-L)>=Math.max(2,L*0.1)){fl={lon:+a.lon.toFixed(7),lat:+a.lat.toFixed(7),layer:'trees',claim:p.h<L?'too_tall':'too_short',observed:{h_m:L},expected:{h_m:p.h}};if(REP)fl.reporter=REP}}if(p.dbh!=null){b.dbh_cm=p.dbh;b.dbh_method='estimate'}trPost(a,b,null,fl)}
+function trRows(a){var ui=a.tr||(a.tr={}),u=a.u||{},dr=a.kd===3,s='<div class="tr">',tx=dr?ui.sp:u.taxon,d=tx&&TR.dict&&TR.dict.by[tx];
+ s+='<div class="rw"><span class="lb">species</span><span class="vl">';
+ if(ui.mode==='sp')s+='<input type="text" class="q" maxlength="60" placeholder="Fichte, oak, Acer\u2026" value="'+esc(ui.q||'')+'" aria-label="species \u00b7 type a German, English or scientific name" autocomplete="off" autocapitalize="off" spellcheck="false"><span class="ms" style="display:contents">'+trChips(trMatch(ui.q||''),'sp')+'</span>';
+ else if(tx)s+=trB('spq',null,'<b>'+esc(d?d[1]:tx)+'</b>','v',null,'change the species')+(d&&d[1]!==d[0]?'<span class="tx">'+esc(d[0])+'</span>':'')+(!dr&&u.n>1?'<span class="mut">\u00b7 '+u.n+' agree</span>':'');
+ else s+=trChips(trGuess(a),'sp')+trB('spq',null,TR.dict?'other\u2026':'name it\u2026','',null,'type a German, English or scientific name');
+ s+='</span></div><div class="rw"><span class="lb">measured</span><span class="vl">'+(ui.mode==='dbh'?'':trMeasure(a,'h'))+(ui.mode==='h'?'':trMeasure(a,'dbh'))+'</span></div>';
+ /* the same flow: what the LiDAR says about this tree, right or wrong — one tap tells {OBS_NAME} */
+ if(!a.kd){var FL={looks_right:'looks right',spurious:'not a tree',misplaced:'misplaced'},mine=a.fg&&a.fg.claim;s+='<div class="rw xo"><span class="lb">lidar</span><span class="vl">';['looks_right','spurious','misplaced'].forEach(function(c){s+=trB('flag',c,FL[c],'',mine===c,c==='looks_right'?'the ring is this tree, about this tall':'tell {OBS_NAME} what is wrong with this apex')});s+='</span></div>'}
+ s+='<div class="ft">';
+ if(ui.busy)s+='<span>'+(dr?'adding':'sending')+ldots()+'</span>';
+ else if(ui.near){var nt=ui.near.t;s+='<span class="ok">{OBS_NAME} has a tree '+(nt.dist_m!=null?trNum(nt.dist_m)+'\u202fm from here':'right here')+(nt.height_m?' \u00b7 '+apH(nt.height_m):'')+'</span>'+trB('nthis',null,'this one','c',null,'report on that tree instead')+trB('nforce',null,'second stem here','c',null,'add yours beside it')+(dr?trB('drop',null,'\u00d7','',null,'cancel'):'')}
+ else if(ui.cand){s+='<span class="ok">'+(ui.cand.none?'no tree of {OBS_NAME} here':'which tree?')+'</span>';ui.cand.list.slice(0,5).forEach(function(c,i){s+=trB('cand',i,(c.kind==='added'?'added':'tree')+(c.height_m?' '+apH(c.height_m):'')+' \u00b7 '+trNum(c.dist_m||0)+'\u202fm away','c')});if(ui.cand.none)s+=trB('candadd',null,'add a tree here','c');s+=trB('cx',null,'\u00d7','',null,'cancel')}
+ else{if(ui.err)s+='<span class="er">'+esc(ui.err)+'</span>';if(ui.dym&&ui.dym.length)s+='<span>did you mean</span>'+trChips(ui.dym.slice(0,4),'sp');if(ui.warn)s+='<span class="er">'+esc(ui.warn)+'</span>';if(ui.done)s+='<span class="ok">\u2713 '+esc(ui.done)+'</span>';
+  /* a hold IS the add: no confirm step — the tree is sent at once and "undo" takes it back; a button only when the send failed */if(dr){if(ui.err)s+=trB('add',null,'try again','go')+trB('drop',null,'cancel')}
+  else{/* collapsed the card is species + measures only; the versions, withdraw and the LiDAR row wait for the expanded card (.xo) — except undo right after an add */var fresh=ui.done==='tree added';s+='<span class="sp"></span>';if(u.v)s+=trB('hist',null,(u.v>1?u.v+' versions':'history'),'xo',ui.hist?true:null,'every report on this tree');if(trMine(a))s+=trB('wd',null,a.kd===1&&u.cid&&TR.mine[u.cid]?(fresh?'undo':'remove tree'):'withdraw',fresh?'':'xo',null,a.kd===1?'withdraw the tree you added':'withdraw your report on this tree')}}
+ s+='</div>';if(ui.hist&&!dr)s+='<div class="hv xo">'+trHistHTML(ui.hist)+'</div>';return s+'</div>'}
+function trDate(t){var d=new Date(typeof t==='number'?t*1000:t);return isNaN(d)?'':d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}
+function trHistHTML(h){if(h==='load')return'<span class="mut">loading'+ldots()+'</span>';if(!h||!h.versions)return'<span class="mut">no history to show</span>';var s='';h.versions.slice().reverse().slice(0,24).forEach(function(v){var p=[];if(v.op==='retract')p.push('withdrawn');else if(v.op==='moderated')p.push('moderated');else if(v.op==='add')p.push('added');if(v.taxon)p.push('<b>'+esc(trName(v.taxon))+'</b>');if(v.h_m!=null)p.push('height '+trNum(v.h_m)+'\u202fm'+(v.h_method?' <span class="mut">'+esc(v.h_method)+'</span>':''));if(v.dbh_cm!=null)p.push('dbh '+trNum(v.dbh_cm)+'\u202fcm'+(v.dbh_method?' <span class="mut">'+esc(v.dbh_method)+'</span>':''));if(v.vitality)p.push(esc(v.vitality));if(v.status)p.push(esc(v.status));if(v.measured_at&&trDate(v.measured_at)&&trDate(v.measured_at)!==trDate(v.ts))p.push('<span class="mut">measured '+trDate(v.measured_at)+'</span>');if(v.by)p.push('<span class="mut">by '+esc(v.by)+'</span>');s+='<div><span>v'+v.v+' \u00b7 '+trDate(v.ts)+'</span><span>'+(p.join(' \u00b7 ')||'\u2014')+'</span></div>'});return s}
+function trCard(a){var u=a.u||{},kd=a.kd||0,dr=kd===3,nm=ixBy[a.kg_code],hd=dr?'new tree':kd?'tree'+(u.h!=null?' \u00b7 '+apH(u.h):''):'tree \u00b7 '+apH(a.height_m),src=dr?'not in the LiDAR inventory':kd===1?'added by '+(trMine(a)?'you':'a reader'):kd===2?'reported \u00b7 no LiDAR apex':'apex \u00b7 {OBS_NAME}';
+ var s='<div class="hd"><b>'+hd+'</b><span class="age">'+src+'</span></div><div class="sub">'+(nm?esc(nm[1])+' \u00b7 ':'')+(a.kg_code?'KG '+a.kg_code+' \u00b7 ':'')+coordS(a.lon,a.lat)+'</div>';
+ if(!kd)s+='<div class="rw"><span class="lb">observed</span><span class="vl">'+sw('g-tr'+apBand(a.height_m))+TH_L[apBand(a.height_m)]+(apWhat(a)?'<span class="sep"></span>'+apWhat(a):'')+(a.crown_d_m?'<span class="sep"></span>crown '+apH(a.crown_d_m):a.crown_m2?'<span class="sep"></span>crown '+Math.round(a.crown_m2)+'\u202fm\u00b2':'')+(a.confidence!=null?'<span class="sep"></span><span class="mut">confidence '+Math.round(a.confidence*100)+'\u202f%</span>':'')+'</span></div>';
+ s+=trRows(a);if(kd)return s;var f=a.fl;
+ return s+'<div class="dt"><div class="sh"><span>observed <i>LiDAR nDSM apex \u00b7 {OBS_NAME}</i></span>'+(f?'<em class="c" title="open reports on this tree">\u2691 '+(f.n||1)+'</em>':'')+'</div><div class="nt mut">'+(a.crown_m2!=null?'every apex \u2265 3\u202fm of the LiDAR inventory, QA-filtered; every ring is a crown at its measured size':'QA-filtered apex')+'</div></div>'}
+function trFlag(a,c){var b={layer:'trees',claim:c,observed:{h_m:a.height_m,crown_m2:a.crown_m2||undefined,species:typeof a.species==='string'?a.species:SP[a.species]||undefined}};if(c==='spurious')b.expected={absent:true};trPost(a,b,{lon:+a.lon.toFixed(7),lat:+a.lat.toFixed(7)})}
+/* re-render in place (no sheet animation: a chip tap must feel instant), keep the caret where the reader is typing */
+function trRe(a){if(!pk||pk.t!=='tree'||pk.a!==a||!tip.classList.contains('on'))return;var ui=a.tr||{};inner.innerHTML=trCard(a);if(ui.focus){var i=inner.querySelector(ui.mode==='sp'?'.tr input.q':'.tr input.n');ui.focus=false;if(i){i.focus({preventScroll:true});try{i.setSelectionRange(0,i.value.length)}catch(e){}}}if(floating()&&picked)place(picked,true)}
+/* ── writes ── */
+function trIdent(a){var u=a.u||{};if(u.cid)return{client_id:u.cid};if(u.tid)return{tree_id:u.tid};return{lon:a.lon,lat:a.lat}}
+function trPost(a,body,ident,extra){var ui=a.tr||(a.tr={}),id=ident||trIdent(a),k;for(k in id)body[k]=id[k];if(REP)body.reporter=REP;ui.busy=true;ui.err='';ui.warn='';ui.done='';ui.dym=null;ui.cand=null;ui.near=null;ui.last={body:body};trRe(a);
+ fetch(TRP,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(extra?{reports:[body,extra]}:body)}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return{s:r.status,j:j||{}}})}).then(function(x){ui.busy=false;var j=x.j,s=x.s;if(extra&&j.results){var f=j.results[1];j=j.results[0]||{};s=j.http||s;if(f&&(f.http===200||f.http===201)&&a.e_){a.fg={claim:extra.claim};var fl=a.fl||(a.fl={claims:{},n:0});if(f.tally&&f.tally.claims){fl.claims=f.tally.claims;fl.n=f.tally.n||1}else{fl.claims[extra.claim]=(fl.claims[extra.claim]||0)+1;fl.n=(fl.n||0)+1}a.e_.flI[a.i]=fl}}trAnswer(a,body,s,j)}).catch(function(){ui.busy=false;ui.err=navigator.onLine===false?'offline \u2014 nothing was sent':'could not send \u2014 try again';trRe(a)})}
+function trErr(j,s){var m=j&&(j.error&&j.error.message||j.error||j.message);return s===429?'too many for now \u2014 try later':typeof m==='string'&&m.length<140?m:'could not send ('+s+')'}
+function trAnswer(a,body,s,j){var ui=a.tr,e=a.e_,t=j.tree;
+ if((s===200||s===201)&&!t&&body.claim!=='tree'&&body.claim!=='missing'&&CL[body.claim]){a.fg={claim:body.claim};var fl=a.fl||(a.fl={claims:{},n:0});if(!j.folded){fl.claims[body.claim]=(fl.claims[body.claim]||0)+1;fl.n=(fl.n||0)+1}if(j.tally&&j.tally.claims){fl.claims=j.tally.claims;fl.n=j.tally.n||fl.n}e.flI[a.i]=fl;ui.done='flagged \u00b7 '+CL[body.claim];apMarks(e);trRe(a);return}
+ if((s===200||s===201)&&t){var tg=a;/* a chooser answer lands on the tree the reader chose, not on the one first tapped */if(ui.to){var te=trTileAt(ui.to.lon,ui.to.lat),ti=te?trFind(te,ui.to,ui.to.kind==='added'):-1;ui.to=null;if(ti>=0&&!(te===e&&ti===a.i)){tg=apObj(te,ti);tg.e_=te;a.tr={};tg.tr={}}}
+  var E=tg.e_,c=E.c,i=tg.i,wd=t.op==='retract',key=t.client_id||t.tree_id||trLL(tg.lon,tg.lat);
+  if(c.kd[i]===9){i=trPush(E,tg.lon,tg.lat,null,1,{});tg=apObj(E,i);tg.e_=E;tg.tr=ui}
+  if(c.kd[i]===3){c.kd[i]=1;tg.kd=1}
+  var u=trSet(E,i,t);tg.u=u;var U=tg.tr;U.mode='';U.q='';U.warn=t.warning||'';
+  if(wd){delete TR.mine[key];delete TR.mine[trLL(tg.lon,tg.lat)];if(u.cid)delete TR.mine[u.cid];if(u.tid)delete TR.mine[u.tid]}else{TR.mine[key]=1;if(body.species&&t.taxon){TR.rec=[t.taxon].concat(TR.rec.filter(function(x){return x!==t.taxon})).slice(0,4)}}trSave();
+  if(wd&&c.kd[i]&&u.taxon==null&&u.h==null&&u.dbh==null&&(c.kd[i]===1?!t.added||!u.n:true)&&(body.claim==='missing'||c.kd[i]===2)){trGone(E,i);showHint(body.claim==='missing'?'tree removed':'report withdrawn',2200);apSched();return}
+  U.done=wd?'withdrawn':body.claim==='missing'?(j.folded?'already added':'tree added'):j.folded?'already reported':'reported \u2014 thank you';if(E.fq){apFiltDrop(E);apFilt(E)}apMarks(E);apSched();
+  if(tg!==a){apPin({e:E,i:i,a:tg,el:null})}else trRe(a);if(U.hist)trHist(tg,true);return}
+ if(s===409&&t){ui.near={t:t};trRe(a);return}
+ if((s===409||s===404)&&j.candidates){ui.cand={list:j.candidates,none:s===404};if(s===404&&!j.candidates.length)ui.err='';trRe(a);return}
+ ui.err=trErr(j,s);ui.dym=j.did_you_mean||null;if(ui.dym){ui.dym=ui.dym.map(function(x){return typeof x==='string'?x:x&&(x.taxon||x[0])}).filter(Boolean);ui.mode='';ui.err='unknown species'}trRe(a)}
+function trSpecies(a,tx){var ui=a.tr;if(a.kd===3){ui.sp=ui.sp===tx&&ui.mode!=='sp'?null:tx;ui.mode='';ui.dym=null;trRe(a);return}trPost(a,{species:tx,layer:'trees',claim:'tree'})}
+function trVal(a,m){var i=inner.querySelector('.tr input.n'),ui=a.tr;if(!i)return;var raw=i.value.trim().replace(',','.'),v=raw===''?null:+raw,R=TR.dict&&TR.dict.mes[m==='h'?'h_m':'dbh_cm']||(m==='h'?[1,70]:[1,600]);
+ if(v!=null&&(isNaN(v)||v<R[0]||v>R[1])){ui.err=(m==='h'?'height ':'dbh ')+R[0]+'\u2013'+R[1]+(m==='h'?' m':' cm');ui.focus=true;trRe(a);return}ui.err='';
+ if(a.kd===3){if(m==='h'){ui.h=v;ui.hDef=false;if(v){a.e_.c.h[a.i]=v;trSize(a.e_,a.i);apSched();apMarks(a.e_)}}else ui.dbh=v;ui.mode='';trRe(a);return}
+ if(v==null){ui.mode='';trRe(a);return}var b={layer:'trees',claim:'tree',measured_at:new Date().toISOString().slice(0,19)+'Z'};b[m==='h'?'h_m':'dbh_cm']=v;if(TR.meth[m])b[m==='h'?'h_method':'dbh_method']=TR.meth[m];trPost(a,b)}
+function trAdd(a,force){var ui=a.tr,u=a.u,b={lon:+a.lon.toFixed(7),lat:+a.lat.toFixed(7),layer:'trees',claim:'missing',client_id:u.cid};if(ui.sp)b.species=ui.sp;if(ui.h){b.h_m=ui.h;if(ui.hDef)b.h_method='estimate';else if(TR.meth.h)b.h_method=TR.meth.h}if(ui.dbh){b.dbh_cm=ui.dbh;if(TR.meth.dbh)b.dbh_method=TR.meth.dbh}if(!ui.hDef&&ui.h||ui.dbh)b.measured_at=new Date().toISOString().slice(0,19)+'Z';if(force)b.force=true;trPost(a,b,{})}
+function trWithdraw(a){var u=a.u||{},b={retract:true,layer:'trees',claim:'tree'};if(a.kd===1&&u.cid&&TR.mine[u.cid]){b.layer='trees';b.claim='missing'}trPost(a,b)}
+function trHist(a,quiet){var ui=a.tr,u=a.u||{};if(!quiet){if(ui.hist){ui.hist=null;trRe(a);return}ui.hist='load';trRe(a)}var q=u.cid?'client_id='+encodeURIComponent(u.cid):u.tid?'tree_id='+encodeURIComponent(u.tid):'lon='+a.lon+'&lat='+a.lat;fetch(SRTM+'/trees/taxa/history?'+q,{credentials:'omit',cache:quiet?'reload':'default'}).then(function(r){return r.ok?r.json():null}).then(function(j){if(!ui.hist)return;ui.hist=j||{};trRe(a)}).catch(function(){if(ui.hist){ui.hist={};trRe(a)}})}
+tip.addEventListener('click',function(e){var b=e.target.closest('.tr button[data-a]');if(!b||!pk||pk.t!=='tree')return;e.stopPropagation();var a=pk.a,ui=a.tr||(a.tr={}),act=b.dataset.a,v=b.dataset.v;if(ui.busy)return;if(!a.e_&&hi.apx)a.e_=hi.apx.e;if(act==='edit')ui.pv=ui.p&&ui.p[v]!=null?ui.p[v]:null;else if(act!=='meth'&&act!=='mok')ui.pv=null;if(act!=='st'&&trPend(a)){if(act==='edit'){ui.p[v]=null;if(trPend(a)){trStepSend(a);return}clearTimeout(ui.hT)}else{trStepSend(a);return}}
+ if(act==='sp')trSpecies(a,v);else if(act==='flag')trFlag(a,v);else if(act==='st')trStep(a,v.slice(0,-1),v.slice(-1)==='-'?-1:1);else if(act==='spq'){trDict();ui.mode='sp';ui.q='';ui.focus=true;ui.err='';trRe(a)}else if(act==='edit'){trDict();ui.mode=v;ui.focus=true;ui.err='';trRe(a)}else if(act==='meth'){var m=ui.mode;TR.meth[m]=TR.meth[m]===v?'':v;trSave();var i=inner.querySelector('.tr input.n'),keep=i?i.value:'';trRe(a);i=inner.querySelector('.tr input.n');if(i){i.value=keep;i.focus({preventScroll:true})}}
+ else if(act==='mok')trVal(a,v);else if(act==='add')trAdd(a,false);else if(act==='nforce')trAdd(a,true);else if(act==='drop')apUnpin();else if(act==='wd')trWithdraw(a);else if(act==='hist')trHist(a);else if(act==='cx'){ui.cand=null;ui.near=null;trRe(a)}
+ else if(act==='nthis'){var nt=ui.near.t,te=trTileAt(nt.lon,nt.lat),ti=te?trFind(te,nt,false):-1;if(ti<0){ui.near=null;ui.err='that tree is not on the map here';trRe(a);return}apPin({e:te,i:ti,a:apObj(te,ti),el:null})}
+ else if(act==='cand'){var c=ui.cand.list[+v],body=ui.last.body;['lon','lat','tree_id','client_id'].forEach(function(k){delete body[k]});ui.to=c;trPost(a,body,c.tree_id?{tree_id:c.tree_id}:c.client_id?{client_id:c.client_id}:{lon:c.lon,lat:c.lat})}
+ else if(act==='candadd'){var p=[a.x,a.y];apUnpin(true);trDraftAt(p,true)}});
+tip.addEventListener('keydown',function(e){var i=e.target.closest&&e.target.closest('.tr input');if(!i||!pk||pk.t!=='tree')return;var a=pk.a,ui=a.tr;e.stopPropagation();if(e.key==='Escape'){e.preventDefault();ui.mode='';ui.err='';trRe(a)}else if(e.key==='Enter'){e.preventDefault();if(i.classList.contains('q')){var q=i.value.trim(),m=trMatch(q);if(m.length)trSpecies(a,m[0]);else if(q.length>=3){if(a.kd===3){ui.sp=q;ui.mode='';trRe(a)}else trPost(a,{species:q,layer:'trees',claim:'tree'})}}else trVal(a,i.dataset.m)}});
+tip.addEventListener('input',function(e){var i=e.target.closest&&e.target.closest('.tr input.q');if(!i||!pk||pk.t!=='tree')return;var a=pk.a;a.tr.q=i.value;var ms=inner.querySelector('.tr .ms');if(ms){ms.innerHTML=trChips(trMatch(i.value),'sp');if(floating()&&picked)place(picked,true)}});
+/* ── a tree the inventory misses: hold the map (long press; a held or a right mouse button) → a draft ring with a card; nothing is sent before "add tree" ── */
+function trNear(x,y,my){var H=[],kg='',cl='',bd=Infinity,r1=15*my,r2=30*my,H2=[];for(var k in hi.tiles){var e=hi.tiles[k];if(e.v!=='apex'||!e.ok||!e.on||!e.c)continue;var t=e.t;if(x<t.x-r2||x>t.x+t.w+r2||y<t.y-r2||y>t.y+t.h+r2)continue;var c=e.c;for(var i=0;i<c.n;i++){if(c.kd&&c.kd[i])continue;var dx=c.x[i]-x;if(dx>r2||dx<-r2)continue;var d=Math.hypot(dx,c.y[i]-y);if(d>r2)continue;H2.push(c.h[i]);if(d<=r1)H.push(c.h[i]);if(d<bd){bd=d;kg=c.kg?c.kg[i]:'';cl=c.sp?c.sp[i]:''}}}
+ if(H.length<2)H=H2;H.sort(function(p,q){return p-q});return{h:H.length?Math.round(H[H.length>>1]):null,kg:kg,cl:typeof cl==='string'?cl:SP[cl]||''}}
+function trDraftAt(p,force,keep){if(!apVis())return false;var zpx=(svg.getBoundingClientRect().width||W)/vb.w,ll=lonlat(p[0],p[1]),e=trTileAt(ll[0],ll[1]);if(!e){showHint('the trees here are still loading');return false}
+ if(e.my*zpx<0.9){showHint('zoom in closer to add a tree');return false}
+ if(hi.apx&&hi.apx.a.kd===3)apUnpin(true);var nb=trNear(p[0],p[1],e.my),i=trPush(e,+ll[0].toFixed(7),+ll[1].toFixed(7),nb.h||3,3,{cid:trUUID()}),a=apObj(e,i);a.kg_code=nb.kg||'';a.e_=e;a.tr={h:nb.h,hDef:nb.h!=null,sp:null,dbh:null,cl:nb.cl};trDict();apPin({e:e,i:i,a:a,el:null});apSched();if(!keep)trAdd(a,false);dbgLog('tree draft '+ll[0].toFixed(6)+','+ll[1].toFixed(6)+' h='+nb.h);return true}
+function trUnpin(e,a){if(trPend(a))trStepSend(a);/* a height still waiting goes out with the card */if(a&&a.kd===3&&e.c.kd[a.i]===3){e.c.kd[a.i]=9;e.c.x[a.i]=e.c.y[a.i]=1e12;delete e.u[a.i];apSched()}}
+function trLpEnd(done){var lp=TR.lp;if(!lp)return;TR.lp=null;clearTimeout(lp.t);if(lp.el){var el=lp.el;if(done){el.classList.add('done');setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el)},340)}else if(el.parentNode)el.parentNode.removeChild(el)}}
+function trLpFire(){var lp=TR.lp;if(!lp)return;trLpEnd(true);TR.lpAt=Date.now();if(drag)drag.moved=true;/* the release that follows is not a tap */var ev={clientX:lp.x,clientY:lp.y,pointerType:lp.ty},hit=apAt(ev);if(hit){if(!(hi.apx&&hi.apx.e===hit.e&&hi.apx.a.i===hit.a.i))apPin(hit);return}if(trDraftAt(at(ev))&&lp.ty==='touch'&&navigator.vibrate)try{navigator.vibrate(12)}catch(x){}}
+main.addEventListener('pointerdown',function(e){trLpEnd();if(e.button>0||!e.isPrimary||!apVis()||keys().length!==1)return;if(!(e.target===main||e.target===svg||svg.contains(e.target)))return;var r=main.getBoundingClientRect(),el=document.createElement('div');el.className='glyph-lp';el.style.left=(e.clientX-r.left)+'px';el.style.top=(e.clientY-r.top)+'px';main.appendChild(el);TR.lp={x:e.clientX,y:e.clientY,id:e.pointerId,ty:e.pointerType,el:el,t:setTimeout(trLpFire,e.pointerType==='mouse'?560:480)}});
+main.addEventListener('pointermove',function(e){var lp=TR.lp;if(lp&&(e.pointerId!==lp.id||Math.hypot(e.clientX-lp.x,e.clientY-lp.y)>(lp.ty==='touch'?9:5)))trLpEnd()});
+['pointerup','pointercancel','blur'].forEach(function(t){window.addEventListener(t,function(){trLpEnd()},true)});main.addEventListener('wheel',function(){trLpEnd()},{passive:true});
+main.addEventListener('contextmenu',function(e){if(!apVis()||!(e.target===main||e.target===svg||svg.contains(e.target)))return;e.preventDefault();trLpEnd();if(Date.now()-TR.lpAt<900)return;TR.lpAt=Date.now();var hit=apAt({clientX:e.clientX,clientY:e.clientY,pointerType:'mouse'});if(hit){if(!(hi.apx&&hi.apx.e===hit.e&&hi.apx.a.i===hit.a.i))apPin(hit);return}trDraftAt(at(e))});
+`

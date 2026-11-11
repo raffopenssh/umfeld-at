@@ -297,6 +297,7 @@ func cacheablePath(p string) bool {
 	case strings.HasPrefix(p, "/debug/"),
 		strings.HasPrefix(p, "/api/v1/debug/"),
 		strings.HasPrefix(p, "/api/v1/feedback"),
+		p == "/api/v1/trees/report",     // relay, live answers (api_tree_report.go)
 		p == "/api/v1/ne/revisit",       // live revisit hints for peers (api_ne_revisit.go)
 		p == "/api/v1/ne/glyph/soak.js": // test driver: must see the current build (docs/ne-glyph.md §soak)
 		return false

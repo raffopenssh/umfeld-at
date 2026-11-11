@@ -68,6 +68,7 @@ var publicExactPaths = map[string]bool{
 	"/api/v1/license":                true,
 	"/api/v1/cache/policy":           true,
 	"/api/v1/feedback":               true,
+	"/api/v1/trees/report":           true, // relay of a reader's tree report to the observed-layer peer; stores nothing (api_tree_report.go)
 	"/api/v1/context":                true, // one-call overlay bundle for a point (api_context.go)
 	"/api/v1/lookup":                 true, // EDM register: gemeinde / plz / ortschaft / kg code+name, toponyms
 	"/api/v1/kgs":                    true, // KG universe: codes, names, admin hierarchy, bbox (register keys; kg_universe.go)
