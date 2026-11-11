@@ -4,7 +4,7 @@ package main
 //
 // A reader names a tree's species (one tap on a chip), measures it (height, DBH: tap the value),
 // adds a tree the LiDAR inventory misses (hold the map — long press on a phone, hold or right-click
-// with a mouse), withdraws, reads the versions. The trees and every report live at the observed-layer
+// with a mouse; the hold always adds at the pressed spot, on an existing tree the card offers that one), withdraws, reads the versions. The trees and every report live at the observed-layer
 // peer (tree contract 2026-11-11): reads go to it straight from the browser (CORS, cacheable), writes
 // go through our relay POST /api/v1/trees/report (api_tree_report.go) which adds the reporter key.
 //
@@ -41,16 +41,25 @@ const neGlyphTreeRepCSS = `
 .glyph-tip .tr .hv{margin-top:.3em;padding-top:.3em;border-top:1px solid var(--rule);font-size:var(--fz2);line-height:1.5;white-space:normal;max-height:9.5em;overflow:auto;pointer-events:auto}
 .glyph-tip .tr .hv div{display:flex;gap:.6em}.glyph-tip .tr .hv div>span:first-child{flex:0 0 auto;color:var(--mut);min-width:7.2em}
 @media(hover:none) and (pointer:coarse){.glyph-tip .tr button{min-height:2.2em;padding-left:.6em;padding-right:.6em}.glyph-tip .tr .stp button{min-width:2.6em}.glyph-tip .tr input{min-height:2em;font-size:16px}}
-.glyph-lp{position:absolute;z-index:6;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.28),inset 0 0 0 1px rgba(0,0,0,.18);pointer-events:none;opacity:0;transform:scale(.25);animation:trlp .36s .12s cubic-bezier(.2,.7,.3,1) forwards}
+.glyph-lp{position:absolute;z-index:6;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.28),inset 0 0 0 1px rgba(0,0,0,.18);pointer-events:none;opacity:0;transform:scale(.25);animation:trlp .38s .12s cubic-bezier(.2,.7,.3,1) forwards}
 .glyph-lp.done{animation:trlpd .32s ease-out forwards}
 @keyframes trlp{to{opacity:.9;transform:scale(1)}}
 @keyframes trlpd{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(.45)}}
 @media(prefers-reduced-motion:reduce){.glyph-lp{animation:none;opacity:.8;transform:none}.glyph-lp.done{animation:none;opacity:0}}
 `
 
+// neGlyphPressJS — the long-press state machine, pure (no clock, no DOM: time is passed in), so
+// TestGlyphPressTracker runs it under node. A press is told from a tap by time + movement only,
+// never by what is under the finger. down → false when it cancelled a pending press (second
+// pointer = pinch); move past slop cancels; tick(t) fires ONCE with the START point, on the timer,
+// not on release; up → whether it had fired.
+const neGlyphPressJS = `
+function pressTracker(o){var ms=o.ms==null?500:o.ms,slop=o.slop==null?10:o.slop,p=null;function cancel(w){var q=p;p=null;if(q&&!q.fired&&o.cancel)o.cancel(w)}
+ return{down:function(id,x,y,t){if(p&&!p.fired){cancel('second');return false}p={id:id,x:x,y:y,t:t,fired:false};return true},move:function(id,x,y){if(p&&!p.fired&&p.id===id&&Math.hypot(x-p.x,y-p.y)>slop)cancel('moved')},up:function(id){var f=!!(p&&p.fired);cancel('up');return f},tick:function(t){if(p&&!p.fired&&t-p.t>=ms){p.fired=true;o.fire({x:p.x,y:p.y})}},active:function(){return!!p&&!p.fired}}}`
+
 // neGlyphTreeRepJS — runs inside the glyph IIFE (spliced after the export block); the hooks in
 // ne_glyph.go are trIngest (hiApex), trDraw (apDraw), trCard (apCard), trUnpin (apUnpin), TRP (apSend).
-const neGlyphTreeRepJS = `
+const neGlyphTreeRepJS = neGlyphPressJS + `
 /* ── tree reports (ne_glyph_treerep.go) ── */
 var TRP='/api/v1/trees/report',TR={dict:null,dictP:null,mine:{},rec:[],meth:{},sT:0,lp:null,lpAt:0,hint:0};
 try{TR.mine=JSON.parse(localStorage.getItem('neg-tr')||'{}')||{};TR.rec=JSON.parse(localStorage.getItem('neg-sp')||'[]')||[];TR.meth=JSON.parse(localStorage.getItem('neg-tm')||'{}')||{};TR.hint=+localStorage.getItem('neg-trh')||0}catch(e){}
@@ -130,7 +139,7 @@ function trRows(a){var ui=a.tr||(a.tr={}),u=a.u||{},dr=a.kd===3,s='<div class="t
  if(!a.kd){var FL={looks_right:'looks right',spurious:'not a tree',misplaced:'misplaced'},mine=a.fg&&a.fg.claim;s+='<div class="rw xo"><span class="lb">lidar</span><span class="vl">';['looks_right','spurious','misplaced'].forEach(function(c){s+=trB('flag',c,FL[c],'',mine===c,c==='looks_right'?'the ring is this tree, about this tall':'tell {OBS_NAME} what is wrong with this apex')});s+='</span></div>'}
  s+='<div class="ft">';
  if(ui.busy)s+='<span>'+(dr?'adding':'sending')+ldots()+'</span>';
- else if(ui.near){var nt=ui.near.t;s+='<span class="ok">{OBS_NAME} has a tree '+(nt.dist_m!=null?trNum(nt.dist_m)+'\u202fm from here':'right here')+(nt.height_m?' \u00b7 '+apH(nt.height_m):'')+'</span>'+trB('nthis',null,'this one','c',null,'report on that tree instead')+trB('nforce',null,'second stem here','c',null,'add yours beside it')+(dr?trB('drop',null,'\u00d7','',null,'cancel'):'')}
+ else if(ui.near){var nt=ui.near.t;s+='<span class="ok">{OBS_NAME} has a tree '+(nt.dist_m!=null?trNum(nt.dist_m)+'\u202fm from here':'right here')+(nt.height_m?' \u00b7 '+apH(nt.height_m):'')+'</span>'+trB('nthis',null,'this one','c',null,'report on that tree instead')+trB('nforce',null,nt.dist_m>=2?'add here':'second stem here','c',null,'add yours beside it')+(dr?trB('drop',null,'\u00d7','',null,'cancel'):'')}
  else if(ui.cand){s+='<span class="ok">'+(ui.cand.none?'no tree of {OBS_NAME} here':'which tree?')+'</span>';ui.cand.list.slice(0,5).forEach(function(c,i){s+=trB('cand',i,(c.kind==='added'?'added':'tree')+(c.height_m?' '+apH(c.height_m):'')+' \u00b7 '+trNum(c.dist_m||0)+'\u202fm away','c')});if(ui.cand.none)s+=trB('candadd',null,'add a tree here','c');s+=trB('cx',null,'\u00d7','',null,'cancel')}
  else{if(ui.err)s+='<span class="er">'+esc(ui.err)+'</span>';if(ui.dym&&ui.dym.length)s+='<span>did you mean</span>'+trChips(ui.dym.slice(0,4),'sp');if(ui.warn)s+='<span class="er">'+esc(ui.warn)+'</span>';if(ui.done)s+='<span class="ok">\u2713 '+esc(ui.done)+'</span>';
   /* a hold IS the add: no confirm step — the tree is sent at once and "undo" takes it back; a button only when the send failed */if(dr){if(ui.err)s+=trB('add',null,'try again','go')+trB('drop',null,'cancel')}
@@ -177,7 +186,7 @@ function trHist(a,quiet){var ui=a.tr,u=a.u||{};if(!quiet){if(ui.hist){ui.hist=nu
 tip.addEventListener('click',function(e){var b=e.target.closest('.tr button[data-a]');if(!b||!pk||pk.t!=='tree')return;e.stopPropagation();var a=pk.a,ui=a.tr||(a.tr={}),act=b.dataset.a,v=b.dataset.v;if(ui.busy)return;if(!a.e_&&hi.apx)a.e_=hi.apx.e;if(act==='edit')ui.pv=ui.p&&ui.p[v]!=null?ui.p[v]:null;else if(act!=='meth'&&act!=='mok')ui.pv=null;if(act!=='st'&&trPend(a)){if(act==='edit'){ui.p[v]=null;if(trPend(a)){trStepSend(a);return}clearTimeout(ui.hT)}else{trStepSend(a);return}}
  if(act==='sp')trSpecies(a,v);else if(act==='flag')trFlag(a,v);else if(act==='st')trStep(a,v.slice(0,-1),v.slice(-1)==='-'?-1:1);else if(act==='spq'){trDict();ui.mode='sp';ui.q='';ui.focus=true;ui.err='';trRe(a)}else if(act==='edit'){trDict();ui.mode=v;ui.focus=true;ui.err='';trRe(a)}else if(act==='meth'){var m=ui.mode;TR.meth[m]=TR.meth[m]===v?'':v;trSave();var i=inner.querySelector('.tr input.n'),keep=i?i.value:'';trRe(a);i=inner.querySelector('.tr input.n');if(i){i.value=keep;i.focus({preventScroll:true})}}
  else if(act==='mok')trVal(a,v);else if(act==='add')trAdd(a,false);else if(act==='nforce')trAdd(a,true);else if(act==='drop')apUnpin();else if(act==='wd')trWithdraw(a);else if(act==='hist')trHist(a);else if(act==='cx'){ui.cand=null;ui.near=null;trRe(a)}
- else if(act==='nthis'){var nt=ui.near.t,te=trTileAt(nt.lon,nt.lat),ti=te?trFind(te,nt,false):-1;if(ti<0){ui.near=null;ui.err='that tree is not on the map here';trRe(a);return}apPin({e:te,i:ti,a:apObj(te,ti),el:null})}
+ else if(act==='nthis'){var nt=ui.near.t,nh=ui.near.h,te=nh&&nh.e.ok&&nh.e.c?nh.e:trTileAt(nt.lon,nt.lat),ti=te===(nh&&nh.e)?nh.i:te?trFind(te,nt,false):-1;if(ti<0){ui.near=null;ui.err='that tree is not on the map here';trRe(a);return}apPin({e:te,i:ti,a:apObj(te,ti),el:null})}
  else if(act==='cand'){var c=ui.cand.list[+v],body=ui.last.body;['lon','lat','tree_id','client_id'].forEach(function(k){delete body[k]});ui.to=c;trPost(a,body,c.tree_id?{tree_id:c.tree_id}:c.client_id?{client_id:c.client_id}:{lon:c.lon,lat:c.lat})}
  else if(act==='candadd'){var p=[a.x,a.y];apUnpin(true);trDraftAt(p,true)}});
 tip.addEventListener('keydown',function(e){var i=e.target.closest&&e.target.closest('.tr input');if(!i||!pk||pk.t!=='tree')return;var a=pk.a,ui=a.tr;e.stopPropagation();if(e.key==='Escape'){e.preventDefault();ui.mode='';ui.err='';trRe(a)}else if(e.key==='Enter'){e.preventDefault();if(i.classList.contains('q')){var q=i.value.trim(),m=trMatch(q);if(m.length)trSpecies(a,m[0]);else if(q.length>=3){if(a.kd===3){ui.sp=q;ui.mode='';trRe(a)}else trPost(a,{species:q,layer:'trees',claim:'tree'})}}else trVal(a,i.dataset.m)}});
@@ -185,14 +194,18 @@ tip.addEventListener('input',function(e){var i=e.target.closest&&e.target.closes
 /* ── a tree the inventory misses: hold the map (long press; a held or a right mouse button) → a draft ring with a card; nothing is sent before "add tree" ── */
 function trNear(x,y,my){var H=[],kg='',cl='',bd=Infinity,r1=15*my,r2=30*my,H2=[];for(var k in hi.tiles){var e=hi.tiles[k];if(e.v!=='apex'||!e.ok||!e.on||!e.c)continue;var t=e.t;if(x<t.x-r2||x>t.x+t.w+r2||y<t.y-r2||y>t.y+t.h+r2)continue;var c=e.c;for(var i=0;i<c.n;i++){if(c.kd&&c.kd[i])continue;var dx=c.x[i]-x;if(dx>r2||dx<-r2)continue;var d=Math.hypot(dx,c.y[i]-y);if(d>r2)continue;H2.push(c.h[i]);if(d<=r1)H.push(c.h[i]);if(d<bd){bd=d;kg=c.kg?c.kg[i]:'';cl=c.sp?c.sp[i]:''}}}
  if(H.length<2)H=H2;H.sort(function(p,q){return p-q});return{h:H.length?Math.round(H[H.length>>1]):null,kg:kg,cl:typeof cl==='string'?cl:SP[cl]||''}}
-function trDraftAt(p,force,keep){if(!apVis())return false;var zpx=(svg.getBoundingClientRect().width||W)/vb.w,ll=lonlat(p[0],p[1]),e=trTileAt(ll[0],ll[1]);if(!e){showHint('the trees here are still loading');return false}
+function trDraftAt(p,force,keep,near){if(!apVis())return false;var zpx=(svg.getBoundingClientRect().width||W)/vb.w,ll=lonlat(p[0],p[1]),e=trTileAt(ll[0],ll[1]);if(!e){showHint('the trees here are still loading');return false}
  if(e.my*zpx<0.9){showHint('zoom in closer to add a tree');return false}
- if(hi.apx&&hi.apx.a.kd===3)apUnpin(true);var nb=trNear(p[0],p[1],e.my),i=trPush(e,+ll[0].toFixed(7),+ll[1].toFixed(7),nb.h||3,3,{cid:trUUID()}),a=apObj(e,i);a.kg_code=nb.kg||'';a.e_=e;a.tr={h:nb.h,hDef:nb.h!=null,sp:null,dbh:null,cl:nb.cl};trDict();apPin({e:e,i:i,a:a,el:null});apSched();if(!keep)trAdd(a,false);dbgLog('tree draft '+ll[0].toFixed(6)+','+ll[1].toFixed(6)+' h='+nb.h);return true}
+ if(hi.apx&&hi.apx.a.kd===3)apUnpin(true);var nb=trNear(p[0],p[1],e.my),i=trPush(e,+ll[0].toFixed(7),+ll[1].toFixed(7),nb.h||3,3,{cid:trUUID()}),a=apObj(e,i);a.kg_code=nb.kg||'';a.e_=e;a.tr={h:nb.h,hDef:nb.h!=null,sp:null,dbh:null,cl:nb.cl,near:near||null};trDict();apPin({e:e,i:i,a:a,el:null});apSched();if(!keep)trAdd(a,false);dbgLog('tree draft '+ll[0].toFixed(6)+','+ll[1].toFixed(6)+' h='+nb.h);return true}
 function trUnpin(e,a){if(trPend(a))trStepSend(a);/* a height still waiting goes out with the card */if(a&&a.kd===3&&e.c.kd[a.i]===3){e.c.kd[a.i]=9;e.c.x[a.i]=e.c.y[a.i]=1e12;delete e.u[a.i];apSched()}}
 function trLpEnd(done){var lp=TR.lp;if(!lp)return;TR.lp=null;clearTimeout(lp.t);if(lp.el){var el=lp.el;if(done){el.classList.add('done');setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el)},340)}else if(el.parentNode)el.parentNode.removeChild(el)}}
-function trLpFire(){var lp=TR.lp;if(!lp)return;trLpEnd(true);TR.lpAt=Date.now();if(drag)drag.moved=true;/* the release that follows is not a tap */var ev={clientX:lp.x,clientY:lp.y,pointerType:lp.ty},hit=apAt(ev);if(hit){if(!(hi.apx&&hi.apx.e===hit.e&&hi.apx.a.i===hit.a.i))apPin(hit);return}if(trDraftAt(at(ev))&&lp.ty==='touch'&&navigator.vibrate)try{navigator.vibrate(12)}catch(x){}}
-main.addEventListener('pointerdown',function(e){trLpEnd();if(e.button>0||!e.isPrimary||!apVis()||keys().length!==1)return;if(!(e.target===main||e.target===svg||svg.contains(e.target)))return;var r=main.getBoundingClientRect(),el=document.createElement('div');el.className='glyph-lp';el.style.left=(e.clientX-r.left)+'px';el.style.top=(e.clientY-r.top)+'px';main.appendChild(el);TR.lp={x:e.clientX,y:e.clientY,id:e.pointerId,ty:e.pointerType,el:el,t:setTimeout(trLpFire,e.pointerType==='mouse'?560:480)}});
-main.addEventListener('pointermove',function(e){var lp=TR.lp;if(lp&&(e.pointerId!==lp.id||Math.hypot(e.clientX-lp.x,e.clientY-lp.y)>(lp.ty==='touch'?9:5)))trLpEnd()});
-['pointerup','pointercancel','blur'].forEach(function(t){window.addEventListener(t,function(){trLpEnd()},true)});main.addEventListener('wheel',function(){trLpEnd()},{passive:true});
-main.addEventListener('contextmenu',function(e){if(!apVis()||!(e.target===main||e.target===svg||svg.contains(e.target)))return;e.preventDefault();trLpEnd();if(Date.now()-TR.lpAt<900)return;TR.lpAt=Date.now();var hit=apAt({clientX:e.clientX,clientY:e.clientY,pointerType:'mouse'});if(hit){if(!(hi.apx&&hi.apx.e===hit.e&&hi.apx.a.i===hit.a.i))apPin(hit);return}trDraftAt(at(e))});
+/* the hold ALWAYS adds, whatever is under the finger (time + movement decide, never the hit target): a draft at the exact pressed spot (p = the viewBox point taken at pointerdown — the map may creep under a finger inside the slop). On a tree that is already there the draft is not sent; its card offers "this one" (open that tree instead) / "second stem here". */
+function trHold(x,y,ty,p){var hit=apAt({clientX:x,clientY:y,pointerType:ty}),near=null;if(hit&&hit.a.kd===3)hit=null;if(hit){var d=Math.hypot(hit.a.x-p[0],hit.a.y-p[1])/(hit.e.my||1);near={t:{lon:hit.a.lon,lat:hit.a.lat,height_m:hit.a.height_m,dist_m:d<0.05?null:+d.toFixed(1)},h:hit}}return trDraftAt(p,false,!!near,near)}
+function trLpFire(){var lp=TR.lp;if(!lp)return;trLpEnd(true);TR.lpAt=Date.now();if(drag)drag.moved=true;/* the release that follows is not a tap */if(trHold(lp.x,lp.y,lp.ty,lp.p)&&lp.ty==='touch'&&navigator.vibrate)try{navigator.vibrate(18)}catch(x){}}
+var trPT=pressTracker({ms:500,slop:10,fire:trLpFire,cancel:function(){trLpEnd()}});
+function trLpDrop(){trPT.up();trLpEnd()}
+main.addEventListener('pointerdown',function(e){if(!e.isPrimary){trPT.down(e.pointerId,e.clientX,e.clientY,performance.now());return}/* a second finger = pinch */trLpDrop();if(e.button>0||!apVis()||keys().length!==1)return;if(!(e.target===main||e.target===svg||svg.contains(e.target)))return;var r=main.getBoundingClientRect(),el=document.createElement('div');el.className='glyph-lp';el.style.left=(e.clientX-r.left)+'px';el.style.top=(e.clientY-r.top)+'px';main.appendChild(el);trPT.down(e.pointerId,e.clientX,e.clientY,performance.now());TR.lp={x:e.clientX,y:e.clientY,ty:e.pointerType,p:at(e),el:el,t:setTimeout(function(){trPT.tick(performance.now()+1)},510)}});
+main.addEventListener('pointermove',function(e){trPT.move(e.pointerId,e.clientX,e.clientY)});
+['pointerup','pointercancel','blur'].forEach(function(t){window.addEventListener(t,trLpDrop,true)});main.addEventListener('lostpointercapture',trLpDrop);main.addEventListener('wheel',trLpDrop,{passive:true});
+main.addEventListener('contextmenu',function(e){if(!apVis()||!(e.target===main||e.target===svg||svg.contains(e.target)))return;e.preventDefault();trLpDrop();if(Date.now()-TR.lpAt<900)return;TR.lpAt=Date.now();trHold(e.clientX,e.clientY,'mouse',at(e))});
 `

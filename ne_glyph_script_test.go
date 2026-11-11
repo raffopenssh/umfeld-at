@@ -148,3 +148,35 @@ func TestGlyphScriptSyntax(t *testing.T) {
 		t.Fatalf("node --check: %v\n%s", err, out)
 	}
 }
+
+// TestGlyphPressTracker — the hold state machine (neGlyphPressJS) under node: time + movement
+// decide, never the target.
+func TestGlyphPressTracker(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node not installed")
+	}
+	p := filepath.Join(t.TempDir(), "press.js")
+	if err := os.WriteFile(p, []byte(neGlyphPressJS+"\n"+glyphPressHarness), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command(node, p).CombinedOutput(); err != nil {
+		t.Fatalf("press tracker: %v\n%s", err, out)
+	}
+}
+
+const glyphPressHarness = `
+var assert=require('assert');
+function mk(){var L={f:[],c:[]};L.t=pressTracker({fire:function(p){L.f.push(p)},cancel:function(w){L.c.push(w)}});return L}
+var L;
+L=mk();L.t.down(1,5,7,0);L.t.tick(499);assert.strictEqual(L.f.length,0,'no fire before ms');assert(L.t.active());
+L.t.tick(500);assert.deepStrictEqual(L.f,[{x:5,y:7}],'fires after ms when still');assert(!L.t.active());
+L.t.tick(900);L.t.tick(2000);assert.strictEqual(L.f.length,1,'fires only once');assert.strictEqual(L.t.up(1),true,'up reports fired');assert.deepStrictEqual(L.c,[]);
+L=mk();L.t.down(1,0,0,0);L.t.move(1,11,0);assert.deepStrictEqual(L.c,['moved']);L.t.tick(600);assert.strictEqual(L.f.length,0,'move > slop cancels');
+L=mk();L.t.down(1,100,100,0);L.t.move(1,106,108);L.t.move(1,110,100);L.t.tick(600);assert.deepStrictEqual(L.f,[{x:100,y:100}],'move <= slop keeps, start point reported');
+L=mk();L.t.down(1,0,0,0);L.t.move(2,500,500);assert(L.t.active(),'another pointer id moving is not this press');
+assert.strictEqual(L.t.down(2,50,50,100),false);assert.deepStrictEqual(L.c,['second']);L.t.tick(700);assert.strictEqual(L.f.length,0,'second pointer cancels');
+L=mk();L.t.down(1,0,0,0);assert.strictEqual(L.t.up(1),false);assert.deepStrictEqual(L.c,['up']);L.t.tick(600);assert.strictEqual(L.f.length,0,'up before ms cancels');
+L=mk();L.t.tick(600);L.t.move(1,9,9);assert.strictEqual(L.t.up(1),false);assert.deepStrictEqual(L.f,[]);assert.deepStrictEqual(L.c,[],'idle is inert');
+L=mk();L.t.down(1,0,0,0);L.t.tick(500);L.t.up(1);L.t.down(1,3,3,1000);L.t.tick(1500);assert.strictEqual(L.f.length,2,'a new press after release fires again');
+`
