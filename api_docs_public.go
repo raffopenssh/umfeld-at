@@ -95,7 +95,7 @@ This API answers "what is AROUND this point?" for any WGS84 coordinate in Austri
                                     ;f=<expr> FILTER — cells failing the expression are veiled, the readout counts the
                                               rest; cell-exact at the near tiles, from the national 1-in-49 sample
                                               farther out, so every term works at every zoom   filter · glyph/fidx · glyph/fnat
-  Selection                         #kg= #adm= (Gemeinde, Bezirk, Land, Natura 2000 site) #h3= #pt=lon,lat #q=<name> #cell=x,y ;tree=lon,lat (one tree, picked)
+  Selection                         #kg= #adm= (Gemeinde, Bezirk, Land, Natura 2000 site; lists combine: #kg=a,b;adm=c = one area) #h3= #pt=lon,lat #q=<name> #cell=x,y ;tree=lon,lat (one tree, picked)
   View                              ;full ;nofull ;screen ;z=<zoom> ;at=x,y,z ;open ;below ;card=fx,fy
   Card / peek                       the cell under the pointer: declared split, observed split, structures, change,
                                     diff, subsidy, trees — glyph/cell?lon=&lat=  ·  cell/{h3} (the rows)

@@ -345,6 +345,17 @@ func neStatsParseShare(h string) (unitKey, unitVal, f string) {
 	return
 }
 
+// neStatsShareVal — one key of a share hash ("" when absent).
+func neStatsShareVal(h, key string) string {
+	h = strings.TrimPrefix(strings.TrimSpace(h), "#")
+	for _, t := range strings.Split(h, ";") {
+		if k, v, ok := strings.Cut(t, "="); ok && k == key {
+			return v
+		}
+	}
+	return ""
+}
+
 // neStatsUnits — resolve the request's units (≤ 50).
 func neStatsUnits(q url.Values) ([]*neStatsUnit, string, int) {
 	f := q.Get("f")
@@ -363,6 +374,12 @@ func neStatsUnits(q url.Values) ([]*neStatsUnit, string, int) {
 		}
 		if k != "" && q.Get(k) == "" {
 			q.Set(k, v)
+			// a combined selection (`#kg=a,b;adm=c,d`): both lists are units
+			if k == "kg" && q.Get("adm") == "" {
+				if a := neStatsShareVal(s, "adm"); a != "" {
+					q.Set("adm", a)
+				}
+			}
 		}
 	}
 	q.Set("f", f)

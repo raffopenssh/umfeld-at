@@ -87,6 +87,12 @@ GET /api/v1/ne/glyph/admin/outline?c=701      {c,kind,n,d:"M…Z",bbox,notice}  
    the new code shape.
 5. **Docs**: `api_docs_public_ne.go` (ne.md endpoint lines + find-box paragraph), this file.
 
+### Combining outlines
+
+KGs and admin units / sites combine into one selection (`#kg=a,b;adm=c,d`, ≤ 50 members, ≤ 500 KGs): the
+**+** at the end of the settled box adds, every tag and every row of the add list removes. Points never
+combine. Code map: `docs/ne-glyph.md` §Area selection (*Combined selection*).
+
 ## 3. Points — addresses and names in the box
 
 An address (`/addresses/search`) or a DLM toponym (`/toponyms/search?near=`) is a **point**: the

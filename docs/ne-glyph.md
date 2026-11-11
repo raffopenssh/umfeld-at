@@ -216,6 +216,20 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   Browsing never veils: a pinned res-7 cell (zoom, arrow keys, click) and a KG inferred from a point
   (address · toponym · own position, `pt` set) show no veil — the only whitening left in those states is
   the observed view's own "not observed yet" picture.
+  **Combined selection** (several outlines as one area): an `asel` with `.set` = members
+  `{t:'kg'|'adm', c, n, s, d, eo, b, idx, kgs, ex}` (`selectSet`, built by `setMember`). Cells and KGs are the
+  union (nothing counted twice), `veilSync` cuts the veil with one mask path per member (`.veilmg`; one evenodd
+  path would punch overlaps back out), the card is `admCard` over the union with the sub-line
+  `combined · <area> · 4 KGs + 1 Gemeinde · 43 KGs in all` (`cmbSub`; area = outline areas, nested members
+  once, `≤` when a site overlaps a KG — `setArea`). Hash `#kg=a,b;adm=c,d` (the list form `/ne/stats/unit?share=`
+  takes: one row per member). Bounds `SETMAX` 50 members / `SETKG` 500 KGs → refused with a hint, selection kept.
+  UI, all in the find box: a quiet **+** at the end of the settled box (`.gt-a`, shown while the selection is a
+  shape — `.cmb`) opens add mode (`openAdd`, `.add`): shapes only, a ＋/− mark per row, the empty box lists the
+  members with a − each; under a mouse the box stays open across picks (`boxHold`), on touch it settles. Tags:
+  two members = two names, more = first + `+N` (tap → the member list); under a mouse a tag's glyph turns into
+  × on hover (every tag kind); Backspace drops the last; Shift/Ctrl/⌘ on a pick adds from the plain box; a box
+  holding a set opens in add mode, and its × there only closes the list. `selParts/selGo/selToggle/selDrop` are
+  the whole API; `collapse()` is the reader's close (ends a hold), `settle()` the code's own.
   A future filter component = build `{idx, a, row, d, b}` the same way and call `drawSelD` + `showSel`.
   Wheel zoom is coalesced per frame (`whl`/`wheelFlush`): deltas of one frame are summed, one
   `zoomAt` per rAF, events older than 250 ms dropped — slow office PCs otherwise replay a stale

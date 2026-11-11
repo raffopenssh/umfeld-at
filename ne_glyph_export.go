@@ -36,7 +36,7 @@ const neGlyphExportCSS = `
 const neGlyphExportJS = `
 /* ── export menu (ne_glyph_export.go): links only, same hash as the share link; QGIS tile URL + an archive of the current view */
 var tKX=tools.querySelector('.gt-kx'),tXM=tools.querySelector('.gt-xm'),XK='ne.key',XKM2=1500;/* XKM2 = the server's cap for a z 9–14 archive (ne_mvt_jobs.go nePMTMaxKm2); beyond it the menu offers the z ≤ 11 overview of the view */
-function unitHash(){var h=curHash().replace(/^#/,'');if(!h)return '';var u='',f='',t=h.split(';');for(var i=0;i<t.length;i++){if(!u&&/^(kg|h3|adm|pt)=/.test(t[i]))u=t[i];else if(/^f=/.test(t[i])&&!/^f=off:/i.test(t[i]))f=t[i]}return u?(f?u+';'+f:u):''}
+function unitHash(){var h=curHash().replace(/^#/,'');if(!h)return '';var u='',f='',t=h.split(';');for(var i=0;i<t.length;i++){if(!u&&/^(kg|h3|adm|pt)=/.test(t[i]))u=t[i];else if(/^kg=/.test(u)&&/^adm=/.test(t[i]))u+=';'+t[i];/* a combined selection: kg= and adm= lists side by side, one row per member */else if(/^f=/.test(t[i])&&!/^f=off:/i.test(t[i]))f=t[i]}return u?(f?u+';'+f:u):''}
 function xKey(){try{return localStorage.getItem(XK)||''}catch(e){return ''}}
 function xK(u){var k=xKey();return k?u+(u.indexOf('?')<0?'?':'&')+'key='+encodeURIComponent(k):u}
 /* the unit the table covers: the picked KG / Gemeinde / cell / point (share=, the hash verbatim) or, without one, the
@@ -60,8 +60,8 @@ function xProj(){return xK(pubOrigin()+'/api/v1/ne/mvt.qgs?share='+encodeURIComp
 function xViewBox(){var a=lonlat(vb.x,vb.y),b=lonlat(vb.x+vb.w,vb.y+vb.h);return[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])]}
 function xViewKm2(b){var la=(b[1]+b[3])/2*Math.PI/180;return (b[2]-b[0])*111.32*Math.cos(la)*(b[3]-b[1])*110.57}
 /* archive target: the selected KG / area (its bbox, via share=) or, without one, the current view (bbox=) */
-function xArchT(){var h=unitHash(),u=h?h.split(';')[0]:'';if(sel&&/^kg=/.test(u)){var a=lonlat(sel.b[0],sel.b[1]),c=lonlat(sel.b[2],sel.b[3]);return{box:[Math.min(a[0],c[0]),Math.min(a[1],c[1]),Math.max(a[0],c[0]),Math.max(a[1],c[1])],u:u,n:'this KG'}}
- if(asel&&/^adm=/.test(u)){var a2=lonlat(asel.b[0],asel.b[1]),c2=lonlat(asel.b[2],asel.b[3]);return{box:[Math.min(a2[0],c2[0]),Math.min(a2[1],c2[1]),Math.max(a2[0],c2[0]),Math.max(a2[1],c2[1])],u:u,n:asel.kind||'this area'}}
+function xArchT(){var h=unitHash(),u=h?h.split(';').filter(function(x){return!/^f=/.test(x)}).join(';'):'';if(sel&&/^kg=/.test(u)){var a=lonlat(sel.b[0],sel.b[1]),c=lonlat(sel.b[2],sel.b[3]);return{box:[Math.min(a[0],c[0]),Math.min(a[1],c[1]),Math.max(a[0],c[0]),Math.max(a[1],c[1])],u:u,n:'this KG'}}
+ if(asel&&/^(adm|kg)=/.test(u)){var a2=lonlat(asel.b[0],asel.b[1]),c2=lonlat(asel.b[2],asel.b[3]);return{box:[Math.min(a2[0],c2[0]),Math.min(a2[1],c2[1]),Math.max(a2[0],c2[0]),Math.max(a2[1],c2[1])],u:u,n:asel.set?'this selection':asel.kind||'this area'}}
  if(/^h3=/.test(u))return{box:[0,0,0,0],u:u,n:'this cell'};return{box:xViewBox(),u:'',n:'the current view'}}
 function xArchMB(t){return Math.max(0.1,xViewKm2(t.box)*0.17)}
 /* maxz 14 = every cell (z 9–14, ≤ XKM2 km²); maxz 11 = the overview from the national table, any area up to all of Austria (docs/qgis-layer.md) */

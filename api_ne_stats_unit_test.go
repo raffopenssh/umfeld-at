@@ -172,3 +172,17 @@ func TestExportGateCountsOnly(t *testing.T) {
 		t.Fatal("local caller limited")
 	}
 }
+
+// A combined selection writes both lists into the hash: `#kg=a,b;adm=c`.
+func TestNEStatsShareCombined(t *testing.T) {
+	h := "#kg=63330,63331;adm=AT1103112,70101;v=obs;f=forest"
+	if k, v, f := neStatsParseShare(h); k != "kg" || v != "63330,63331" || f != "forest" {
+		t.Fatalf("got %q %q %q", k, v, f)
+	}
+	if a := neStatsShareVal(h, "adm"); a != "AT1103112,70101" {
+		t.Fatalf("adm %q", a)
+	}
+	if a := neStatsShareVal("#kg=63330", "adm"); a != "" {
+		t.Fatalf("adm %q", a)
+	}
+}

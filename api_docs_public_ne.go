@@ -443,6 +443,8 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
                           #h3=<res-12 id>   #q=<name> (first hit of the KG search —
                           name / Gemeinde / district / code; rewritten to #kg= once resolved)
                           #adm=<code> an admin unit or Natura 2000 site (7, 701, 70101, AT1103112)
+                          #kg=a,b;adm=c,d   several outlines combined into one area (≤ 50; the veil, the card
+                          and share= exports cover all of them — one stats row per member)
                           #pt=lon,lat[;pn=<label | sub>] a found point (address / name): dot + the KG under it
                           A bare #kg= / #adm= / #pt= (no ;at= / ;z=) lands like the find box: full resolution
                           whenever the fit is deep enough (;nofull keeps the overview). ;z= / ;at= past the
