@@ -259,3 +259,29 @@ func TestNEStatsUnitSet(t *testing.T) {
 		t.Fatalf("boxes %v", u2.boxes)
 	}
 }
+
+// A view-clipped unit keeps the unit's weights inside the box, has its own
+// memo key and is never queued for the background pass.
+func TestNEStatsClip(t *testing.T) {
+	u := &neStatsUnit{kind: "natura2000", key: "ATX", bbox: [4]float64{14, 46, 14.4, 46.4}, peerQ: "x",
+		member: func(_ uint64, lon, lat float64) float64 { return 0.5 }}
+	if neStatsClip(u, [4]float64{15, 47, 15.1, 47.1}) != nil {
+		t.Fatal("no overlap must give nil")
+	}
+	c := neStatsClip(u, [4]float64{14.2, 46.2, 15, 47})
+	if c == nil || c.bbox != [4]float64{14.2, 46.2, 14.4, 46.4} || !c.noExact || c.peerQ != "" || c.key == u.key || u.noExact {
+		t.Fatalf("clip %+v", c)
+	}
+	if c.member(0, 14.3, 46.3) != 0.5 || c.member(0, 14.1, 46.3) != 0 || c.member(0, 14.3, 46.1) != 0 {
+		t.Fatal("membership = unit ∩ box")
+	}
+	// a combined unit: member boxes are cut, those outside dropped
+	s := &neStatsUnit{kind: "combined", key: "k", bbox: [4]float64{14, 46, 16, 48}, boxes: [][4]float64{{14, 46, 14.1, 46.1}, {15.9, 47.9, 16, 48}},
+		member: func(_ uint64, _, _ float64) float64 { return 1 }}
+	if cs := neStatsClip(s, [4]float64{14, 46, 14.05, 46.05}); cs == nil || len(cs.boxes) != 1 || cs.boxes[0] != [4]float64{14, 46, 14.05, 46.05} {
+		t.Fatalf("combined clip %+v", cs)
+	}
+	if neStatsClip(s, [4]float64{15, 47, 15.1, 47.1}) != nil {
+		t.Fatal("a box between the members holds nothing")
+	}
+}

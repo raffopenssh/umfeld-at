@@ -116,6 +116,7 @@ type neStatsUnit struct {
 	member          func(id uint64, lon, lat float64) float64
 	rings           [][][2]float64 // outline units (Natura 2000): membership by cell centre
 	boxes           [][4]float64   // combined units: the members' boxes — the bins walked are their union, not the hull
+	noExact         bool           // a view-clipped unit (the page's in-view legend): never queued for the background pass
 }
 
 // neStatsKGSet — the declared views of a list of KGs as ONE membership: a
@@ -1092,7 +1093,7 @@ func neStatsOwn(u *neStatsUnit, expr *neFiltExpr) (*neStatsEnvelope, int, *neSta
 	acc, code := neStatsCompute(u, expr)
 	approx, pending := false, false
 	if code == 413 {
-		if !filt {
+		if !filt && !u.noExact {
 			pending = neStatsExactAsk(key, u)
 		}
 		// too large for the bins: the national 1-in-49 sample answers, ×49 (docs/ne-filter.md §8)
@@ -1904,6 +1905,22 @@ func handleNEGlyphArea(w http.ResponseWriter, r *http.Request) {
 		apiError(w, msg, code)
 		return
 	}
+	// clip=w,s,e,n — the part of the unit inside a box (the page's "in view"
+	// with a selection): same cells, same weights, centre inside the box
+	if cs := r.URL.Query().Get("clip"); cs != "" {
+		cu, msg := neStatsUnitBBox(cs)
+		if cu == nil {
+			apiError(w, msg, 400)
+			return
+		}
+		units[0] = neStatsClip(units[0], cu.bbox)
+		if units[0] == nil {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Cache-Control", "public, max-age=600")
+			writeJSON(w, 200, map[string]interface{}{"pending": false, "area_ha": 0, "cells_n": 0, "approx": false, "complete": true, "figures": map[string]interface{}{"cells_n": 0}})
+			return
+		}
+	}
 	e, code, _ := neStatsOwn(units[0], nil)
 	if code != 0 || e == nil {
 		w.Header().Set("Retry-After", "30")
@@ -1919,5 +1936,44 @@ func handleNEGlyphArea(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 	}
 	writeJSON(w, 200, map[string]interface{}{"pending": pending, "kind": units[0].kind, "key": units[0].key, "area_ha": e.Unit["area_ha"], "cells_n": e.Unit["cells_n"],
-		"approx": approx, "complete": complete})
+		"approx": approx, "complete": complete, "figures": e.Figures})
+}
+
+// neStatsClip — the unit restricted to a box (cell centre inside, half-open);
+// nil when they do not meet. Its key carries the box, so the memo keeps it
+// apart from the whole unit.
+func neStatsClip(u *neStatsUnit, c [4]float64) *neStatsUnit {
+	cut := func(b [4]float64) ([4]float64, bool) {
+		o := [4]float64{math.Max(b[0], c[0]), math.Max(b[1], c[1]), math.Min(b[2], c[2]), math.Min(b[3], c[3])}
+		return o, o[0] < o[2] && o[1] < o[3]
+	}
+	bb, ok := cut(u.bbox)
+	if !ok {
+		return nil
+	}
+	v := *u
+	v.bbox, v.scan, v.boxes, v.noExact, v.peerQ, v.total = bb, [4]float64{}, nil, true, "", 0
+	if u.scan != [4]float64{} {
+		if sc, ok := cut(u.scan); ok {
+			v.scan = sc
+		}
+	}
+	for _, b := range u.boxes {
+		if o, ok := cut(b); ok {
+			v.boxes = append(v.boxes, o)
+		}
+	}
+	if len(u.boxes) > 0 && len(v.boxes) == 0 {
+		return nil
+	}
+	v.key = fmt.Sprintf("%s|clip=%.4f,%.4f,%.4f,%.4f", u.key, c[0], c[1], c[2], c[3])
+	v.note = u.note + "; clipped to a box"
+	inner := u.member
+	v.member = func(id uint64, lon, lat float64) float64 {
+		if lon < c[0] || lon >= c[2] || lat < c[1] || lat >= c[3] {
+			return 0
+		}
+		return inner(id, lon, lat)
+	}
+	return &v
 }

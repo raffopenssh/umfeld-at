@@ -234,6 +234,18 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   × on hover (every tag kind); Backspace drops the last; Shift/Ctrl/⌘ on a pick adds from the plain box; a box
   holding a set opens in add mode, and its × there only closes the list. `selParts/selGo/selToggle/selDrop` are
   the whole API; `collapse()` is the reader's close (ends a hold), `settle()` the code's own.
+  **Selection figures** (every selection: KG, area, combination): `setAreaGet` asks `/api/v1/ne/glyph/area?u=<kg=…;adm=…>`
+  (`handleNEGlyphArea` = the `/ne/stats/unit` unit, same memo as the export) → `s.fig`, copied onto the row by
+  `areaRow` (`row.cmb`, `row.fig`). The card's declared area (`decLine`), observed line (`figObsLine`) and the
+  subsidy share read it; `undefined` = asked (the line says *measuring…*), `null` = none (a Bundesland: > 300
+  KGs) → the page's own res-7 figures stand. The change row stays on the chunk-log counts (`chgHTML`).
+  **In view × selection** (`ivGet`, `ivKey`): the in-view legend's profile block counts only the cells inside
+  the selection — the unit clipped to the view (`&clip=w,s,e,n`, `neStatsClip`; no clip when all of it is in
+  view), debounced, last answer kept while the next loads; header `N cells selected`. The overlay blocks
+  (change, diff, subsidy, trees) are tile sums and are headed `whole view · …` while a selection stands. The
+  filter is not applied to it (its own block sits on top).
+  **Cut lines open in place**: a card line ending in … (`.rw>.vl`, `.sub`, `.hd>b`) wraps on tap / click and
+  folds back on the next (`wrEl`, classes `w-dec|w-ob|w-chg|w-sb|w-sub|w-hd` on the card, reset per subject).
   A future filter component = build `{idx, a, row, d, b}` the same way and call `drawSelD` + `showSel`.
   Wheel zoom is coalesced per frame (`whl`/`wheelFlush`): deltas of one frame are summed, one
   `zoomAt` per rAF, events older than 250 ms dropped — slow office PCs otherwise replay a stale
