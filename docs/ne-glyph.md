@@ -147,7 +147,7 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   ring 6 px out; `apDraw` skips its canvas ring; `.cur.cap` draws nothing. Motion: a tap = ONE wave
   outwards (`.nu`, `AP_TAP` 640 ms — the finger covered the crown); a jump (`apPin(h,true)`:
   `neGlyph.tree()`, *this one* on the card, a fresh draft) = four 1.6 s beats, each a wave of
-  `AP_WAVE` 22 px while the outer ring breathes (`.pu`, `AP_PULSE`); negative `--d` delays survive
+  `AP_WAVE` 22 px (the wave animates the circle's `r` from `--r0` to `--r1`, never a CSS `transform` — Safari strokes a scaled circle at these coordinates with a stray white bar) while the outer ring breathes (`.pu`, `AP_PULSE`); negative `--d` delays survive
   redraws; none under reduced motion. Hit test `apAt`: pointer inside a crown (≥ 7 px) → the smallest
   such crown; else the nearest ring within the slop (14 px touch · 5 px mouse).
   Named/measured trees = their crown ring in paper white, trees without a
