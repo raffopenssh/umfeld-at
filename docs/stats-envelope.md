@@ -21,20 +21,32 @@ any of the three — or all three through umfeld-at — without walking cells.
 umfeld-at additionally takes the landing page's own keys, so **the share link and the export are one
 URL logic** — whatever `#…` a user copies from the map is a valid `share=` and vice versa:
 ```
-?adm=61630              Gemeinde (5 digits, union of its KGs) · ?adm=AT2205000  Natura 2000 site (centre inside)
+?adm=61630              Gemeinde (5 digits, union of its KGs) · ?adm=606 Bezirk · ?adm=AT2205000  Natura 2000 site (centre inside)
+?combine=1              several kg= / adm= units as ONE unit, their union (kind "combined", key "kg=a,b;adm=c")
 ?pt=15.1,47.12          the res-7 cell under a point
 ?share=%23kg%3D63330%3Bf%3Dforest   the map's hash verbatim (kg= h3= adm= pt= and f= are read, view tokens ignored)
 ?f=<expr>               the glyph filter (same grammar as /api/v1/ne/filter): figures cover the MATCHING cells,
                         unit_cells_n / unit_area_ha keep the whole unit; the peers are asked for the SAME matching
                         cells (§6 cell list), so srtm.* / sub.* are filtered too
 ```
-Bezirk / Bundesland are too large for one row — pass `kg=` lists (≤ 50 per call) or Gemeinden.
+**Combined units.** A `share=` naming several areas (`#kg=a,b;adm=c,d` — the map's combined selection) is
+ONE unit: the union of their cells. Every cell counts once whatever the overlap — a KG inside a listed
+Gemeinde adds nothing, a Natura 2000 site partly inside a listed KG adds only its part outside, two KGs
+sharing a border cell hold it whole between them. So `area_ha` of a combination is never the sum of its
+members' rows unless they are disjoint. `combine=0` keeps the members apart (one row each, overlaps in each).
+A unit holds up to 300 KGs (a Bezirk fits, a Bundesland does not — pass its Bezirke).
+
+**Exact and approximate.** A unit up to 48 bins (0.025°) is answered cell-exact at once; a combined unit is
+measured by its members' boxes, not their hull (two small KGs far apart stay exact). A larger unit is
+answered at once from the national 1-in-49 sample (`coverage.approx: true`) and, without `f=`, computed
+cell-exact in the background: `coverage.exact: "pending"` says so, the answer is not cacheable, and the same
+URL returns the exact figures (no `approx`) a minute or so later.
 
 ## 2. Envelope
 
 ```json
 {"schema":"stats-envelope/1","service":"umfeld-at",
- "unit":{"kind":"kg|h3|bbox|gemeinde|natura2000","key":"63330","name":"Kohlschwarz","bbox":[w,s,e,n],"res":12,"cells_n":52478,"area_ha":1593.37,"kgs":["63330"]},
+ "unit":{"kind":"kg|h3|bbox|gemeinde|bezirk|natura2000|combined","key":"63330","name":"Kohlschwarz","bbox":[w,s,e,n],"res":12,"cells_n":52478,"area_ha":1593.37,"kgs":["63330"]},
  "source":"umfeld-at@ne-fidx1","epoch":"YYYY-MM",
  "coverage":{"complete":true,"cells_known":52478,"cells_total":52478,"bins":12,"bins_missing":0,"note":"…"},
  "filter":{"f":"d=wald","words":"forest","ignored":[],"note":"…"},          ← only with f=

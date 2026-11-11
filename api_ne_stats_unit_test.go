@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -184,5 +186,76 @@ func TestNEStatsShareCombined(t *testing.T) {
 	}
 	if a := neStatsShareVal("#kg=63330", "adm"); a != "" {
 		t.Fatalf("adm %q", a)
+	}
+}
+
+// neStatsKGSet: a cell's weight is its share summed over the listed KGs,
+// capped at 1 — the same whether a KG is listed alone or with its neighbours.
+func TestNEStatsKGSetShare(t *testing.T) {
+	row := func(id uint64, sh uint8) []byte {
+		b := make([]byte, neLURowBytes)
+		binary.LittleEndian.PutUint64(b, id)
+		b[8] = sh
+		return b
+	}
+	a := append(append(row(10, 255), row(20, 100)...), row(30, 200)...)
+	b := append(append(row(20, 155), row(30, 200)...), row(40, 51)...)
+	box := [4]float64{14, 46, 15, 47}
+	one := &neStatsKGSet{rows: [][]byte{a}, boxes: [][4]float64{box}}
+	two := &neStatsKGSet{rows: [][]byte{a, b}, boxes: [][4]float64{box, box}}
+	for _, c := range []struct {
+		s    *neStatsKGSet
+		id   uint64
+		want float64
+	}{{one, 10, 1}, {one, 20, 100.0 / 255}, {one, 15, 0}, {one, 99, 0}, {two, 20, 1}, {two, 30, 1}, {two, 40, 51.0 / 255}, {two, 10, 1}, {two, 5, 0}} {
+		if got := c.s.share(c.id, 14.5, 46.5); math.Abs(got-c.want) > 1e-9 {
+			t.Fatalf("share(%d) = %v, want %v", c.id, got, c.want)
+		}
+	}
+	// a KG whose box is far from the cell is not consulted (several KGs only)
+	far := &neStatsKGSet{rows: [][]byte{a, b}, boxes: [][4]float64{box, {16, 48, 16.1, 48.1}}}
+	if got := far.share(20, 14.5, 46.5); math.Abs(got-100.0/255) > 1e-9 {
+		t.Fatalf("far box consulted: %v", got)
+	}
+}
+
+// A combined unit is the union: a cell inside two overlapping sites counts
+// once, the key is canonical, and units that are not areas do not combine.
+func TestNEStatsUnitSet(t *testing.T) {
+	sq := func(w, s, e, n float64) [][][2]float64 {
+		return [][][2]float64{{{w, s}, {e, s}, {e, n}, {w, n}, {w, s}}}
+	}
+	site := func(key string, w, s, e, n float64) *neStatsUnit {
+		return &neStatsUnit{kind: "natura2000", key: key, name: key, bbox: [4]float64{w, s, e, n}, rings: sq(w, s, e, n)}
+	}
+	a, b := site("ATB", 14, 46, 14.2, 46.2), site("ATA", 14.1, 46.1, 14.3, 46.3)
+	u, msg := neStatsUnitSet([]*neStatsUnit{a, b, a})
+	if msg != "" || u.kind != "combined" || u.key != "adm=ATA,ATB" || len(u.boxes) != 2 {
+		t.Fatalf("unit %+v msg %q", u, msg)
+	}
+	if u.bbox != [4]float64{14, 46, 14.3, 46.3} {
+		t.Fatalf("bbox %v", u.bbox)
+	}
+	for _, c := range []struct {
+		lon, lat, want float64
+	}{{14.05, 46.05, 1}, {14.15, 46.15, 1}, {14.25, 46.25, 1}, {14.25, 46.05, 0}, {14.05, 46.25, 0}} {
+		if got := u.member(0, c.lon, c.lat); got != c.want {
+			t.Fatalf("member(%v,%v) = %v, want %v", c.lon, c.lat, got, c.want)
+		}
+	}
+	if u.peerQ != "" || u.kgs != nil {
+		t.Fatal("a union with an outline member has no KG list for the peers")
+	}
+	if tok := neStatsUnitToken(u); tok != "adm=ATA,ATB" {
+		t.Fatalf("token %q", tok)
+	}
+	if _, msg := neStatsUnitSet([]*neStatsUnit{a, {kind: "bbox", key: "x"}}); msg == "" {
+		t.Fatal("a box must not combine")
+	}
+	// the bins walked are the members' boxes, not the hull: two far-apart small units stay within the cell-exact cap
+	far := site("ATC", 16.5, 48.5, 16.52, 48.52)
+	u2, _ := neStatsUnitSet([]*neStatsUnit{site("ATD", 10, 47, 10.02, 47.02), far})
+	if len(u2.boxes) != 2 || u2.boxes[1] != far.bbox {
+		t.Fatalf("boxes %v", u2.boxes)
 	}
 }

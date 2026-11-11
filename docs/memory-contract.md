@@ -20,7 +20,7 @@ Rules:
    `ne_change`, `ne_declared_view`, `ne_reports`, `ne_revisit`, `ne_glyph`,
    `ne_glyph_admin`, `ne_glyph_tiles` (64 MB RAM + `disk`: 4 GB / 400 k files), `ne_glyph_sub`, `ne_glyph_dif`,
    `ne_passes`, `ne_fidx` (48 MB RAM + 2 GB disk), `ne_stats` (16 MB; unit
-   envelopes + peer answers, 10 min), `ne_mvt`, `ne_mvt_gate`, `export_gate`, `public_gate` (≤ 20 000 client identities × ~100 B, swept every 5 min)
+   envelopes + peer answers, 10 min; large units' cell-exact envelopes 2 h, computed by ONE background worker, queue ≤ 8 — `exact_waiting/_done/_refused`), `ne_mvt`, `ne_mvt_gate`, `export_gate`, `public_gate` (≤ 20 000 client identities × ~100 B, swept every 5 min)
    (≤ 2 000 identities, idle swept), `osm_remote_grid`.
 2. **Don't trust the CPU graph; read the memory numbers.** `sys ≫ user` with
    high iowait is memory pressure, not compute. Swap-used trend is the earliest

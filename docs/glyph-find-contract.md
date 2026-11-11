@@ -89,7 +89,7 @@ GET /api/v1/ne/glyph/admin/outline?c=701      {c,kind,n,d:"M…Z",bbox,notice}  
 
 ### Combining outlines
 
-KGs and admin units / sites combine into one selection (`#kg=a,b;adm=c,d`, ≤ 50 members, ≤ 500 KGs): the
+KGs and admin units / sites combine into one selection (`#kg=a,b;adm=c,d`, ≤ 50 members, ≤ 300 KGs): the
 **+** at the end of the settled box adds, every tag and every row of the add list removes. Points never
 combine. Code map: `docs/ne-glyph.md` §Area selection (*Combined selection*).
 

@@ -263,6 +263,8 @@ func handleNE(w http.ResponseWriter, r *http.Request) {
 		handleNEGlyphCell(w, r)
 	case rest == "glyph/kg":
 		handleNEGlyphKG(w, r)
+	case rest == "glyph/area":
+		handleNEGlyphArea(w, r)
 	case rest == "glyph/admin":
 		handleNEGlyphAdmin(w, r)
 	case rest == "glyph/admin/outline":

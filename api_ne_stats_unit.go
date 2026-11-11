@@ -52,8 +52,15 @@ const (
 	neStatsService = "umfeld-at"
 	neStatsMaxBins = 48
 	neStatsMaxUnit = 50
-	neStatsTTL     = 10 * time.Minute
-	neStatsPeerTO  = 5 * time.Second
+	neStatsMaxKGs  = 300 // KGs behind one unit (a Bezirk, a combined selection)
+	// a unit beyond neStatsMaxBins answers from the national sample at once (approx)
+	// and — up to this many bins, unfiltered — is computed cell-exact in the
+	// background (one worker, ≤ neStatsExactQueue waiting); the next call has it
+	neStatsExactBins  = 640
+	neStatsExactQueue = 8
+	neStatsExactTTL   = 2 * time.Hour
+	neStatsTTL        = 10 * time.Minute
+	neStatsPeerTO     = 5 * time.Second
 )
 
 var (
@@ -84,6 +91,9 @@ func NEStatsUnitStats() map[string]interface{} {
 	neStatsCntMu.Lock()
 	m["computed"], m["peer_fetches"], m["peer_errors"] = neStatsHits[0], neStatsHits[1], neStatsHits[2]
 	neStatsCntMu.Unlock()
+	neStatsExactMu.Lock()
+	m["exact_waiting"], m["exact_done"], m["exact_refused"] = len(neStatsExactWait), neStatsExactN[0], neStatsExactN[1]
+	neStatsExactMu.Unlock()
 	return m
 }
 
@@ -104,6 +114,67 @@ type neStatsUnit struct {
 	peerQ           string // query the peers understand ("" = not asked)
 	note            string
 	member          func(id uint64, lon, lat float64) float64
+	rings           [][][2]float64 // outline units (Natura 2000): membership by cell centre
+	boxes           [][4]float64   // combined units: the members' boxes — the bins walked are their union, not the hull
+}
+
+// neStatsKGSet — the declared views of a list of KGs as ONE membership: a
+// cell's weight is the sum of its shares over the listed KGs, capped at 1
+// (a border cell between two listed KGs counts whole, once). Views are
+// id-sorted row blobs out of the chunk LRU — looked up by binary search, no
+// per-request maps. Every KG-based unit (kg, Gemeinde, Bezirk, combined) goes
+// through here, so a KG, the Gemeinde holding it and their combination agree
+// cell for cell.
+type neStatsKGSet struct {
+	rows  [][]byte
+	boxes [][4]float64
+	built int
+}
+
+func neStatsKGSetOf(kgs []string) *neStatsKGSet {
+	s := &neStatsKGSet{}
+	for _, kg := range kgs {
+		b, ok := neStatsKGBox(kg)
+		if !ok {
+			continue
+		}
+		v := neDeclViewOf(kg)
+		if v == nil || v.CellsN() == 0 {
+			continue
+		}
+		s.built++
+		s.rows = append(s.rows, v.Rows[:v.CellsN()*neLURowBytes])
+		s.boxes = append(s.boxes, b)
+	}
+	return s
+}
+
+// a cell's centre lies within a cell radius (~10 m) of its KG's box; the pad is generous
+const neStatsKGPad = 2e-3
+
+func (s *neStatsKGSet) share(id uint64, lon, lat float64) float64 {
+	sum := 0
+	for i, rows := range s.rows {
+		if b := s.boxes[i]; len(s.rows) > 1 && (lon < b[0]-neStatsKGPad || lon > b[2]+neStatsKGPad || lat < b[1]-neStatsKGPad || lat > b[3]+neStatsKGPad) {
+			continue
+		}
+		lo, hi := 0, len(rows)/neLURowBytes
+		for lo < hi {
+			m := (lo + hi) / 2
+			if neRowID(rows, m, neLURowBytes) < id {
+				lo = m + 1
+			} else {
+				hi = m
+			}
+		}
+		if lo < len(rows)/neLURowBytes && neRowID(rows, lo, neLURowBytes) == id {
+			sum += int(rows[lo*neLURowBytes+8])
+		}
+	}
+	if sum >= 255 {
+		return 1
+	}
+	return float64(sum) / 255
 }
 
 func neStatsBBoxOK(b [4]float64) bool {
@@ -160,9 +231,9 @@ func neStatsUnitKG(code string) (*neStatsUnit, string) {
 	if r := neStatsKGRow(code); r != nil {
 		u.name = r.KGName
 	}
-	sh := neStatsKGShares(code)
-	u.member = func(id uint64, _, _ float64) float64 { return float64(sh[id]) / 255 }
-	if sh == nil {
+	sh := neStatsKGSetOf(u.kgs)
+	u.member = sh.share
+	if sh.built == 0 {
 		u.note = "KG not built yet — no declared view"
 	}
 	return u, ""
@@ -252,33 +323,46 @@ func neStatsUnitPt(s string) (*neStatsUnit, string) {
 // large for one row — the caller gets the hint to pass kg= lists.
 func neStatsUnitAdm(code string) (*neStatsUnit, string) {
 	code = strings.TrimSpace(code)
-	if len(code) == 5 && neKGRe.MatchString(code) {
-		kgs, _ := ResolveKGCodes(KGCodeFilter{Gemeinde: code})
+	if n := len(code); (n == 5 || n == 3 || n == 1) && isNumericCode(code) {
+		kind, flt := "gemeinde", KGCodeFilter{Gemeinde: code}
+		switch n {
+		case 3:
+			kind, flt = "bezirk", KGCodeFilter{District: code}
+		case 1:
+			kind, flt = "land", KGCodeFilter{State: code}
+		}
+		kgs, _ := ResolveKGCodes(flt)
 		if len(kgs) == 0 {
-			return nil, "unknown gemeinde " + code
+			return nil, "unknown " + kind + " " + code
+		}
+		if len(kgs) > neStatsMaxKGs {
+			return nil, fmt.Sprintf("%s %s holds %d KGs — a unit takes up to %d (pass its Bezirke or Gemeinden one by one)", kind, code, len(kgs), neStatsMaxKGs)
 		}
 		sort.Strings(kgs)
 		bb := [4]float64{180, 90, -180, -90}
-		shares := map[uint64]int{}
 		for _, kg := range kgs {
 			if b, ok := neStatsKGBox(kg); ok {
 				bb[0], bb[1], bb[2], bb[3] = math.Min(bb[0], b[0]), math.Min(bb[1], b[1]), math.Max(bb[2], b[2]), math.Max(bb[3], b[3])
 			}
-			for id, s := range neStatsKGShares(kg) {
-				shares[id] += int(s)
-			}
 		}
 		if !neStatsBBoxOK(bb) {
-			return nil, "gemeinde without KG boxes"
+			return nil, kind + " without KG boxes"
 		}
-		u := &neStatsUnit{kind: "gemeinde", key: code, bbox: bb, kgs: kgs, note: fmt.Sprintf("union of the Gemeinde's %d KGs (declared-view cell sets, shares summed and capped)", len(kgs))}
+		u := &neStatsUnit{kind: kind, key: code, bbox: bb, kgs: kgs, note: fmt.Sprintf("union of the %d KGs of the %s (declared-view cell sets, shares summed and capped)", len(kgs), kind)}
 		if len(kgs) <= neStatsMaxUnit {
 			u.peerQ = "kg=" + strings.Join(kgs, ",")
 		}
 		if r := neStatsKGRow(kgs[0]); r != nil {
-			u.name = r.GemeindeName
+			switch kind {
+			case "gemeinde":
+				u.name = r.GemeindeName
+			case "bezirk":
+				u.name = r.DistrictName
+			default:
+				u.name = r.StateName
+			}
 		}
-		u.member = func(id uint64, _, _ float64) float64 { return math.Min(1, float64(shares[id])/255) }
+		u.member = neStatsKGSetOf(kgs).share
 		return u, ""
 	}
 	if err := neGlyphAdminLoad(); err != nil {
@@ -286,13 +370,13 @@ func neStatsUnitAdm(code string) (*neStatsUnit, string) {
 	}
 	au := neGlyphAdmin.by[code]
 	if au == nil {
-		return nil, "unknown adm code (Gemeinde 5 digits or Natura 2000 AT… site)"
+		return nil, "unknown adm code (Gemeinde 5 digits, Bezirk 3, Land 1, or a Natura 2000 AT… site)"
 	}
 	if au.kind == nil || au.kind.Key != "n2k" {
-		return nil, "adm= takes a Gemeinde or a Natura 2000 site — for a Bezirk or Land pass kg= lists (≤ 50 per call)"
+		return nil, "adm= takes a Gemeinde, Bezirk, Land or a Natura 2000 site"
 	}
 	rings := au.R
-	u := &neStatsUnit{kind: "natura2000", key: code, name: au.N, bbox: au.BBox, note: "cells whose centre lies inside the site outline (EEA Natura 2000)"}
+	u := &neStatsUnit{kind: "natura2000", key: code, name: au.N, bbox: au.BBox, rings: rings, note: "cells whose centre lies inside the site outline (EEA Natura 2000)"}
 	u.member = func(_ uint64, lon, lat float64) float64 {
 		if neStatsInRings(rings, lon, lat) {
 			return 1
@@ -356,9 +440,102 @@ func neStatsShareVal(h, key string) string {
 	return ""
 }
 
-// neStatsUnits — resolve the request's units (≤ 50).
+// neStatsUnitSet — several KG-based / outline units as ONE: the union of
+// their cells. A cell is counted once whatever the overlap — a KG inside a
+// listed Gemeinde, a site partly or wholly inside a listed KG, two sites
+// across each other: weight = max(summed-and-capped share over the distinct
+// KGs behind all KG-based members, 1 when its centre lies in any site).
+func neStatsUnitSet(ms []*neStatsUnit) (*neStatsUnit, string) {
+	var kgTok, admTok, names, kgs []string
+	seenU, seenKG := map[string]bool{}, map[string]bool{}
+	var sites []*neStatsUnit
+	bb := [4]float64{180, 90, -180, -90}
+	var boxes [][4]float64
+	for _, m := range ms {
+		if m.kgs == nil && m.rings == nil {
+			return nil, "combine= takes kg= and adm= units (a " + m.kind + " does not combine)"
+		}
+		if seenU[m.kind+"/"+m.key] {
+			continue
+		}
+		seenU[m.kind+"/"+m.key] = true
+		if m.kind == "kg" {
+			kgTok = append(kgTok, m.key)
+		} else {
+			admTok = append(admTok, m.key)
+		}
+		if m.name != "" {
+			names = append(names, m.name)
+		} else {
+			names = append(names, m.key)
+		}
+		for _, kg := range m.kgs {
+			if !seenKG[kg] {
+				seenKG[kg] = true
+				kgs = append(kgs, kg)
+			}
+		}
+		if m.rings != nil {
+			sites = append(sites, m)
+		}
+		b := m.bbox
+		boxes = append(boxes, b)
+		bb[0], bb[1], bb[2], bb[3] = math.Min(bb[0], b[0]), math.Min(bb[1], b[1]), math.Max(bb[2], b[2]), math.Max(bb[3], b[3])
+	}
+	if len(kgs) > neStatsMaxKGs {
+		return nil, fmt.Sprintf("the combination holds %d KGs — up to %d", len(kgs), neStatsMaxKGs)
+	}
+	sort.Strings(kgTok)
+	sort.Strings(admTok)
+	sort.Strings(kgs)
+	var key []string
+	if len(kgTok) > 0 {
+		key = append(key, "kg="+strings.Join(kgTok, ","))
+	}
+	if len(admTok) > 0 {
+		key = append(key, "adm="+strings.Join(admTok, ","))
+	}
+	n := len(kgTok) + len(admTok)
+	name := strings.Join(names, " + ")
+	if len(names) > 3 {
+		name = fmt.Sprintf("%s + %s + %d more", names[0], names[1], len(names)-2)
+	}
+	u := &neStatsUnit{kind: "combined", key: strings.Join(key, ";"), name: name, bbox: bb, boxes: boxes,
+		note: fmt.Sprintf("union of %d units — every cell once, whatever the overlap (KG cells by their summed share, capped; site cells by their centre)", n)}
+	if len(sites) == 0 {
+		u.kgs = kgs
+		if len(kgs) <= neStatsMaxUnit {
+			u.peerQ = "kg=" + strings.Join(kgs, ",")
+		}
+	}
+	ks := neStatsKGSetOf(kgs)
+	u.member = func(id uint64, lon, lat float64) float64 {
+		w := 0.0
+		if len(ks.rows) > 0 {
+			if w = ks.share(id, lon, lat); w >= 1 {
+				return 1
+			}
+		}
+		for _, m := range sites {
+			if b := m.bbox; lon < b[0] || lon > b[2] || lat < b[1] || lat > b[3] {
+				continue
+			}
+			if neStatsInRings(m.rings, lon, lat) {
+				return 1
+			}
+		}
+		return w
+	}
+	return u, ""
+}
+
+// neStatsUnits — resolve the request's units (≤ 50). A combined selection
+// (share=#kg=a,b;adm=c — or combine=1 on kg=/adm= lists) is ONE unit, the
+// union; combine=0 keeps a share's members apart (one row each, overlaps
+// counted in each).
 func neStatsUnits(q url.Values) ([]*neStatsUnit, string, int) {
 	f := q.Get("f")
+	combine := q.Get("combine") == "1"
 	var units []*neStatsUnit
 	add := func(u *neStatsUnit, msg string) string {
 		if msg != "" {
@@ -379,6 +556,10 @@ func neStatsUnits(q url.Values) ([]*neStatsUnit, string, int) {
 				if a := neStatsShareVal(s, "adm"); a != "" {
 					q.Set("adm", a)
 				}
+			}
+			// the page's selection is one area: several members = their union
+			if (k == "kg" || k == "adm") && q.Get("combine") == "" {
+				combine = true
 			}
 		}
 	}
@@ -413,6 +594,13 @@ func neStatsUnits(q url.Values) ([]*neStatsUnit, string, int) {
 	}
 	if len(units) > neStatsMaxUnit {
 		return nil, fmt.Sprintf("≤ %d units per call", neStatsMaxUnit), 413
+	}
+	if combine && len(units) > 1 {
+		u, msg := neStatsUnitSet(units)
+		if msg != "" {
+			return nil, msg, 400
+		}
+		return []*neStatsUnit{u}, "", 0
 	}
 	return units, "", 0
 }
@@ -451,6 +639,10 @@ func neRound(v float64, dec int) float64 {
 
 // neStatsCompute — walk the bins of the unit's bbox, join lu/obs rows, sum.
 func neStatsCompute(u *neStatsUnit, expr *neFiltExpr) (*neStatsAcc, int) {
+	return neStatsComputeMax(u, expr, neStatsMaxBins)
+}
+
+func neStatsComputeMax(u *neStatsUnit, expr *neFiltExpr, maxBins int) (*neStatsAcc, int) {
 	acc := &neStatsAcc{kgHa: map[string]float64{}}
 	if err := neGlyphLoadFrame(); err != nil {
 		return acc, 503
@@ -460,10 +652,31 @@ func neStatsCompute(u *neStatsUnit, expr *neFiltExpr) (*neStatsAcc, int) {
 	if bb == [4]float64{} {
 		bb = u.bbox
 	}
-	i0, i1 := int(math.Floor(bb[0]/neFidxBinDeg)), int(math.Floor((bb[2]-1e-9)/neFidxBinDeg))
-	j0, j1 := int(math.Floor(bb[1]/neFidxBinDeg)), int(math.Floor((bb[3]-1e-9)/neFidxBinDeg))
-	if (i1-i0+1)*(j1-j0+1) > neStatsMaxBins {
-		return acc, 413
+	// the bins to walk: the unit's box — or, for a combined unit, the union of
+	// its members' boxes (two KGs far apart stay cell-exact)
+	boxes := u.boxes
+	if len(boxes) == 0 {
+		boxes = [][4]float64{bb}
+	}
+	var bins [][2]int
+	binSeen := map[[2]int]bool{}
+	for _, b := range boxes {
+		i0, i1 := int(math.Floor(b[0]/neFidxBinDeg)), int(math.Floor((b[2]-1e-9)/neFidxBinDeg))
+		j0, j1 := int(math.Floor(b[1]/neFidxBinDeg)), int(math.Floor((b[3]-1e-9)/neFidxBinDeg))
+		if (i1-i0+1)*(j1-j0+1) > maxBins {
+			return acc, 413
+		}
+		for i := i0; i <= i1; i++ {
+			for j := j0; j <= j1; j++ {
+				if !binSeen[[2]int{i, j}] {
+					binSeen[[2]int{i, j}] = true
+					bins = append(bins, [2]int{i, j})
+				}
+			}
+		}
+		if len(bins) > maxBins {
+			return acc, 413
+		}
 	}
 	filt := expr != nil && !expr.empty()
 	type memb struct {
@@ -471,8 +684,9 @@ func neStatsCompute(u *neStatsUnit, expr *neFiltExpr) (*neStatsAcc, int) {
 		w float64
 	}
 	seen := map[string]bool{}
-	for i := i0; i <= i1; i++ {
-		for j := j0; j <= j1; j++ {
+	{
+		for _, ij := range bins {
+			i, j := ij[0], ij[1]
 			acc.bins++
 			full, st, err := neFidxGet(i, j)
 			if err != nil {
@@ -848,6 +1062,19 @@ func neStatsOwn(u *neStatsUnit, expr *neFiltExpr) (*neStatsEnvelope, int, *neSta
 	}
 	key := "own/" + u.kind + "/" + u.key + "/" + canon
 	filt := expr != nil && !expr.empty()
+	// a large unit computed cell-exact in the background (below): kept longer,
+	// served stale while it is recomputed
+	if b, ok := neStatsLRU.get("x/" + key); ok && len(b) > 8 && !filt {
+		ts := time.Unix(int64(binary.LittleEndian.Uint64(b)), 0)
+		var e neStatsEnvelope
+		if json.Unmarshal(b[8:], &e) == nil {
+			e.AgeS = int(time.Since(ts).Seconds())
+			if time.Since(ts) > neStatsExactTTL {
+				neStatsExactAsk(key, u)
+			}
+			return &e, 0, nil
+		}
+	}
 	if b, ok := neStatsLRU.get(key); ok && len(b) > 8 {
 		if ts := int64(binary.LittleEndian.Uint64(b)); time.Since(time.Unix(ts, 0)) < neStatsTTL {
 			var e neStatsEnvelope
@@ -863,8 +1090,11 @@ func neStatsOwn(u *neStatsUnit, expr *neFiltExpr) (*neStatsEnvelope, int, *neSta
 		}
 	}
 	acc, code := neStatsCompute(u, expr)
-	approx := false
+	approx, pending := false, false
 	if code == 413 {
+		if !filt {
+			pending = neStatsExactAsk(key, u)
+		}
 		// too large for the bins: the national 1-in-49 sample answers, ×49 (docs/ne-filter.md §8)
 		if sp := neSampGet(); sp != nil {
 			acc, code = neStatsSample(sp, u, expr)
@@ -875,6 +1105,110 @@ func neStatsOwn(u *neStatsUnit, expr *neFiltExpr) (*neStatsEnvelope, int, *neSta
 		return nil, code, nil
 	}
 	neStatsCount(0)
+	e := neStatsEnvelopeOf(u, expr, acc, approx)
+	if pending {
+		e.Coverage["exact"] = "pending"
+		e.Coverage["note"] = e.Coverage["note"].(string) + "; the cell-exact figures are being computed — ask again in a minute"
+	}
+	now := time.Now().UTC()
+	var cells *neStatsCells
+	if filt {
+		cells = &neStatsCells{body: neStatsCellsBody(acc.ids), scale: max(acc.scale, 1), n: len(acc.ids)}
+	}
+	if acc.partial == 0 && !pending {
+		b, _ := json.Marshal(e)
+		buf := make([]byte, 8, 8+len(b))
+		binary.LittleEndian.PutUint64(buf, uint64(now.Unix()))
+		neStatsLRU.put(key, append(buf, b...))
+		if cells != nil {
+			hdr := binary.LittleEndian.AppendUint32([]byte{byte(cells.scale)}, uint32(cells.n))
+			neStatsLRU.put("ids/"+key, append(hdr, cells.body...))
+		}
+	}
+	return e, 0, cells
+}
+
+// the background pass for large units: one worker, a bounded queue
+var (
+	neStatsExactMu   sync.Mutex
+	neStatsExactWait = map[string]bool{}
+	neStatsExactCh   chan func()
+	neStatsExactN    [2]int64 // done, refused (queue full)
+)
+
+// neStatsExactAsk — queue the cell-exact pass of a unit beyond neStatsMaxBins.
+// true = it is queued or running (the answer will come); false = not possible
+// (too large even for the pass, queue full).
+func neStatsExactAsk(key string, u *neStatsUnit) bool {
+	neStatsExactMu.Lock()
+	defer neStatsExactMu.Unlock()
+	if neStatsExactWait[key] {
+		return true
+	}
+	if neStatsExactCh == nil {
+		neStatsExactCh = make(chan func(), neStatsExactQueue)
+		go func() {
+			for f := range neStatsExactCh {
+				f()
+			}
+		}()
+	}
+	// a queued job must not pin the unit's declared views: it rebuilds the unit from its token
+	tok := neStatsUnitToken(u)
+	if tok != "" && tok != "h3="+u.key {
+		u = nil
+	}
+	job := func() {
+		u := u
+		if u == nil {
+			us, _, _ := neStatsUnits(url.Values{"share": {tok}})
+			if len(us) != 1 {
+				return
+			}
+			u = us[0]
+		}
+		defer func() {
+			_ = recover()
+			neStatsExactMu.Lock()
+			delete(neStatsExactWait, key)
+			neStatsExactMu.Unlock()
+		}()
+		acc, code := neStatsComputeMax(u, nil, neStatsExactBins)
+		if code != 0 || acc.partial > 0 {
+			if code == 413 { // never fits: remember, so it is not asked again and again
+				neStatsLRU.put("xno/"+key, []byte{1})
+			}
+			return
+		}
+		e := neStatsEnvelopeOf(u, nil, acc, false)
+		b, _ := json.Marshal(e)
+		buf := make([]byte, 8, 8+len(b))
+		binary.LittleEndian.PutUint64(buf, uint64(time.Now().Unix()))
+		neStatsLRU.put("x/"+key, append(buf, b...))
+		neStatsExactMu.Lock()
+		neStatsExactN[0]++
+		neStatsExactMu.Unlock()
+	}
+	if _, no := neStatsLRU.get("xno/" + key); no {
+		return false
+	}
+	select {
+	case neStatsExactCh <- job:
+		neStatsExactWait[key] = true
+		return true
+	default:
+		neStatsExactN[1]++
+		return false
+	}
+}
+
+// neStatsEnvelopeOf — the envelope of one computed unit.
+func neStatsEnvelopeOf(u *neStatsUnit, expr *neFiltExpr, acc *neStatsAcc, approx bool) *neStatsEnvelope {
+	canon := ""
+	if expr != nil {
+		canon = expr.Canonical()
+	}
+	filt := expr != nil && !expr.empty()
 	now := time.Now().UTC()
 	e := &neStatsEnvelope{Schema: neStatsSchema, Service: neStatsService, License: "CC-BY-4.0", ComputedAt: now.Format(time.RFC3339),
 		Attribution: neFidxAttribution + " · aggregated by " + publicHost()}
@@ -918,21 +1252,7 @@ func neStatsOwn(u *neStatsUnit, expr *neFiltExpr) (*neStatsEnvelope, int, *neSta
 	}
 	e.Figures = neStatsFigures(u, acc, filt)
 	e.Link = neStatsLink(u, canon)
-	var cells *neStatsCells
-	if filt {
-		cells = &neStatsCells{body: neStatsCellsBody(acc.ids), scale: max(acc.scale, 1), n: len(acc.ids)}
-	}
-	if acc.partial == 0 {
-		b, _ := json.Marshal(e)
-		buf := make([]byte, 8, 8+len(b))
-		binary.LittleEndian.PutUint64(buf, uint64(now.Unix()))
-		neStatsLRU.put(key, append(buf, b...))
-		if cells != nil {
-			hdr := binary.LittleEndian.AppendUint32([]byte{byte(cells.scale)}, uint32(cells.n))
-			neStatsLRU.put("ids/"+key, append(hdr, cells.body...))
-		}
-	}
-	return e, 0, cells
+	return e
 }
 
 // neStatsCells — a filtered unit as the peers see it: the matching res-12
@@ -1085,15 +1405,8 @@ func neStatsRoundBox(b [4]float64) []float64 {
 // neStatsLink — the landing page showing the same unit (+ filter): the share
 // link and the export are two renderings of one hash.
 func neStatsLink(u *neStatsUnit, canon string) string {
-	var tok string
-	switch u.kind {
-	case "kg":
-		tok = "kg=" + u.key
-	case "h3":
-		tok = "h3=" + u.key
-	case "gemeinde", "natura2000":
-		tok = "adm=" + u.key
-	default:
+	tok := neStatsUnitToken(u)
+	if tok == "" {
 		tok = fmt.Sprintf("pt=%.5f,%.5f;z=%d", (u.bbox[0]+u.bbox[2])/2, (u.bbox[1]+u.bbox[3])/2, neFilterZoomFor(u.bbox[2]-u.bbox[0]))
 	}
 	if canon != "" {
@@ -1101,6 +1414,22 @@ func neStatsLink(u *neStatsUnit, canon string) string {
 		tok += ";f=" + strings.NewReplacer("<", "%3C", ">", "%3E", "|", "%7C", " ", "%20").Replace(canon)
 	}
 	return publicURL() + "/#" + tok
+}
+
+// neStatsUnitToken — the share-hash token that names the unit ("" for a box / point).
+func neStatsUnitToken(u *neStatsUnit) string {
+	var tok string
+	switch u.kind {
+	case "kg":
+		tok = "kg=" + u.key
+	case "h3":
+		tok = "h3=" + u.key
+	case "gemeinde", "bezirk", "land", "natura2000":
+		tok = "adm=" + u.key
+	case "combined":
+		tok = u.key
+	}
+	return tok
 }
 
 // ── peers ───────────────────────────────────────────────────────────────────
@@ -1456,8 +1785,8 @@ func handleNEStatsUnit(w http.ResponseWriter, r *http.Request, gateID string) {
 			apiError(w, "frame unavailable", 503)
 			return
 		}
-		if c, _ := e.Coverage["complete"].(bool); !c {
-			partial = true
+		if c, _ := e.Coverage["complete"].(bool); !c || e.Coverage["exact"] == "pending" {
+			partial = true // not to be cached: incomplete, or the cell-exact figures are on their way
 		}
 		envs = append(envs, e)
 	}
@@ -1558,4 +1887,37 @@ func neStatsFileName(units []*neStatsUnit) string {
 		return units[0].kind + "-" + strings.NewReplacer(",", "_", ".", "p").Replace(units[0].key)
 	}
 	return fmt.Sprintf("%d-units", len(units))
+}
+
+// handleNEGlyphArea — GET /api/v1/ne/glyph/area?u=kg=a,b;adm=c — the card's
+// area line for a selection: the SAME unit, cells and area the export
+// (/ne/stats/unit?share=) answers with, taken from the same memo — the page
+// and the sheet cannot disagree. Not an export: no rows, not gated as one.
+func handleNEGlyphArea(w http.ResponseWriter, r *http.Request) {
+	u := r.URL.Query().Get("u")
+	if len(u) > 4096 {
+		apiError(w, "u= too long", 400)
+		return
+	}
+	units, msg, code := neStatsUnits(url.Values{"share": {u}})
+	if msg != "" {
+		apiError(w, msg, code)
+		return
+	}
+	e, code, _ := neStatsOwn(units[0], nil)
+	if code != 0 || e == nil {
+		w.Header().Set("Retry-After", "30")
+		apiError(w, "not available", 503)
+		return
+	}
+	approx, _ := e.Coverage["approx"].(bool)
+	complete, _ := e.Coverage["complete"].(bool)
+	pending := e.Coverage["exact"] == "pending"
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Cache-Control", "public, max-age=600")
+	if pending {
+		w.Header().Set("Cache-Control", "no-store")
+	}
+	writeJSON(w, 200, map[string]interface{}{"pending": pending, "kind": units[0].kind, "key": units[0].key, "area_ha": e.Unit["area_ha"], "cells_n": e.Unit["cells_n"],
+		"approx": approx, "complete": complete})
 }

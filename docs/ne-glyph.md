@@ -220,9 +220,13 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   `{t:'kg'|'adm', c, n, s, d, eo, b, idx, kgs, ex}` (`selectSet`, built by `setMember`). Cells and KGs are the
   union (nothing counted twice), `veilSync` cuts the veil with one mask path per member (`.veilmg`; one evenodd
   path would punch overlaps back out), the card is `admCard` over the union with the sub-line
-  `combined · <area> · 4 KGs + 1 Gemeinde · 43 KGs in all` (`cmbSub`; area = outline areas, nested members
-  once, `≤` when a site overlaps a KG — `setArea`). Hash `#kg=a,b;adm=c,d` (the list form `/ne/stats/unit?share=`
-  takes: one row per member). Bounds `SETMAX` 50 members / `SETKG` 500 KGs → refused with a hint, selection kept.
+  `combined · <area> · 4 KGs + 1 Gemeinde · 43 KGs in all` (`cmbSub`). **The area is the server's**
+  (`setAreaGet` → `/api/v1/ne/glyph/area?u=`, `handleNEGlyphArea`): the combined unit of `/ne/stats/unit`
+  (`neStatsUnitSet`: union of cells, every cell once whatever the overlap; same memo as the export, so card and
+  sheet cannot disagree). Until it arrives the outline estimate (`setArea`) stands with `≈`; a selection beyond
+  48 bins shows the sample figure with `≈` and is re-asked until the background cell-exact pass is in
+  (`neStatsExactAsk`). Hash `#kg=a,b;adm=c,d` = the `share=` of the export (one combined row).
+  Bounds `SETMAX` 50 members / `SETKG` 300 KGs (= `neStatsMaxKGs`) → refused with a hint, selection kept.
   UI, all in the find box: a quiet **+** at the end of the settled box (`.gt-a`, shown while the selection is a
   shape — `.cmb`) opens add mode (`openAdd`, `.add`): shapes only, a ＋/− mark per row, the empty box lists the
   members with a − each; under a mouse the box stays open across picks (`boxHold`), on touch it settles. Tags:

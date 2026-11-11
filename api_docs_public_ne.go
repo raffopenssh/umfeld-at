@@ -243,11 +243,13 @@ GET /api/v1/ne/stats/unit?kg=|h3=|bbox=|adm=|pt=|share=[&f=][&format=json|flat|c
                                             ONE ROW PER UNIT (docs: /api/v1/docs/stats-envelope.md): declared/observed/diff/change/
                                             subsidy/protection aggregates of the cell set + the same unit's envelopes from {OBS_NAME}
                                             and {SUB_NAME} ("peers"). Units: kg (≤ 50, one envelope each), h3 res 5–12
-                                            (exact descendants), bbox ≤ 0.1°, adm = Gemeinde (5 digits) or Natura 2000 site, pt = the
+                                            (exact descendants), bbox ≤ 0.1°, adm = Gemeinde (5 digits), Bezirk (3) or Natura 2000 site, pt = the
                                             res-7 cell under a point, share = the landing page's #hash verbatim (kg= h3= adm= pt= f=; f=off:… = no filter) —
                                             share link and export are one URL. A unit wider than 48 bins (a large Gemeinde, a
                                             Natura 2000 site, a Bezirk) is answered from the national 1-in-49 sample: counts and
-                                            hectares ×49, coverage.approx=true, coverage.sample=49, kg.* empty. f= filters the cells (grammar above; unit_cells_n /
+                                            hectares ×49, coverage.approx=true, coverage.sample=49, kg.* empty — and, without f=, computed cell-exact
+                                            in the background (coverage.exact="pending"; ask again a minute later). A share naming several areas
+                                            (#kg=a,b;adm=c) is ONE unit, their union: every cell once whatever the overlap (combine=0 = one row each). f= filters the cells (grammar above; unit_cells_n /
                                             unit_area_ha keep the whole unit; the peers get the SAME matching cells as a cell list — POST NEI1,
                                             stats-envelope.md §6 — so every column of the row is filtered; a peer without cell-list
                                             support shows available=false with the reason, never whole-unit figures). figures{} is
@@ -444,7 +446,7 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
                           name / Gemeinde / district / code; rewritten to #kg= once resolved)
                           #adm=<code> an admin unit or Natura 2000 site (7, 701, 70101, AT1103112)
                           #kg=a,b;adm=c,d   several outlines combined into one area (≤ 50; the veil, the card
-                          and share= exports cover all of them — one stats row per member)
+                          and share= exports cover all of them as one unit, every cell counted once)
                           #pt=lon,lat[;pn=<label | sub>] a found point (address / name): dot + the KG under it
                           A bare #kg= / #adm= / #pt= (no ;at= / ;z=) lands like the find box: full resolution
                           whenever the fit is deep enough (;nofull keeps the overview). ;z= / ;at= past the
