@@ -279,7 +279,7 @@ func TestNEMVTProject(t *testing.T) {
 	if !strings.Contains(body, fmt.Sprintf(`DefaultViewExtent xmin="%.2f"`, x0)) {
 		t.Errorf("default view is not the box")
 	}
-	if !strings.Contains(body, `enabled="1" name="declared · forest (wald)"`) || !strings.Contains(body, `enabled="0" name="observed · forest (wald)"`) {
+	if !strings.Contains(body, `enabled="1" name="declared · forest (wald) (aggregates, far zooms)"`) || !strings.Contains(body, `enabled="0" name="observed · forest (wald) (aggregates, far zooms)"`) || !strings.Contains(body, `/api/v1/ne/mvt/pic/declared/{z}/{x}/{y}.png`) {
 		t.Errorf("default profile must be declared")
 	}
 	if !strings.Contains(body, `name="OpenStreetMap" source="type=xyz`) || !strings.Contains(body, `checked="Qt::Unchecked" expanded="0"`) {
@@ -294,7 +294,7 @@ func TestNEMVTProject(t *testing.T) {
 		if w.Code != 200 {
 			t.Fatalf("share project → %d %s", w.Code, body)
 		}
-		for _, want := range []string{`enabled="1" name="observed · forest (wald)"`, `enabled="0" name="declared · forest (wald)"`, `enabled="1" name="trees · 10–20 m"`, `enabled="1" name="subsidy · arable (acker)"`, `enabled="0" name="change · confirmed"`, `f=ht%3E%3D20`, `opacity="1.00"`, `name="trees · `, `providerKey="ogr"`, `trees/bbox?bbox=`, `osm/geometry?bbox=`, `max-zoom="24"`, "umfeld-at-cells-view-filtered.qgs"} {
+		for _, want := range []string{`enabled="1" name="observed · forest (wald)"`, `enabled="0" name="declared · forest (wald)"`, `enabled="1" name="trees · tallest 5–15 m (hexagons, far zooms)"`, `enabled="0" name="change · confirmed"`, `.pbf?f%3Dht%3E%3D20`, `name="trees · crowns`, `providerKey="ogr"`, `/api/v1/ne/mvt/trees.geojson?bbox=`, `ht=20..`, `type="graduatedSymbol" attr="h"`, `/api/v1/ne/mvt/pic/sub/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/pic/observed/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/relief/{z}/{x}/{y}.png`, `<blendMode>8</blendMode>`, `osm/geometry?bbox=`, `max-zoom="24"`, "umfeld-at-cells-view-filtered.qgs"} {
 			if !strings.Contains(body, want) && !strings.Contains(w.Header().Get("Content-Disposition"), want) {
 				t.Errorf("share project lacks %q", want)
 			}
@@ -303,8 +303,12 @@ func TestNEMVTProject(t *testing.T) {
 			t.Errorf("view box from at= = %v", vb)
 		}
 	}
+	// nothing of ours may be fetched from anywhere but this service, and a key rides on every one of them
+	if _, body = get("/api/v1/ne/mvt.qgs?bbox=10.07,47.13,10.09,47.14&key=k1"); strings.Contains(body, peers().ObsAPI+"/") && peers().ObsAPI != "" || strings.Count(body, "key%3Dk1") < 8 {
+		t.Errorf("keyed project: peer URL leaked or key missing (%d)", strings.Count(body, "key%3Dk1"))
+	}
 	w, body = get("/api/v1/ne/mvt.qml?for=ogr")
-	if w.Code != 200 || !strings.Contains(body, `type="categorizedSymbol" attr="d"`) {
+	if w.Code != 200 || !strings.Contains(body, `type="RuleRenderer"`) {
 		t.Errorf("ogr qml → %d", w.Code)
 	}
 	if _, body = get("/api/v1/ne/mvt.qml?for=tiles&share=v=obs"); !strings.Contains(body, `enabled="1" name="observed · forest (wald)"`) {
@@ -312,5 +316,41 @@ func TestNEMVTProject(t *testing.T) {
 	}
 	if w, _ = get("/api/v1/ne/mvt.qgs"); w.Code != 400 {
 		t.Errorf("no box → %d", w.Code)
+	}
+}
+
+// The companion layers of the project (ne_mvt_layers.go): routed under mvt/,
+// unknown pictures 404, zooms outside a layer's range empty, never the cell tile.
+func TestNEMVTLayerRoutes(t *testing.T) {
+	get := func(p string) int {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", p, nil)
+		if !handleNEMVTLayer(w, r, strings.TrimPrefix(r.URL.Path, "/api/v1/ne/")) {
+			return -1
+		}
+		return w.Code
+	}
+	for p, want := range map[string]int{
+		"/api/v1/ne/mvt/14/8904/5653.pbf":              -1, // the cells
+		"/api/v1/ne/mvt/pic/parcels/14/8904/5653.png":  404,
+		"/api/v1/ne/mvt/pic/sub/9/278/176.png":         204,
+		"/api/v1/ne/mvt/trees/13/4452/2826.pbf":        204,
+		"/api/v1/ne/mvt/relief/5/17/11.png":            204,
+		"/api/v1/ne/mvt/relief/12/0/0.png":             204, // outside Austria
+		"/api/v1/ne/mvt/trees.geojson?bbox=9,46,17,49": 413,
+		"/api/v1/ne/mvt/trees.geojson":                 400,
+	} {
+		if got := get(p); got != want {
+			t.Errorf("%s → %d, want %d", p, got, want)
+		}
+	}
+	if lo, hi, ok := neLayerHtRange("27..34"); !ok || lo != 27 || hi != 34 {
+		t.Errorf("ht range")
+	}
+	if got := neQGSFiltHt("ht=27..34"); got != "27..34" {
+		t.Errorf("filter ht → %q", got)
+	}
+	if got := neQGSEnc("http://h/a/{z}.pbf?f=ht%3E%3D20&key=k"); got != "http://h/a/{z}.pbf?f%3Dht%3E%3D20%26key%3Dk" {
+		t.Errorf("neQGSEnc → %q", got)
 	}
 }

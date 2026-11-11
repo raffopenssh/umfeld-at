@@ -5,6 +5,7 @@
 //
 //	GET /api/v1/ne/pmtiles?bbox=w,s,e,n | kg= | h3= | adm= | share=#… [&minz=9][&maxz=14]
 //	    → 200 application/vnd.pmtiles  (done; Content-Disposition attachment)
+//	    &format=zip → the archive + its .qml style + a .qgs project in one folder (neQGSBundle)
 //	    → 202 {"status":"queued|building","job":…,"progress":{…},"eta_s":…}  + Refresh / Retry-After
 //	    → 413 box too large (≤ nePMTMaxKm2 km², ≤ nePMTMaxTiles tiles)
 //	GET /api/v1/ne/pmtiles/jobs                        the queue (ids, progress — no identities)
@@ -513,6 +514,11 @@ func handleNEPMTiles(w http.ResponseWriter, r *http.Request, rest string) {
 		}
 		defer f.Close()
 		fi, _ := f.Stat()
+		if fm := neQuery(r).Get("format"); fm == "zip" || fm == "qgis" {
+			// the archive with its style and project (ne_mvt_qgs.go): what QGIS opens styled
+			neQGSBundle(w, r, c.path, "umfeld-at-cells-"+name+"-z"+strconv.Itoa(c.MinZ)+"-"+strconv.Itoa(c.MaxZ), c.MaxZ)
+			return
+		}
 		w.Header().Set("Content-Type", "application/vnd.pmtiles")
 		w.Header().Set("Content-Disposition", `attachment; filename="umfeld-at-cells-`+name+`-z`+strconv.Itoa(c.MinZ)+`-`+strconv.Itoa(c.MaxZ)+`.pmtiles"`)
 		w.Header().Set("Cache-Control", "private, max-age=3600")

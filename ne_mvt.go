@@ -108,6 +108,7 @@ func NEMVTStats() map[string]interface{} {
 	m["pending_202"] = neMVTPending.Load()
 	m["queue"] = neFidxQueueStats()
 	m["jobs"] = nePMTJobStats()
+	m["layers"] = NELayerStats() // ne_mvt_layers.go: relief relay, tree tiles, overlay pictures
 	m["national"] = NENatStats()
 	m["sample"] = NESampStats()
 	return m
@@ -1074,6 +1075,9 @@ func handleNEMVT(w http.ResponseWriter, r *http.Request, rest string) {
 		return
 	case "mvt/status":
 		handleNEMVTStatus(w, r)
+		return
+	}
+	if handleNEMVTLayer(w, r, rest) { // relief, trees, overlay pictures (ne_mvt_layers.go)
 		return
 	}
 	p := strings.Split(strings.TrimSuffix(strings.TrimPrefix(rest, "mvt/"), ".pbf"), "/")

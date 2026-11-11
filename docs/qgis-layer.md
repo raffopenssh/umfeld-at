@@ -7,8 +7,9 @@ statistics) as **H3 cell polygons with every attribute**, in two forms:
 |---|---|---|
 | **QGIS project** | `{PUBLIC_URL}/api/v1/ne/mvt.qgs?bbox=w,s,e,n` (or `kg=`, `adm=`, `share=`) | **start here**: one small `.qgs` — double-click and QGIS opens on that view with the live cell layer styled and a legend, basemaps underneath |
 | Vector tiles (MVT) | `{PUBLIC_URL}/api/v1/ne/mvt/{z}/{x}/{y}.pbf` | live layer, always current (what the project uses) |
-| PMTiles archive | `{PUBLIC_URL}/api/v1/ne/pmtiles?bbox=w,s,e,n` | one file per area, works offline |
-| Style (QML) | `{PUBLIC_URL}/api/v1/ne/mvt.qml?for=tiles` / `?for=ogr` | the legend alone, for a layer you added yourself / for an archive |
+| PMTiles archive | `{PUBLIC_URL}/api/v1/ne/pmtiles?bbox=w,s,e,n` (`&format=zip`: with style and project) | one file per area, works offline |
+| Companion layers | `…/ne/mvt/trees.geojson?bbox=` · `…/ne/mvt/trees/14/{x}/{y}.pbf` · `…/ne/mvt/relief/{z}/{x}/{y}.png` · `…/ne/mvt/pic/{declared\|observed\|sub\|subc\|roads}/{z}/{x}/{y}.png` | what the page draws around the cells: tree crowns, hillshade, the page's own pictures (used by the project) |
+| Style (QML) | `{PUBLIC_URL}/api/v1/ne/mvt.qml?for=tiles` / `?for=ogr` (`&share=` for a state of the page) | the legend alone, for a layer you added yourself / for an archive |
 
 TileJSON: `/api/v1/ne/mvt.json` (lists every field). Zoom 9–15. Same data at the
 same zoom in both forms; an archive is just the tiles of one box, packed. Tiles
@@ -82,27 +83,49 @@ A share hash carries the view (`;at=`), the profile (`;v=obs`) and the overlays
 (`;change ;diff ;trees ;subsidy ;roads ;relief ;ortho`), and the project mirrors
 them: it opens on the same extent, with the same things switched on.
 
-What is in the file (a few KB of XML, nothing downloaded in advance):
+What is in the file (some tens of KB of XML, nothing downloaded in advance).
+**Every layer of ours is fetched from this service** — cells, pictures, trees,
+relief — with your `?key=` on each URL if you passed one, so one identity covers
+the whole map; without a key the same URLs work anonymously. Only the two foreign
+basemaps (basemap.at, OpenStreetMap) are asked directly. Top to bottom:
 
+- **trees · crowns** — every tree as a ring of its crown, as on the page (on with
+  `;trees`, visible below 1:34 000). For a view up to 40 km² (the view plus a
+  quarter around it) this is **one point layer**,
+  `mvt/trees.geojson?bbox=w,s,e,n[&ht=lo..hi]`, fields `h` (m), `crown_d` (m),
+  `crown_m2`, `species`, `vitality`, drawn with a **graduated renderer on `h`**:
+  five classes in the page's bands (3–5 · 5–15 · 15–25 · 25–35 · ≥ 35 m) and
+  greens. To recolour: *Layer styling → Colour ramp →* pick any ramp (Viridis,
+  Magma, …) — the rings follow; change the class count or mode there too. The
+  ring's diameter is the crown in metres on the ground (it grows as you zoom in,
+  never under 1.3 mm); the size expression is on the symbol (*Size → data-defined*)
+  — it multiplies `crown_d` by 1/cos(latitude) while the map is in EPSG:3857,
+  because Web Mercator stretches the ground by that much. Larger views get the
+  same rings from tiles (`mvt/trees/14/{x}/{y}.pbf`, zoom 14, layer `trees`), one
+  legend entry per band. A `ht` term of the filter limits the trees as on the page.
+- **roads · as on the map** — the page's road and rail ink as a picture
+  (`mvt/pic/roads/{z}/{x}/{y}.png`, zoom 12–16), opacity from `;roads=<0.1–1>`.
+  *roads · OpenStreetMap lines* (off) is the same network as vectors for a view of
+  ≤ 400 km² (`/api/v1/osm/geometry?bbox=&cat=road,rail`), *water* likewise.
+- **subsidy claims** — the Schläge as the page draws them (`mvt/pic/sub/…`; under
+  `;change` their lineage, `mvt/pic/subc/…`). Pictures only: the outlines
+  themselves are not handed out. On with `;subsidy`.
+- **relief** — the hillshade of {OBS_NAME}, relayed (`mvt/relief/{z}/{x}/{y}.png`,
+  zoom 8–17), flat ground keyed transparent and blended *overlay* like the page
+  (`?raw=1` = the tile untouched). On with `;relief`.
 - **cells** — the live vector-tile layer (`mvt/{z}/{x}/{y}.pbf`, zoom 9–15, the
-  filter `?f=` and your `?key=` in the URL if you passed them). Its legend is the
-  landing page's set of toggles, each a rule you tick on and off in the layer panel:
-  *declared · group* (fill by `d`, every zoom), *observed · group* (fill by `o`,
-  the `;v=obs` profile), *no declared use*, *change · confirmed / candidate* (red
-  outlines, z ≥ 13; *in the area* on aggregates below), *declared ≠ observed*
-  (violet outline, ≥ 25 % of an aggregate; the cell itself at z ≥ 13), *trees ·
-  height classes* (green, by `ht`), *subsidy · class* (orange, by `sub`), *roads ·
-  within 50 m* (`rd_min = 0`). Colours are the landing page's palette. The styles
-  run to zoom 24: zoom in past 15 and QGIS keeps painting the z15 tile.
-- **trees** — the landing page's tree marks, for a view of ≤ 3 km²: one GeoJSON
-  fetch from {OBS_NAME} (`/api/v1/trees/bbox`, up to 20 000 apices), a disc per
-  tree, diameter = crown, colour = the page's five height bands (< 5 · 5–15 ·
-  15–25 · 25–35 · ≥ 35 m), translucent with a subtle rim; visible below 1:6 000.
-  On with `;trees`. Fields `height_m crown_d_m crown_m2 species vitality cell kg_code`.
-- **roads · OpenStreetMap**, **water · OpenStreetMap** — for a view of ≤ 400 km²,
-  one fetch each from this service's `/api/v1/osm/geometry?bbox=&cat=road,rail`
-  (`water_area`); rail dashed, major roads wider. Roads on with `;roads`, water off.
-- **relief** — {OBS_NAME}'s hillshade tiles (on with `;relief`).
+  filter `?f=` in the URL). It carries the attributes (identify ⓘ a hexagon), the
+  outlines — *change · confirmed / candidate* (z ≥ 13; *in the area* on aggregates
+  below), *declared ≠ observed*, *subsidy cells · class* (off) — the *trees ·
+  tallest* tint of the wooded hexagons at zoom 12–13, and the group fills
+  (*declared · group* by `d`, *observed · group* by `o`). While the pictures below
+  are in charge the fills cover the aggregates up to zoom 11 only; with a filter
+  they paint the matching cells at every zoom. Styles run to zoom 24.
+- **cells · observed / declared, as on the map** — the page's own cell picture
+  (`mvt/pic/observed|declared/{z}/{x}/{y}.png`, zoom 12–16): dominant group,
+  shade = its share, the second group as an inner hexagon from 25 %. Opacities
+  are the page's for the state of the link (profile, photo, subsidy); under a
+  filter the picture steps back to a veil.
 - **orthophoto** — basemap.at's aerial image (CC BY 4.0; on with `;ortho`, opacity
   from `;ortho=<0.1–1>`).
 - **OpenStreetMap** — desaturated, on unless the photo is.
@@ -149,16 +172,28 @@ tells you how much of an area is ready (`status: ready|warming|cold`, `eta_s`);
    `Retry-After`); keep the URL. Limits for the fine zooms (z ≥ 12): ≤ 1500 km²
    and ≤ 20 000 tiles → `413` with a hint to split or use `maxz=11`. Archives
    stay 48 h. The landing page's link ▾ menu builds these URLs for you.
-2. Save the `.pmtiles` file, and next to it — same name, `.qml` — the style:
-   `{PUBLIC_URL}/api/v1/ne/mvt.qml?for=ogr`. QGIS applies a sidecar `.qml` on open.
-3. **Drag the `.pmtiles` file onto the QGIS map** (or *Layer → Add Vector Layer*).
-   QGIS has no native PMTiles *vector-tile* source; the file opens through GDAL
-   (≥ 3.8, in every QGIS ≥ 3.34) as a plain vector layer `cells` — one zoom level
-   at a time, the finest in the file by default (`maxz`, res 12 with every
-   attribute). Other zooms: *Layer → Add Vector Layer → open options* `ZOOM_LEVEL=11`
-   (GDAL PMTiles driver), or build a second archive with `maxz=11`.
-4. The legend comes from the `.qml` (one category per declared group). The file
-   also holds the TileJSON metadata (fields, bounds, attribution) in its header.
+2. **Add `&format=zip`** (the link ▾ menu does) and the answer is a folder:
+   `x.pmtiles`, **`x.qml`** — its style — and **`x.qgs`**, a project. Unpack, keep
+   the three together. Add `&view=<share hash>` to style it by a state of the page.
+   - Double-click `x.qgs`: the map as on the page, the cells read from the
+     archive; trees, subsidy claims, roads, relief and photo are the live layers
+     described above (they need a connection, the cells do not).
+   - Or drag `x.pmtiles` into any project: QGIS applies the `.qml` of the same
+     name — the same legend as rules (declared / observed groups, change,
+     mismatch), not one flat symbol. Without the zip, save
+     `{PUBLIC_URL}/api/v1/ne/mvt.qml?for=ogr` next to the archive under its name.
+3. How QGIS reads it: there is no native PMTiles *vector-tile* source; the file
+   opens through GDAL (≥ 3.8, in every QGIS ≥ 3.34) as a plain vector layer
+   `cells` — one zoom level, the finest in the file by default (`maxz`, res 12
+   with every attribute). Other zooms: *Add Vector Layer → open options*
+   `ZOOM_LEVEL=11`, or a second archive with `maxz=11`.
+4. **Tile seams.** A hexagon on a tile edge is stored in both tiles, and GDAL cuts
+   each copy at the edge — with an outlined symbol the cut shows as a grid. The
+   project opens the archive with the open option **`CLIP=NO`** (whole hexagons, no
+   seam); when you add the file by hand set `CLIP=NO` in *Add Vector Layer → open
+   options*. The `.qml` fills outline in their own colour, so a dragged-in archive
+   shows no seam in the fills either. Edge cells are then listed twice (same `h3`).
+5. The file also holds the TileJSON metadata (fields, bounds, attribution).
 
 `/api/v1/ne/pmtiles/jobs` lists your recent archives (status, progress, size).
 

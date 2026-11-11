@@ -148,6 +148,22 @@ func (f *mvtFeature) done() {
 	f.l.n++
 }
 
+// donePoint — serialise a feature whose geometry is one MoveTo (type 1 = point).
+func (f *mvtFeature) donePoint() {
+	if len(f.geom) == 0 {
+		return
+	}
+	var b []byte
+	b = pbVarint(b, 1<<3|0)
+	b = pbVarint(b, f.id)
+	b = pbPacked(b, 2, f.tags)
+	b = pbVarint(b, 3<<3|0)
+	b = pbVarint(b, 1)
+	b = pbPacked(b, 4, f.geom)
+	f.l.feats = pbBytes(f.l.feats, 2, b)
+	f.l.n++
+}
+
 // encode — the Tile message: one Layer (repeated field 3).
 func mvtEncode(layers ...*mvtLayer) []byte {
 	var out []byte

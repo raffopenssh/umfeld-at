@@ -94,9 +94,8 @@ func exportLoadTiers() {
 
 // exportIdentity — (identity id, tier) for a request. Keys are matched in
 // constant time; the id never carries the key itself.
-func exportIdentity(r *http.Request) (string, *exportTier) {
-	exportLoadTiers()
-	loadTierConfig()
+// exportKeyOf — the key a request presents (key=, X-Export-Key, Bearer), "" = none.
+func exportKeyOf(r *http.Request) string {
 	key := strings.TrimSpace(r.URL.Query().Get("key"))
 	if key == "" {
 		key = strings.TrimSpace(r.Header.Get("X-Export-Key"))
@@ -106,6 +105,13 @@ func exportIdentity(r *http.Request) (string, *exportTier) {
 			key = strings.TrimSpace(a[7:])
 		}
 	}
+	return key
+}
+
+func exportIdentity(r *http.Request) (string, *exportTier) {
+	exportLoadTiers()
+	loadTierConfig()
+	key := exportKeyOf(r)
 	if key != "" {
 		kb := []byte(key)
 		for _, t := range exportTiers {
