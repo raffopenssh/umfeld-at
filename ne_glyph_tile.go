@@ -292,7 +292,8 @@ const neGlyphTileBleed = 1
 // WebKit anti-aliases every <image> edge over ~1 device px on each side, and at the far end of LOD 0 a
 // tile px is ~0.6 css px, so with a 1-px ring both tiles' faded edges met over the page background — a
 // hairline of it along every tile margin on Safari (Chrome's edge is sharper and hid it). The pictures
-// are opaque and identical in the overlap, so a wider ring costs nothing but a few pixels.
+// are identical in the overlap but NOT opaque (alpha = dominance), so the client clips each one to its tile
+// + one screen px a side (hiPE, --pe): the ring is there for every zoom, the doubled band stays ≤ 2 px.
 const neGlyphTilePicBleed = 3
 
 // neGlyphTileBleedFor — the ring of a view's tile; mirrored by the client's hiTile (BLEED / BLEED_PIC).

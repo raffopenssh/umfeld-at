@@ -407,6 +407,10 @@ lazy caches unlocked while a tile burst of one KG read them (`fatal error: concu
 write`, process restart mid-session). Now `rowsMu`/`deltasMu`, and `neChangeAppend` is copy-on-write
 (drops the loaded KG, next reader reloads) — `TestNEChangeProtocol` runs 8 readers under `-race`.
 
+**Picture tile seams** (`hiPE`, `--pe`): base and `v=obs` tiles carry a 3-px ring but are translucent (alpha = dominance), so the ring two
+neighbours share composited twice — a band of other tone along every seam, 14 px at 2400×. Each picture is clipped
+(`clip-path: inset(ring − var(--pe))`) to its tile + one screen px a side; `hiPE` (from `hiView`) keeps `--pe` in step with the zoom.
+
 ## Phone load triage — `?trace` field recorder + emulated screencast
 
 A load that "flashes" on a phone we cannot hold: add `?trace` (hard reload with a fresh `?r=N` after every
