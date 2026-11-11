@@ -153,7 +153,7 @@ function trErr(j,s){var m=j&&(j.error&&j.error.message||j.error||j.message);retu
 function trAnswer(a,body,s,j){var ui=a.tr,e=a.e_,t=j.tree;
  if((s===200||s===201)&&!t&&body.claim!=='tree'&&body.claim!=='missing'&&CL[body.claim]){a.fg={claim:body.claim};var fl=a.fl||(a.fl={claims:{},n:0});if(!j.folded){fl.claims[body.claim]=(fl.claims[body.claim]||0)+1;fl.n=(fl.n||0)+1}if(j.tally&&j.tally.claims){fl.claims=j.tally.claims;fl.n=j.tally.n||fl.n}e.flI[a.i]=fl;ui.done='flagged \u00b7 '+CL[body.claim];apMarks(e);trRe(a);return}
  if((s===200||s===201)&&t){var tg=a;/* a chooser answer lands on the tree the reader chose, not on the one first tapped */if(ui.to){var te=trTileAt(ui.to.lon,ui.to.lat),ti=te?trFind(te,ui.to,ui.to.kind==='added'):-1;ui.to=null;if(ti>=0&&!(te===e&&ti===a.i)){tg=apObj(te,ti);tg.e_=te;a.tr={};tg.tr={}}}
-  var E=tg.e_,c=E.c,i=tg.i,wd=t.op==='retract',key=t.client_id||t.tree_id||trLL(tg.lon,tg.lat);
+  var E=tg.e_,c=E.c,i=tg.i,wd=t.op==='retract'||!!(body.retract&&j.folded)/* 200 folded = withdrawn before: the same end state */,key=t.client_id||t.tree_id||trLL(tg.lon,tg.lat);
   if(c.kd[i]===9){i=trPush(E,tg.lon,tg.lat,null,1,{});tg=apObj(E,i);tg.e_=E;tg.tr=ui}
   if(c.kd[i]===3){c.kd[i]=1;tg.kd=1}
   var u=trSet(E,i,t);tg.u=u;var U=tg.tr;U.mode='';U.q='';U.warn=t.warning||'';
@@ -161,6 +161,7 @@ function trAnswer(a,body,s,j){var ui=a.tr,e=a.e_,t=j.tree;
   if(wd&&c.kd[i]&&u.taxon==null&&u.h==null&&u.dbh==null&&(c.kd[i]===1?!t.added||!u.n:true)&&(body.claim==='missing'||c.kd[i]===2)){trGone(E,i);showHint(body.claim==='missing'?'tree removed':'report withdrawn',2200);apSched();return}
   U.done=wd?'withdrawn':body.claim==='missing'?(j.folded?'already added':'tree added'):j.folded?'already reported':'reported \u2014 thank you';if(E.fq){apFiltDrop(E);apFilt(E)}apMarks(E);apSched();
   if(tg!==a){apPin({e:E,i:i,a:tg,el:null})}else trRe(a);if(U.hist)trHist(tg,true);return}
+ if(body.retract&&(s===403||s===404)){/* 403 not_yours: this reader never reported on the tree, nothing was written; 404: the peer has no such tree. Either way it is not ours (any more) */var uu=a.u||{};delete TR.mine[trLL(a.lon,a.lat)];if(uu.cid)delete TR.mine[uu.cid];if(uu.tid)delete TR.mine[uu.tid];trSave();if(s===404&&a.kd===1){trGone(e,a.i);showHint('tree removed',2200);apSched();return}ui.err=s===403?'not your report \u2014 nothing withdrawn':'nothing to withdraw here';trRe(a);return}
  if(s===409&&t){ui.near={t:t};trRe(a);return}
  if((s===409||s===404)&&j.candidates){ui.cand={list:j.candidates,none:s===404};if(s===404&&!j.candidates.length)ui.err='';trRe(a);return}
  ui.err=trErr(j,s);ui.dym=j.did_you_mean||null;if(ui.dym){ui.dym=ui.dym.map(function(x){return typeof x==='string'?x:x&&(x.taxon||x[0])}).filter(Boolean);ui.mode='';ui.err='unknown species'}trRe(a)}

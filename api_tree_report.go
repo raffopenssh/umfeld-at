@@ -210,8 +210,10 @@ func handleV1TreeReport(w http.ResponseWriter, r *http.Request) {
 	treeReportBucket.status[resp.StatusCode]++
 	treeReportBucket.mu.Unlock()
 	status := resp.StatusCode
-	if status == http.StatusUnauthorized || status == http.StatusForbidden {
-		// our key, not the reader's fault — and never a hint about it
+	if status == http.StatusUnauthorized || (status == http.StatusForbidden && !bytes.Contains(out, []byte(`"not_yours"`))) {
+		// our key, not the reader's fault — and never a hint about it. A 403 with
+		// reason "not_yours" is the peer's answer to a withdraw by somebody who never
+		// reported on that tree: that one goes back to the reader.
 		apiError(w, "tree reports are not accepted right now", http.StatusBadGateway)
 		return
 	}
