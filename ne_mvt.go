@@ -849,6 +849,7 @@ func neMVTTileBins(z, x, y int, clip *[4]float64) [][2]int {
 func neMVTRenderFromBlobs(z, x, y int, bins [][2]int, blobs [][]byte, states []string, clip *[4]float64, expr *neFiltExpr) ([]byte, int) {
 	t0 := time.Now()
 	filt := expr != nil && !expr.empty()
+	veil := filt && expr.Veil // the complement: what the filter leaves out
 	w, s, e, n := mvtTileBox(z, x, y)
 	if clip != nil { // archive: only what lies in the requested box
 		w, s, e, n = math.Max(w, clip[0]), math.Max(s, clip[1]), math.Min(e, clip[2]), math.Min(n, clip[3])
@@ -886,7 +887,7 @@ func neMVTRenderFromBlobs(z, x, y int, bins [][2]int, blobs [][]byte, states []s
 				mask = b.eval(expr)
 			}
 			for k := 0; k < b.N; k++ {
-				if mask != nil && mask[k] == 0 {
+				if mask != nil && (mask[k] == 0) != veil {
 					continue
 				}
 				lon, lat := neMVTBinLonLat(b, k)
@@ -941,7 +942,7 @@ func neMVTRenderFromBlobs(z, x, y int, bins [][2]int, blobs [][]byte, states []s
 				}
 				if filt {
 					a.nAll++
-					if mask[k] == 0 {
+					if (mask[k] == 0) != veil {
 						continue
 					}
 				}
@@ -980,6 +981,12 @@ func neMVTTile(z, x, y int, inline int, clip *[4]float64, expr *neFiltExpr) (gz 
 	canon := ""
 	if expr != nil && !expr.empty() {
 		canon = expr.Canonical()
+		if expr.Veil {
+			if neMVTZoomRes(z) <= neNatRes { // the veil exists where the cells' own index does (z 12+)
+				return nil, "empty", neMVTProgress{}, true, nil
+			}
+			canon += ";veil"
+		}
 	}
 	if neMVTZoomRes(z) <= neNatRes {
 		if nat := neNatGet(); nat != nil { // low zooms: the national table, never a bin
@@ -1106,6 +1113,7 @@ func handleNEMVT(w http.ResponseWriter, r *http.Request, rest string) {
 	var expr *neFiltExpr
 	if f := r.URL.Query().Get("f"); f != "" {
 		expr = neFiltParse(f)
+		expr.Veil = r.URL.Query().Get("veil") == "1"
 	}
 	gz, key, prog, complete, err := neMVTTile(z, x, y, neMVTWaitBins, nil, expr)
 	if err == errBusy {

@@ -68,6 +68,9 @@ you) — and the layer holds only what the map leaves un-veiled:
 | 12–13 (res 10–11) | hexagons with ≥ 1 matching cell; aggregates over the **matching** cells; `n` = matching, `n_all` = every cell, `match_pct`, `area_ha` = the matching share of the hexagon |
 | 9–11 (res 7–9) | the same, folded from the national 1-in-49 sample (one res-12 cell per res-10 cell): counts ×49, `approx=true`, `sample=49`; every term applies, `k>=` not |
 
+`&veil=1` next to `f=` turns a tile into the **complement** — the cells the
+filter leaves out (zoom 12+; empty below).
+
 `/api/v1/ne/mvt.json?f=…` is a TileJSON with the filter in its tile URL (for
 MapLibre and scripts; QGIS wants the `{z}/{x}/{y}` template, the project carries
 it); `/api/v1/ne/pmtiles?…&f=…` (or a `share=` whose hash
@@ -90,65 +93,64 @@ relief — with your `?key=` on each URL if you passed one, so one identity cove
 the whole map; without a key the same URLs work anonymously. Only the two foreign
 basemaps (basemap.at, OpenStreetMap) are asked directly. Top to bottom:
 
-- **trees · crowns** — every tree as a ring of its crown, as on the page (on with
-  `;trees`, visible below 1:34 000). For a view up to 40 km² (the view plus a
-  quarter around it) this is **one point layer**,
-  `mvt/trees.geojson?bbox=w,s,e,n[&ht=lo..hi]`, fields `h` (m), `crown_d` (m),
-  `crown_m2`, `species`, `vitality`, drawn with a **graduated renderer on `h`**:
-  five classes in the page's bands (3–5 · 5–15 · 15–25 · 25–35 · ≥ 35 m) and
-  greens. To recolour: *Layer styling → Colour ramp →* pick any ramp (Viridis,
-  Magma, …) — the rings follow; change the class count or mode there too. The
-  ring's diameter is the crown in metres on the ground (it grows as you zoom in,
-  never under 1.3 mm); the size expression is on the symbol (*Size → data-defined*)
-  — it multiplies `crown_d` by 1/cos(latitude) while the map is in EPSG:3857,
-  because Web Mercator stretches the ground by that much. Larger views get the
-  same rings from tiles (`mvt/trees/14/{x}/{y}.pbf`, zoom 14, layer `trees`), one
-  legend entry per band. A `ht` term of the filter limits the trees as on the page.
-- **roads · as on the map** — the page's road and rail ink as a picture
+- **Trees · crowns by height** — every tree as a ring of its crown, as on the
+  page (on with `;trees`, visible below 1:34 000). Live tiles
+  (`mvt/trees/14/{x}/{y}.pbf[?ht=lo..hi]`, zoom 14, layer `trees`): they load
+  wherever the map goes. Identify a ring: `h` (m), `crown_d` (m), `crown_m2`,
+  `species`, `vitality`. One legend entry per height band (3–5 · 5–15 · 15–25 ·
+  25–35 · ≥ 35 m). A `ht` term of the filter limits the trees as on the page.
+- **Roads and rail** — the page's road and rail ink as a picture
   (`mvt/pic/roads/{z}/{x}/{y}.png`, zoom 12–16), opacity from `;roads=<0.1–1>`.
-  *roads · OpenStreetMap lines* (off) is the same network as vectors for a view of
-  ≤ 400 km² (`/api/v1/osm/geometry?bbox=&cat=road,rail`), *water* likewise.
-- **subsidy claims** — the Schläge as the page draws them (`mvt/pic/sub/…`; under
-  `;change` their lineage, `mvt/pic/subc/…`). Pictures only: the outlines
-  themselves are not handed out. On with `;subsidy`.
-- **relief** — the hillshade of {OBS_NAME}, relayed (`mvt/relief/{z}/{x}/{y}.png`,
-  zoom 8–17), flat ground keyed transparent and blended *overlay* like the page
-  (`?raw=1` = the tile untouched). On with `;relief`.
-- **cells** — the live vector-tile layer (`mvt/{z}/{x}/{y}.pbf`, zoom 9–15, the
-  filter `?f=` in the URL). It carries the attributes (identify ⓘ a hexagon), the
-  outlines — *change · confirmed / candidate* (z ≥ 13; *in the area* on aggregates
-  below), *declared ≠ observed*, *subsidy cells · class* (off) — the *trees ·
-  tallest* tint of the wooded hexagons at zoom 12–13, and the group fills
-  (*declared · group* by `d`, *observed · group* by `o`). While the pictures below
-  are in charge the fills cover the aggregates up to zoom 11 only; with a filter
-  they paint the matching cells at every zoom. Styles run to zoom 24.
-- **cells · hexagons (this view)** — off at first. The same cells as a **plain
-  vector layer** (`mvt/cells.geojson?bbox=`, one fetch of the view): tick it and
-  the identify tool ⓘ lists every attribute under its label and unit, the
-  attribute table and *select by expression* work, and so do the processing
-  tools — a vector-tile layer cannot be an input there. Legend = the page's
-  toggles as rules (declared or observed groups by the profile of the link, the
-  fill shaded by the group's share like the picture; change · confirmed /
-  candidate; declared ≠ observed; subsidy cells off). Extra fields: `area_m2`,
-  `lon`, `lat` (centre), `match`. Resolution follows the view: the cells
-  themselves up to 16 km², res-11 aggregates up to 110 km², res-10 up to
-  700 km² (`&res=10|11` asks for the coarser one); beyond that the layer is
-  left out (`413`) — use the tiles or an archive.
-- **veil · cells the filter leaves out (this view)** — only with a filter, off
-  at first: `cells.geojson?bbox=&f=…&veil=1`, the complement, painted as the
-  page's veil. The hexagon layer then holds the cells that pass (`match=true`),
-  the veil the rest (`match=false`) — every cell of the view in exactly one, so
-  *Intersection* with the hexagons or *Difference* with the veil cuts any layer
-  (trees, your own polygons) to what the filter keeps. On aggregates a hexagon
-  is in each layer with the cells of that side (`n`, `n_all`, `match_pct`).
-- **cells · observed / declared, as on the map** — the page's own cell picture
-  (`mvt/pic/observed|declared/{z}/{x}/{y}.png`, zoom 12–16): dominant group,
-  shade = its share, the second group as an inner hexagon from 25 %. Opacities
-  are the page's for the state of the link (profile, photo, subsidy); under a
-  filter the picture steps back to a veil.
-- **orthophoto** — basemap.at's aerial image (CC BY 4.0; on with `;ortho`, opacity
-  from `;ortho=<0.1–1>`).
-- **OpenStreetMap** — desaturated, on unless the photo is.
+- **Subsidy claims (INVEKOS)** — the claimed fields as the page draws them
+  (`mvt/pic/sub/…`; under `;change` their lineage, `mvt/pic/subc/…`). Pictures
+  only: the outlines themselves are not handed out. On with `;subsidy`.
+- **Terrain relief** — the hillshade of {OBS_NAME}, relayed
+  (`mvt/relief/{z}/{x}/{y}.png`, zoom 8–17), flat ground keyed transparent and
+  blended *overlay* like the page (`?raw=1` = the tile untouched). On with `;relief`.
+- **Cells · click for details** — the live vector-tile layer
+  (`mvt/{z}/{x}/{y}.pbf`, zoom 9–15, the filter `?f=` in the URL). **The layer
+  for the identify tool ⓘ**: click a hexagon, every attribute. It also draws
+  the outlines — *change · confirmed / candidate* (z ≥ 13; *in the area* on
+  aggregates below), *declared ≠ observed*, *subsidy cells · class* (off) — the
+  *trees · tallest* tint of the wooded hexagons at zoom 12–13, and the group
+  fills (*declared · group* by `d`, *observed · group* by `o`). While the
+  pictures below are in charge the fills cover the aggregates up to zoom 11
+  only; with a filter they paint the matching cells at every zoom. Styles run
+  to zoom 24.
+- **Filter veil** — only with a filter: the tiles with `?f=…&veil=1`, the
+  **complement** of the filter (zoom 12+), whitened like the page's veil over
+  the pictures below. Identify a veiled cell to see why it fails.
+- **Vector data of this view (analysis)** — a collapsed group, all off at
+  first. The view as **plain vector layers**, one fetch each (they do not grow
+  when you pan): what the attribute table, *select by expression* and the
+  processing tools accept — a vector-tile layer cannot be their input.
+  - **Trees as points** — `mvt/trees.geojson?bbox=w,s,e,n[&ht=lo..hi]` (the
+    view plus a quarter around it, up to 40 km²), a **graduated renderer on
+    `h`** in the page's bands and greens. To recolour: *Layer styling → Colour
+    ramp →* any ramp — the rings follow. The ring's diameter is the crown in
+    metres on the ground (data-defined size: `crown_d` × 1/cos(latitude) in
+    EPSG:3857).
+  - **Cells as polygons** — `mvt/cells.geojson?bbox=`, styled like the map
+    (groups by the profile of the link, each fill shaded by the group's share;
+    change; declared ≠ observed). Fields carry their label and unit as alias;
+    extra fields `area_m2`, `lon`, `lat` (centre), `match`. With a filter this
+    is **Cells in the filter** (`match=true`) next to **Cells outside the
+    filter** (`…&veil=1`) — every cell of the view in exactly one, so
+    *Intersection* with the first or *Difference* with the second cuts any
+    layer (trees, your own polygons) to what the filter keeps. Resolution
+    follows the view: the cells themselves up to 16 km², res-11 aggregates
+    (*· 25 m*) up to 110 km², res-10 (*· 66 m*) up to 700 km² (`&res=10|11`
+    asks for the coarser one; on aggregates a hexagon is in each layer with
+    the cells of that side: `n`, `n_all`, `match_pct`); beyond that the layers
+    are left out (`413`) — use an archive.
+- **Land use · observed (LiDAR)** / **Land use · declared (register)** — the
+  page's own cell picture (`mvt/pic/observed|declared/{z}/{x}/{y}.png`, zoom
+  12–16): dominant group, shade = its share, the second group as an inner
+  hexagon from 25 %. Opacities are the page's for the state of the link
+  (profile, photo, subsidy).
+- **Aerial photo** — basemap.at's aerial image (CC BY 4.0; on with `;ortho`,
+  opacity from `;ortho=<0.1–1>`).
+- **Base map (OpenStreetMap)** — desaturated, on unless the photo is.
 
 Project CRS is Web Mercator (EPSG:3857); measurement units m / ha; attribution in
 the project and layer metadata. Identify (ⓘ) a hexagon to read every attribute;

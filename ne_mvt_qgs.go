@@ -349,7 +349,7 @@ const neQGSOrthoURL = "https://mapsneu.wien.gv.at/basemap/bmaporthofoto30cm/norm
 // neQGSVector — one GeoJSON-over-HTTP vector layer (QGIS "ogr" provider reads
 // the URL directly): tree apices from the observed-layer peer, OSM lines and
 // water from this service. One fetch per layer on open — only offered for a
-// box small enough (neQGSTreesKm2 / neQGSLinesKm2), like the page's overlays
+// box small enough (neLayerTreesMaxKm2), like the page's overlays
 // that exist at the near zooms only.
 func neQGSVector(id, name, url, geom, rights, renderer string, checked bool, opacity string, minScale int) (tree, layer string) {
 	id = neQGSID(id)
@@ -375,7 +375,7 @@ const neQGSCRS4326 = `<spatialrefsys nativeFormat="Wkt"><wkt>GEOGCRS["WGS 84",DA
 // the whole cell, neGlyphTileAlphaMin … 1). share = the field holding the
 // dominant group's share in percent.
 func neQGSHexShade(rgb, share string) string {
-	ex := fmt.Sprintf(`set_color_part('%s','alpha',255*(%.2f+%.2f*clamp(0,floor((coalesce("%s",100)/100-1/3)*6),3)/3))`, rgb, neGlyphTileAlphaMin, 1-neGlyphTileAlphaMin, share)
+	ex := fmt.Sprintf(`set_color_part('%s','alpha',255*(%.2f+%.2f*clamp(0,floor((coalesce(%s,100)/100-1/3)*6),3)/3))`, rgb, neGlyphTileAlphaMin, 1-neGlyphTileAlphaMin, share)
 	prop := func(n string) string {
 		return `<Option type="Map" name="` + n + `"><Option type="bool" name="active" value="true"/><Option type="QString" name="expression" value="` + html.EscapeString(ex) + `"/><Option type="int" name="type" value="3"/></Option>`
 	}
@@ -386,6 +386,33 @@ func neQGSHexShade(rgb, share string) string {
 // cell layer's rules that exist at that resolution, the group fills shaded by
 // share like the page's picture. Which rules start ticked is the page's state
 // (declared / observed profile, change, mismatch).
+// neQGSHexShaded — a rule's symbol with the shade, if the rule is a group fill.
+// res 0 = tiles (cells and aggregates in one style: whichever share field is there).
+func neQGSHexShaded(x neQGSRule, res int) string {
+	for i, g := range neGlyphGroups {
+		c := neGlyphGroupRGB[i]
+		rgb := fmt.Sprintf("%d,%d,%d", c[0], c[1], c[2])
+		for _, pf := range [][3]string{{"declared · ", "dsh", "d_pct"}, {"observed · ", "osh", "o_pct"}} {
+			if x.name == pf[0]+neQGSGroupLabel[i]+" ("+g+")" {
+				share := `"` + pf[1] + `"`
+				if res == 0 {
+					share += `,"` + pf[2] + `"`
+				} else if res < 12 {
+					share = `"` + pf[2] + `"`
+				}
+				return strings.Replace(x.sym, `</Option></layer>`, `</Option>`+neQGSHexShade(rgb, share)+`</layer>`, 1)
+			}
+		}
+	}
+	return x.sym
+}
+
+// neQGSVeilTileStyle — the veil tiles: one entry, the page's paper at 82 %.
+func neQGSVeilTileStyle() string {
+	return fmt.Sprintf(`<renderer type="basic"><styles><style enabled="1" name="veiled by the filter" layer="%s" geometry="2" expression="" min-zoom="12" max-zoom="%d"><symbols>%s</symbols></style></styles></renderer>`,
+		neMVTLayerName, neQGSStyleMaxZ, neQGSFill("0", "250,250,247,209", "250,250,247,209", "0.1"))
+}
+
 func neQGSHexStyles(v neQGSView, res int) string {
 	z := res + 2
 	var r, sy strings.Builder
@@ -399,20 +426,7 @@ func neQGSHexStyles(v neQGSView, res int) string {
 		if !x.on {
 			chk = ` checkstate="0"`
 		}
-		sym := strings.Replace(x.sym, `name="0"`, fmt.Sprintf(`name="%d"`, k), 1)
-		for i, g := range neGlyphGroups {
-			c := neGlyphGroupRGB[i]
-			rgb := fmt.Sprintf("%d,%d,%d", c[0], c[1], c[2])
-			for _, pf := range [][3]string{{"declared · ", "dsh", "d_pct"}, {"observed · ", "osh", "o_pct"}} {
-				if x.name == pf[0]+neQGSGroupLabel[i]+" ("+g+")" {
-					share := pf[1]
-					if res < 12 {
-						share = pf[2]
-					}
-					sym = strings.Replace(sym, `</Option></layer>`, `</Option>`+neQGSHexShade(rgb, share)+`</layer>`, 1)
-				}
-			}
-		}
+		sym := strings.Replace(neQGSHexShaded(x, res), `name="0"`, fmt.Sprintf(`name="%d"`, k), 1)
 		fmt.Fprintf(&r, `<rule filter="%s" symbol="%d" key="{00000000-0000-4000-8000-0000000d%04d}" label="%s"%s/>`, html.EscapeString(x.expr), k, k+1, html.EscapeString(x.name), chk)
 		sy.WriteString(sym)
 		k++
@@ -485,24 +499,6 @@ func neQGSHexLayer(id, name, url, abstract, rights, renderer, extras, opacity st
 func neQGSLine(name, color, width, style string) string {
 	return `<symbol type="line" name="` + name + `" alpha="1" clip_to_extent="1" force_rhr="0"><layer class="SimpleLine" enabled="1" locked="0" pass="0"><Option type="Map"><Option type="QString" name="line_color" value="` + color + `"/><Option type="QString" name="line_width" value="` + width + `"/><Option type="QString" name="line_width_unit" value="MM"/><Option type="QString" name="line_style" value="` + style + `"/><Option type="QString" name="capstyle" value="round"/><Option type="QString" name="joinstyle" value="round"/></Option></layer></symbol>`
 }
-
-// neQGSRoadRenderer — the page's roads ink: major roads darker and wider,
-// rail dashed, the rest thin grey.
-func neQGSRoadRenderer() string {
-	return `<renderer-v2 type="RuleRenderer" symbollevels="0" forceraster="0" enableorderby="0"><rules key="{00000000-0000-4000-8000-000000000rd0}">` +
-		`<rule filter="&quot;cat&quot; = 'rail'" symbol="0" key="{00000000-0000-4000-8000-000000000rd1}" label="rail"/>` +
-		`<rule filter="&quot;cat&quot; = 'road' AND &quot;major&quot;" symbol="1" key="{00000000-0000-4000-8000-000000000rd2}" label="major road"/>` +
-		`<rule filter="&quot;cat&quot; = 'road' AND NOT &quot;major&quot;" symbol="2" key="{00000000-0000-4000-8000-000000000rd3}" label="road, track, path"/>` +
-		`</rules><symbols>` + neQGSLine("0", "70,70,70,255", "0.5", "dash") + neQGSLine("1", "60,60,60,230", "0.6", "solid") + neQGSLine("2", "110,110,110,200", "0.3", "solid") + `</symbols></renderer-v2>`
-}
-
-func neQGSWaterRenderer() string {
-	return `<renderer-v2 type="singleSymbol" symbollevels="0" forceraster="0" enableorderby="0"><symbols>` + neQGSFill("0", "79,147,214,120", "79,147,214,255", "0.2") + `</symbols></renderer-v2>`
-}
-
-// neQGSLinesKm2 — box size (km²) up to which a project offers the one-fetch
-// OSM GeoJSON layers (lines ≈ 15/km²). The pictures and tiles have no limit.
-const neQGSLinesKm2 = 400.0
 
 func neQGSBoxKm2(b [4]float64) float64 {
 	la := (b[1] + b[3]) / 2 * math.Pi / 180
@@ -587,68 +583,70 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 
 	// the page's stack, bottom → top: photo · cells · relief (overlay blend) ·
 	// subsidy · roads · trees
-	type bm struct{ tree, layer, id string }
-	var bms, over []bm // under the cells / over them, each top → bottom
+	type bm struct {
+		tree, layer, id string
+		grp             bool // inside the "this view as vector data" group
+	}
+	var bms, over, vec []bm // under the cells / over them, each top → bottom; vec = the vector group
 	km2 := neQGSBoxKm2(box)
 	bb := fmt.Sprintf("%.5f,%.5f,%.5f,%.5f", box[0], box[1], box[2], box[3])
 	if pr.ObsAPI != "" {
 		ht := neQGSFiltHt(sp.canon)
-		tn := "trees · crowns"
+		tn := "Trees · crowns by height"
+		tp := "Trees as points"
 		if ht != "" {
-			tn += " " + strings.Replace(ht, "..", "–", 1) + " m"
+			w := ""
+			switch lo, hi, _ := strings.Cut(ht, ".."); {
+			case hi == "":
+				w = " · ≥ " + lo + " m"
+			case lo == "":
+				w = " · ≤ " + hi + " m"
+			default:
+				w = " · " + lo + "–" + hi + " m"
+			}
+			tn, tp = tn+w, tp+w
 			ht = "ht=" + ht
 		}
-		// the view and a margin around it in one fetch → a point layer with a
-		// graduated renderer (re-rampable); larger views get the tile layer
+		// on the map: the live tiles — the page's rings wherever the reader pans
+		t, l := neQGSTileLayer(neQGSTileOpt{id: "trees", name: tn, url: q(base+"/api/v1/ne/mvt/trees/{z}/{x}/{y}.pbf", ht), zmin: neLayerTreesZ, zmax: neLayerTreesZ,
+			rights: pr.ObsName + " (CC BY 4.0), BEV", renderer: neQGSTreeStyles(), checked: view.trees, opacity: "0.9", minScale: 34000,
+			abstract: "Every tree found by LiDAR as a ring the size of its crown, coloured by height — as on the map. Live tiles: they load wherever the map goes. Visible below 1:34 000. Click a ring with the identify tool: h (m), crown_d (m), crown_m2, species, vitality."})
+		over = append(over, bm{tree: t, layer: l, id: "trees"})
+		// for analysis: the view and a margin around it in one fetch → a point
+		// layer with a graduated renderer (re-rampable), in the vector group
 		mx, my := (box[2]-box[0])*0.25, (box[3]-box[1])*0.25
 		tb := [4]float64{box[0] - mx, box[1] - my, box[2] + mx, box[3] + my}
 		if neQGSBoxKm2(tb) > neLayerTreesMaxKm2 {
 			tb = box
 		}
-		var t, l string
-		if neQGSBoxKm2(tb) <= neLayerTreesMaxKm2 {
-			t, l = neQGSVector("trees", tn, q(base+"/api/v1/ne/mvt/trees.geojson", fmt.Sprintf("bbox=%.5f,%.5f,%.5f,%.5f", tb[0], tb[1], tb[2], tb[3]), ht), "Point", pr.ObsName+" (CC BY 4.0), BEV", neQGSTreeGraduated(), view.trees, "0.9", 34000)
-		} else {
-			t, l = neQGSTileLayer(neQGSTileOpt{id: "trees", name: tn, url: q(base+"/api/v1/ne/mvt/trees/{z}/{x}/{y}.pbf", ht), zmin: neLayerTreesZ, zmax: neLayerTreesZ,
-				rights: pr.ObsName + " (CC BY 4.0), BEV", renderer: neQGSTreeStyles(), checked: view.trees, opacity: "0.9", minScale: 34000,
-				abstract: "Tree apices from LiDAR: h (m), crown_d (m), crown_m2, species, vitality. A ring per crown, as on the map. Visible below 1:34 000 (zoom 14)."})
+		if neQGSBoxKm2(tb) <= neLayerTreesMaxKm2 && sp.archive == "" {
+			t, l := neQGSVector("treepts", tp, q(base+"/api/v1/ne/mvt/trees.geojson", fmt.Sprintf("bbox=%.5f,%.5f,%.5f,%.5f", tb[0], tb[1], tb[2], tb[3]), ht), "Point", pr.ObsName+" (CC BY 4.0), BEV", neQGSTreeGraduated(), false, "0.9", 34000)
+			vec = append(vec, bm{tree: t, layer: l, id: "treepts", grp: true})
 		}
-		over = append(over, bm{t, l, "trees"})
 	}
-	t, l := neQGSRaster(neQGSRasterOpt{id: "roadsink", name: "roads · as on the map", url: q(base + "/api/v1/ne/mvt/pic/roads/{z}/{x}/{y}.png"), rights: "© OpenStreetMap contributors (ODbL)",
+	t, l := neQGSRaster(neQGSRasterOpt{id: "roadsink", name: "Roads and rail", url: q(base + "/api/v1/ne/mvt/pic/roads/{z}/{x}/{y}.png"), rights: "© OpenStreetMap contributors (ODbL)",
 		zmin: neLayerPicMinZ, zmax: neLayerPicMaxZ, opacity: view.roadsOp, checked: view.roads, hidpi: true})
-	over = append(over, bm{t, l, "roadsink"})
-	if km2 <= neQGSLinesKm2 {
-		t, l := neQGSVector("roads", "roads · OpenStreetMap lines (this view)", q(base+"/api/v1/osm/geometry", "bbox="+bb, "cat=road,rail"), "Line", "© OpenStreetMap contributors (ODbL)", neQGSRoadRenderer(), false, "0.8", 0)
-		over = append(over, bm{t, l, "roads"})
-	}
+	over = append(over, bm{tree: t, layer: l, id: "roadsink"})
 	if pr.SubName != "" {
-		pv, pn := "sub", "subsidy claims · Schläge as drawn"
+		pv, pn := "sub", "Subsidy claims (INVEKOS)"
 		if view.change {
-			pv, pn = "subc", "subsidy claims · new / redrawn / gone"
+			pv, pn = "subc", "Subsidy claims · changes"
 		}
 		t, l := neQGSRaster(neQGSRasterOpt{id: "subsidy", name: pn, url: q(base + "/api/v1/ne/mvt/pic/" + pv + "/{z}/{x}/{y}.png"), rights: neSubAttribution,
 			zmin: neLayerPicMinZ, zmax: neLayerPicMaxZ, opacity: 1, checked: view.sub, hidpi: true})
-		over = append(over, bm{t, l, "subsidy"})
+		over = append(over, bm{tree: t, layer: l, id: "subsidy"})
 	}
 	if pr.ObsWeb != "" {
-		t, l := neQGSRaster(neQGSRasterOpt{id: "relief", name: "relief · hillshade", url: q(base + "/api/v1/ne/mvt/relief/{z}/{x}/{y}.png"), rights: pr.ObsName + " (CC BY 4.0), BEV",
+		t, l := neQGSRaster(neQGSRasterOpt{id: "relief", name: "Terrain relief", url: q(base + "/api/v1/ne/mvt/relief/{z}/{x}/{y}.png"), rights: pr.ObsName + " (CC BY 4.0), BEV",
 			zmin: neLayerReliefMinZ, zmax: neLayerReliefMaxZ, opacity: 0.45, checked: view.relief, blend: 8})
-		over = append(over, bm{t, l, "relief"})
-	}
-	if km2 <= neQGSLinesKm2 {
-		t, l := neQGSVector("water", "water · OpenStreetMap (this view)", q(base+"/api/v1/osm/geometry", "bbox="+bb, "cat=water_area"), "Polygon", "© OpenStreetMap contributors (ODbL)", neQGSWaterRenderer(), false, "0.8", 0)
-		bms = append(bms, bm{t, l, "water"})
+		over = append(over, bm{tree: t, layer: l, id: "relief"})
 	}
 	// the page's own cell picture (dominant group, shade = dominance, second
 	// group as an inner hexagon): under the vector cells, which then carry the
 	// outlines, the attributes and — with a filter — the matching cells
-	otf, veil := 1.0, 1.0
+	otf := 1.0
 	if view.ortho {
 		otf = 1 - 0.65*view.orthoOp
-	}
-	if sp.canon != "" {
-		veil = 0.35 // the page veils what the filter does not match
 	}
 	dop, oop := 1.0, 1.0
 	switch {
@@ -665,47 +663,52 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 	}
 	var pics []bm // above the vector cells' basemaps, below the cells
 	if pr.ObsAPI != "" {
-		t, l := neQGSRaster(neQGSRasterOpt{id: "picobs", name: "cells · observed, as on the map", url: q(base + "/api/v1/ne/mvt/pic/observed/{z}/{x}/{y}.png"), rights: pr.ObsName + " (CC BY 4.0), BEV",
-			zmin: neLayerPicMinZ, zmax: neLayerPicMaxZ, opacity: oop * otf * veil, checked: view.obs && sp.archive == "", hidpi: true})
-		pics = append(pics, bm{t, l, "picobs"})
+		t, l := neQGSRaster(neQGSRasterOpt{id: "picobs", name: "Land use · observed (LiDAR)", url: q(base + "/api/v1/ne/mvt/pic/observed/{z}/{x}/{y}.png"), rights: pr.ObsName + " (CC BY 4.0), BEV",
+			zmin: neLayerPicMinZ, zmax: neLayerPicMaxZ, opacity: oop * otf, checked: view.obs && sp.archive == "", hidpi: true})
+		pics = append(pics, bm{tree: t, layer: l, id: "picobs"})
 	}
-	t, l = neQGSRaster(neQGSRasterOpt{id: "picdecl", name: "cells · declared, as on the map", url: q(base + "/api/v1/ne/mvt/pic/declared/{z}/{x}/{y}.png"), rights: BEVNotice(),
-		zmin: neLayerPicMinZ, zmax: neLayerPicMaxZ, opacity: dop * otf * veil, checked: sp.archive == "", hidpi: true})
-	pics = append(pics, bm{t, l, "picdecl"})
-	// the same cells as plain vector layers (cells.geojson): what the identify
-	// tool, the attribute table and the processing tools work on. Off at first,
-	// over the pictures; with a filter the hexagons are the matching cells and
-	// the veil is the rest, so the two tile the view.
-	if hres := neCellsJSONRes(km2); hres > 0 && sp.archive == "" {
-		prof := "declared"
-		if view.obs {
-			prof = "observed"
-		}
-		if view.change {
-			prof += " + change"
-		}
-		what := map[int]string{12: "9 m cells", 11: "25 m aggregates", 10: "66 m aggregates"}[hres]
+	t, l = neQGSRaster(neQGSRasterOpt{id: "picdecl", name: "Land use · declared (register)", url: q(base + "/api/v1/ne/mvt/pic/declared/{z}/{x}/{y}.png"), rights: BEVNotice(),
+		zmin: neLayerPicMinZ, zmax: neLayerPicMaxZ, opacity: dop * otf, checked: sp.archive == "", hidpi: true})
+	pics = append(pics, bm{tree: t, layer: l, id: "picdecl"})
+	// with a filter: the page's veil — the complement of the filter as live
+	// tiles, the paper colour over every cell that does not pass, right under
+	// the cell layer's outlines. A veiled cell can be identified like any other.
+	// And for analysis, one collapsed group: this view as plain vector layers
+	// (cells.geojson / trees.geojson, one fetch each) — what the attribute table
+	// and the processing tools (intersection, …) accept; tiles cannot be their input.
+	if sp.archive == "" {
 		rights := BEVNotice() + " · " + pr.ObsName + " · " + pr.SubName
-		abs := "The H3 cells of this view as a plain vector layer (" + what + ") with every attribute: identify, attribute table, select by expression, and the processing tools (intersection, join by location, statistics). Legend entries are the page's toggles. Field meanings: " + base + "/api/v1/docs/qgis-layer.md"
-		var hx []bm
+		docs := " Field meanings: " + base + "/api/v1/docs/qgis-layer.md"
+		words := ""
 		if sp.canon != "" {
-			t, l := neQGSHexLayer("veil", "veil · cells the filter leaves out (this view)", q(base+"/api/v1/ne/mvt/cells.geojson", "bbox="+bb, fq, "veil=1"),
-				"The cells of this view that do NOT pass the filter ("+neFiltParse(sp.canon).Words()+") — the page's veil as polygons, with every attribute. Together with the hexagon layer it tiles the view: use it as the overlay of a Difference, or the hexagons as the overlay of an Intersection.", rights, neQGSVeilStyle(), neQGSHexExtras(hres), "1")
-			hx = append(hx, bm{t, l, "veil"})
+			words = neFiltParse(sp.canon).Words()
+			t, l := neQGSTileLayer(neQGSTileOpt{id: "veilt", name: "Filter veil", url: q(base+"/api/v1/ne/mvt/{z}/{x}/{y}.pbf", fq, "veil=1"), zmin: 12, zmax: neMVTMaxZ,
+				rights: rights, renderer: neQGSVeilTileStyle(), opacity: "1", minScale: 140000, checked: true,
+				abstract: "The cells that do NOT pass the filter (" + words + "), whitened as on the map. Live tiles (zoom 12+), they follow the map. Click a veiled cell with the identify tool to see its values and why it fails." + docs})
+			bms = append(bms, bm{tree: t, layer: l, id: "veilt"})
 		}
-		hn := "cells · hexagons, " + prof + " (this view)"
-		if sp.canon != "" {
-			hn = "cells · hexagons passing the filter, " + prof + " (this view)"
+		if hres := neCellsJSONRes(km2); hres > 0 {
+			what := map[int]string{11: " · 25 m", 10: " · 66 m"}[hres] // coarser than the cells themselves
+			hn := "Cells as polygons" + what
+			if sp.canon != "" {
+				hn = "Cells in the filter" + what
+			}
+			t, l := neQGSHexLayer("hex", hn, q(base+"/api/v1/ne/mvt/cells.geojson", "bbox="+bb, fq),
+				"The cells of this view as a plain vector layer (one fetch, it does not grow when you pan) with every attribute: attribute table, select by expression, and the processing tools — intersection, join by location, statistics — which do not accept tiles."+docs, rights, neQGSHexStyles(view, hres), neQGSHexExtras(hres), "1")
+			vec = append(vec, bm{tree: t, layer: l, id: "hex", grp: true})
+			if sp.canon != "" {
+				t, l := neQGSHexLayer("veil", "Cells outside the filter"+what, q(base+"/api/v1/ne/mvt/cells.geojson", "bbox="+bb, fq, "veil=1"),
+					"The cells of this view that do NOT pass the filter ("+words+"). Together with the matching cells they tile the view: use this layer as the overlay of a Difference, or the matching cells as the overlay of an Intersection."+docs, rights, neQGSVeilStyle(), neQGSHexExtras(hres), "1")
+				vec = append(vec, bm{tree: t, layer: l, id: "veil", grp: true})
+			}
 		}
-		t, l := neQGSHexLayer("hex", hn, q(base+"/api/v1/ne/mvt/cells.geojson", "bbox="+bb, fq), abs, rights, neQGSHexStyles(view, hres), neQGSHexExtras(hres), "1")
-		hx = append(hx, bm{t, l, "hex"})
-		bms = append(hx, bms...)
+		bms = append(bms, vec...)
 	}
 	bms = append(bms, pics...) // under the water outlines, over the photo
-	t, l = neQGSRaster(neQGSRasterOpt{id: "ortho", name: "orthophoto · basemap.at", url: neQGSOrthoURL, rights: "basemap.at, CC BY 4.0", zmax: 19, opacity: view.orthoOp, checked: view.ortho})
-	bms = append(bms, bm{t, l, "ortho"})
-	t, l = neQGSRaster(neQGSRasterOpt{id: "osm", name: "OpenStreetMap", url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", rights: "© OpenStreetMap contributors", zmax: 19, opacity: 1, checked: !view.ortho, grey: true})
-	bms = append(bms, bm{t, l, "osm"})
+	t, l = neQGSRaster(neQGSRasterOpt{id: "ortho", name: "Aerial photo", url: neQGSOrthoURL, rights: "basemap.at, CC BY 4.0", zmax: 19, opacity: view.orthoOp, checked: view.ortho})
+	bms = append(bms, bm{tree: t, layer: l, id: "ortho"})
+	t, l = neQGSRaster(neQGSRasterOpt{id: "osm", name: "Base map (OpenStreetMap)", url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", rights: "© OpenStreetMap contributors", zmax: 19, opacity: 1, checked: !view.ortho, grey: true})
+	bms = append(bms, bm{tree: t, layer: l, id: "osm"})
 
 	// the vector cells: with the pictures underneath they paint the aggregates
 	// farther out, the outlines and — filtered or offline — the cells themselves
@@ -721,10 +724,14 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 		html.EscapeString(lname), html.EscapeString(abstract), attrib, attrib, base)
 	cid := neQGSID("cells")
 	var ctree, clayer string
+	cname := "Cells · click for details"
+	if sp.canon != "" {
+		cname = "Cells in the filter · click for details"
+	}
 	if sp.archive == "" {
 		src := html.EscapeString(fmt.Sprintf("type=xyz&url=%s&zmin=%d&zmax=%d", neQGSEnc(q(base+"/api/v1/ne/mvt/{z}/{x}/{y}.pbf", fq)), neMVTMinZ, neMVTMaxZ))
-		ctree = fmt.Sprintf(`<layer-tree-layer id="%s" name="%s" source="%s" providerKey="xyzvectortiles" checked="Qt::Checked" expanded="1" legend_exp="" patch_size="-1,-1"><customproperties><Option/></customproperties></layer-tree-layer>`, cid, html.EscapeString(lname), src)
-		clayer = fmt.Sprintf(`<maplayer type="vector-tile" hasScaleBasedVisibilityFlag="0" autoRefreshMode="Disabled" styleCategories="AllStyleCategories"><id>%s</id><datasource>%s</datasource><layername>%s</layername><srs>%s</srs>`, cid, src, html.EscapeString(lname), neQGSCRS3857) + meta +
+		ctree = fmt.Sprintf(`<layer-tree-layer id="%s" name="%s" source="%s" providerKey="xyzvectortiles" checked="Qt::Checked" expanded="0" legend_exp="" patch_size="-1,-1"><customproperties><Option/></customproperties></layer-tree-layer>`, cid, html.EscapeString(cname), src)
+		clayer = fmt.Sprintf(`<maplayer type="vector-tile" hasScaleBasedVisibilityFlag="0" autoRefreshMode="Disabled" styleCategories="AllStyleCategories"><id>%s</id><datasource>%s</datasource><layername>%s</layername><srs>%s</srs>`, cid, src, html.EscapeString(cname), neQGSCRS3857) + meta +
 			`<provider>xyzvectortiles</provider><map-layer-style-manager current="default"><map-layer-style name="default"/></map-layer-style-manager><flags><Identifiable>1</Identifiable><Removable>1</Removable><Searchable>1</Searchable><Private>0</Private></flags><customproperties><Option/></customproperties>` +
 			neQGSTileStyles(view, pic) + fmt.Sprintf(`<blendMode>0</blendMode><layerOpacity>%.2f</layerOpacity></maplayer>`, cop)
 	} else {
@@ -749,8 +756,19 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 		b.WriteString(m.tree)
 	}
 	b.WriteString(ctree)
+	ingrp := false
 	for _, m := range bms {
+		if m.grp != ingrp {
+			if ingrp = m.grp; ingrp {
+				b.WriteString(`<layer-tree-group name="` + neQGSVecGroup + `" checked="Qt::Checked" expanded="0"><customproperties><Option/></customproperties>`)
+			} else {
+				b.WriteString(`</layer-tree-group>`)
+			}
+		}
 		b.WriteString(m.tree)
+	}
+	if ingrp {
+		b.WriteString(`</layer-tree-group>`)
 	}
 	b.WriteString(`<custom-order enabled="0">`)
 	for _, m := range over {
@@ -780,6 +798,9 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 	b.WriteString(`</qgis>` + "\n")
 	return b.String(), lname
 }
+
+// neQGSVecGroup — the collapsed group of one-fetch vector layers.
+const neQGSVecGroup = "Vector data of this view (analysis)"
 
 // neQGSTileOpt / neQGSTileLayer — a vector-tile layer of ours other than the cells (the tree crowns).
 type neQGSTileOpt struct {

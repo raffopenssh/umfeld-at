@@ -276,7 +276,7 @@ func TestNEMVTProject(t *testing.T) {
 		}
 	}
 	// the hexagons of the view as a plain vector layer: off at first, no veil without a filter
-	if !strings.Contains(body, `name="cells · hexagons, declared + change (this view)" source="`) || !strings.Contains(body, `/api/v1/ne/mvt/cells.geojson?bbox=`) || strings.Contains(body, "veil=1") || !strings.Contains(body, `<alias field="dsh" name="dsh · declared share`) {
+	if !strings.Contains(body, `name="Cells as polygons" source="`) || !strings.Contains(body, `<layer-tree-group name="`+neQGSVecGroup+`"`) || !strings.Contains(body, `name="Cells · click for details" source="type=xyz`) || strings.Contains(body, "osm/geometry") || !strings.Contains(body, `/api/v1/ne/mvt/cells.geojson?bbox=`) || strings.Contains(body, "veil=1") || !strings.Contains(body, `<alias field="dsh" name="dsh · declared share`) {
 		t.Errorf("hexagon layer missing or veiled without a filter")
 	}
 	if neCellsJSONRes(10) != 12 || neCellsJSONRes(100) != 11 || neCellsJSONRes(600) != 10 || neCellsJSONRes(5000) != 0 {
@@ -289,7 +289,7 @@ func TestNEMVTProject(t *testing.T) {
 	if !strings.Contains(body, `enabled="1" name="declared · forest (wald) (aggregates, far zooms)"`) || !strings.Contains(body, `enabled="0" name="observed · forest (wald) (aggregates, far zooms)"`) || !strings.Contains(body, `/api/v1/ne/mvt/pic/declared/{z}/{x}/{y}.png`) {
 		t.Errorf("default profile must be declared")
 	}
-	if !strings.Contains(body, `name="OpenStreetMap" source="type=xyz`) || !strings.Contains(body, `checked="Qt::Unchecked" expanded="0"`) {
+	if !strings.Contains(body, `name="Base map (OpenStreetMap)" source="type=xyz`) || !strings.Contains(body, `checked="Qt::Unchecked" expanded="0"`) {
 		t.Errorf("basemaps: OSM on, orthophoto off by default")
 	}
 	if strings.Contains(body, "colorizeOn=\"0\" grayscaleMode") { // the short form paints the photo blue
@@ -301,7 +301,7 @@ func TestNEMVTProject(t *testing.T) {
 		if w.Code != 200 {
 			t.Fatalf("share project → %d %s", w.Code, body)
 		}
-		for _, want := range []string{`enabled="1" name="observed · forest (wald)"`, `enabled="0" name="declared · forest (wald)"`, `enabled="1" name="trees · tallest 5–15 m (hexagons, far zooms)"`, `enabled="0" name="change · confirmed"`, `.pbf?f%3Dht%3E%3D20`, `name="trees · crowns`, `providerKey="ogr"`, `/api/v1/ne/mvt/trees.geojson?bbox=`, `ht=20..`, `type="graduatedSymbol" attr="h"`, `/api/v1/ne/mvt/pic/sub/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/pic/observed/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/relief/{z}/{x}/{y}.png`, `<blendMode>8</blendMode>`, `osm/geometry?bbox=`, `max-zoom="24"`, "umfeld-at-cells-view-filtered.qgs", `name="veil · cells the filter leaves out (this view)"`, `&amp;f=ht%3E%3D20&amp;veil=1`, `name="cells · hexagons passing the filter, observed (this view)"`, `set_color_part(&#39;`} {
+		for _, want := range []string{`enabled="1" name="observed · forest (wald)"`, `enabled="0" name="declared · forest (wald)"`, `enabled="1" name="trees · tallest 5–15 m (hexagons, far zooms)"`, `enabled="0" name="change · confirmed"`, `.pbf?f%3Dht%3E%3D20`, `name="Trees · crowns by height · ≥ 20 m" source="type=xyz`, `providerKey="ogr"`, `/api/v1/ne/mvt/trees.geojson?bbox=`, `ht=20..`, `type="graduatedSymbol" attr="h"`, `/api/v1/ne/mvt/pic/sub/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/pic/observed/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/relief/{z}/{x}/{y}.png`, `<blendMode>8</blendMode>`, `max-zoom="24"`, "umfeld-at-cells-view-filtered.qgs", `name="Filter veil" source="type=xyz`, `%26veil%3D1`, `name="Cells outside the filter"`, `&amp;f=ht%3E%3D20&amp;veil=1`, `name="Cells in the filter"`, `name="Trees as points · ≥ 20 m"`, `name="Land use · observed (LiDAR)"`, `set_color_part(&#39;`} {
 			if !strings.Contains(body, want) && !strings.Contains(w.Header().Get("Content-Disposition"), want) {
 				t.Errorf("share project lacks %q", want)
 			}

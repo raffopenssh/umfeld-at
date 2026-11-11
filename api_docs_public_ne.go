@@ -293,7 +293,7 @@ GET /api/v1/ne/mvt/{z}/{x}/{y}.pbf          the cells as VECTOR TILES for QGIS /
                                             &f=<filter> (grammar above, the map's ;f=) = the veil for QGIS: z ≥ 14 only matching cells;
                                             z 12–13 hexagons with ≥ 1 match, aggregates over the matching cells + n_all, match_pct,
                                             area_ha = the matching share; z 9–11 the same from the national 1-in-49 sample (approx=true,
-                                            sample=49; every term, k>= excepted). /api/v1/ne/mvt.json?f= = a TileJSON with the filter baked in.
+                                            sample=49; every term, k>= excepted). &f=…&veil=1 = the complement, the veiled cells (z 12+). /api/v1/ne/mvt.json?f= = a TileJSON with the filter baked in.
 GET /api/v1/ne/mvt/cells.geojson?bbox=w,s,e,n[&f=][&veil=1][&res=10|11]
                                             the cells of ONE VIEW as GeoJSON polygons, every attribute of the tiles + area_m2, lon,
                                             lat, match — a plain vector layer for identify, the attribute table and processing tools.

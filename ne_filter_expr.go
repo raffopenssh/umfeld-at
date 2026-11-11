@@ -337,6 +337,7 @@ type neFiltExpr struct {
 	K          int            // post-filter: keep match clusters ≥ K cells (0 = off)
 	Ignored    []string
 	Incomplete []neFiltIncomplete // the subset of Ignored that names a real field without a usable value
+	Veil       bool               `json:"-"` // cell tiles only (mvt …?f=&veil=1): the complement — the cells the filter leaves out
 }
 
 // neFiltIncomplete — an ignored term whose field exists (`ht`, `trees`, `d=`,
