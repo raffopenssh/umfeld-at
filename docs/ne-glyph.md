@@ -142,9 +142,15 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   `hiShow/hiPick/hiUnpin/hiGoto(cell)`.
 - **Diff**: `df`, `setDif(on,quiet,raw)`, `difBlock` (legend), `difCellLine` (card row + open block), `difSw` (swatches: solid · `ng-h4` dots · hollow hexagon), `difAge` (`flown 2022 · 4 y ago`), `DIF_L/DIF_T/DIF_K`; `hiSum('dif')` reads `dif cmp als mix`; `hiCull` hides a dif tile whose `raw` does not match `df.raw`; the legend's `a.raw` link toggles raw (delegated click on `inner`).
 - **Trees**: `hiApex/apRender/apCard/apUnpin/setTree`.
-  Picked tree = the lit SVG mark `#ng-tr.tp`: fill only (dome `ng-trg` a little wider than the crown,
-  apex dot, faint halo `ng-trh`), no outline; `apDraw` skips its canvas ring; `.cur.cap` draws nothing.
-  It is the only filled tree. Named/measured trees = their crown ring in paper white, trees without a
+  Picked tree = its own crown ring in another state, never a fill (`g.tp`, built by `apMarks`): the ring
+  in paper white, 2.2 px growing to 4.4 px with the crown (`--w`), over a dark seam, plus a quiet outer
+  ring 6 px out; `apDraw` skips its canvas ring; `.cur.cap` draws nothing. Motion: a tap = ONE wave
+  outwards (`.nu`, `AP_TAP` 640 ms — the finger covered the crown); a jump (`apPin(h,true)`:
+  `neGlyph.tree()`, *this one* on the card, a fresh draft) = four 1.6 s beats, each a wave of
+  `AP_WAVE` 22 px while the outer ring breathes (`.pu`, `AP_PULSE`); negative `--d` delays survive
+  redraws; none under reduced motion. Hit test `apAt`: pointer inside a crown (≥ 7 px) → the smallest
+  such crown; else the nearest ring within the slop (14 px touch · 5 px mouse).
+  Named/measured trees = their crown ring in paper white, trees without a
   LiDAR apex = fine dashed paper ring (`trDraw`) — no dots. Hovered tree = `hovRing(d,true)`
   (`.hov.tr`). Deepest zoom `HI_ZMAX` = 2400.
   **Tree sprites at LOD 0 and LOD 1 — `/trees/bbox?format=columns` contract** ({OBS_NAME}, CC BY,
@@ -179,10 +185,7 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   `(e, a.i)`. `apWhat` accepts the words the columns carry (`spruce`, `vital`) and the codes of the
   cell layer alike. Check: `#pt=10.0875,47.1375;v=obs;full;trees;z=260` and `;f=ht=20..25` →
   trees drawn, `left=0`, `neGlyph.apN()` non-zero, no `error` events; `z=900` for LOD 1; a tap on
-  a ring opens the card with species · vitality · crown · KG. **Picked tree** = `use.tp` in `#ng-tr`
-  (never `.sel` — that class is the KG outline and is hidden at full res): the crown ring filled
-  white at .42 over the dark glow, plus the cursor `.cur.cap` as a hairline white halo at 1.9× the
-  crown (its `.g` twin the dark underlay, `trpk` contraction on pick, off under reduced motion). **Relief**: `relView/relStatus/setRelief` (`mtWant(z,n)` = the Web-Mercator squares touching the view, shared).
+  a ring opens the card with species · vitality · crown · KG. **Picked tree** = `g.tp` (above; never `.sel` — that class is the KG outline and is hidden at full res). **Relief**: `relView/relStatus/setRelief` (`mtWant(z,n)` = the Web-Mercator squares touching the view, shared).
   **Photo** (`ot`, `/* ── ortho`): `otZ` (one step finer than `relZ`) · `otView/otTile/otPump/otFetch/otSettle/otClear` (relief's shape; URL `ORTHO` = mapsneu.wien.gv.at WMTS `{z}/{y}/{x}.jpeg`, 404 = outside coverage, ≤ 6 in flight, `OT_KEEP` 240) · `setOrtho(on,quiet)` · `setOrthoOp(v,quiet)` + `otApply` (group opacity + `--otf`) · popover `otPop(on,ms)/otPopSync` (`otHeld` swallows the click after a hold) · fetch class `ortho`, mark `the photo`, group `basemap.at`.
   **Roads** (`rd`, `/* ── roads`): `RD_OP` .7 · `setRoads(on,quiet)` · `setRoadsOp(v,quiet)` + `rdApply` (group opacity on `.ov-rd`) · `rdPop = mkPop({…})` · `rdLine()` legend line from `hiSum('rd')` (`km rd rdc`; `rm` = Σ rm·Σrmb / Σ Σrmb is aggregated for scripts, not shown — the remoteness reading is the one-time hint on enable, never legend clutter); tiles ride the ordinary `hiTile(t,'rd')` path (key `rd/<lod>/<i>/<j>`, no `~` suffix — the weight is CSS, never a refetch).
   **Popover factory** `mkPop({btn, panel, on, turnOn, get, set, commit})` → callable `pop(on, ms)` with `.sync()` and `.held()` (swallows the click after a hold); `otPop` and `rdPop` are its two instances.
