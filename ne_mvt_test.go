@@ -275,6 +275,13 @@ func TestNEMVTProject(t *testing.T) {
 			t.Errorf("id %s not bound everywhere", m[1])
 		}
 	}
+	// the hexagons of the view as a plain vector layer: off at first, no veil without a filter
+	if !strings.Contains(body, `name="cells · hexagons, declared + change (this view)" source="`) || !strings.Contains(body, `/api/v1/ne/mvt/cells.geojson?bbox=`) || strings.Contains(body, "veil=1") || !strings.Contains(body, `<alias field="dsh" name="dsh · declared share`) {
+		t.Errorf("hexagon layer missing or veiled without a filter")
+	}
+	if neCellsJSONRes(10) != 12 || neCellsJSONRes(100) != 11 || neCellsJSONRes(600) != 10 || neCellsJSONRes(5000) != 0 {
+		t.Errorf("cells.geojson resolution by box size")
+	}
 	x0, _ := neQGSMerc(10.07, 47.13)
 	if !strings.Contains(body, fmt.Sprintf(`DefaultViewExtent xmin="%.2f"`, x0)) {
 		t.Errorf("default view is not the box")
@@ -294,7 +301,7 @@ func TestNEMVTProject(t *testing.T) {
 		if w.Code != 200 {
 			t.Fatalf("share project → %d %s", w.Code, body)
 		}
-		for _, want := range []string{`enabled="1" name="observed · forest (wald)"`, `enabled="0" name="declared · forest (wald)"`, `enabled="1" name="trees · tallest 5–15 m (hexagons, far zooms)"`, `enabled="0" name="change · confirmed"`, `.pbf?f%3Dht%3E%3D20`, `name="trees · crowns`, `providerKey="ogr"`, `/api/v1/ne/mvt/trees.geojson?bbox=`, `ht=20..`, `type="graduatedSymbol" attr="h"`, `/api/v1/ne/mvt/pic/sub/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/pic/observed/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/relief/{z}/{x}/{y}.png`, `<blendMode>8</blendMode>`, `osm/geometry?bbox=`, `max-zoom="24"`, "umfeld-at-cells-view-filtered.qgs"} {
+		for _, want := range []string{`enabled="1" name="observed · forest (wald)"`, `enabled="0" name="declared · forest (wald)"`, `enabled="1" name="trees · tallest 5–15 m (hexagons, far zooms)"`, `enabled="0" name="change · confirmed"`, `.pbf?f%3Dht%3E%3D20`, `name="trees · crowns`, `providerKey="ogr"`, `/api/v1/ne/mvt/trees.geojson?bbox=`, `ht=20..`, `type="graduatedSymbol" attr="h"`, `/api/v1/ne/mvt/pic/sub/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/pic/observed/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/relief/{z}/{x}/{y}.png`, `<blendMode>8</blendMode>`, `osm/geometry?bbox=`, `max-zoom="24"`, "umfeld-at-cells-view-filtered.qgs", `name="veil · cells the filter leaves out (this view)"`, `&amp;f=ht%3E%3D20&amp;veil=1`, `name="cells · hexagons passing the filter, observed (this view)"`, `set_color_part(&#39;`} {
 			if !strings.Contains(body, want) && !strings.Contains(w.Header().Get("Content-Disposition"), want) {
 				t.Errorf("share project lacks %q", want)
 			}
@@ -331,14 +338,17 @@ func TestNEMVTLayerRoutes(t *testing.T) {
 		return w.Code
 	}
 	for p, want := range map[string]int{
-		"/api/v1/ne/mvt/14/8904/5653.pbf":              -1, // the cells
-		"/api/v1/ne/mvt/pic/parcels/14/8904/5653.png":  404,
-		"/api/v1/ne/mvt/pic/sub/9/278/176.png":         204,
-		"/api/v1/ne/mvt/trees/13/4452/2826.pbf":        204,
-		"/api/v1/ne/mvt/relief/5/17/11.png":            204,
-		"/api/v1/ne/mvt/relief/12/0/0.png":             204, // outside Austria
-		"/api/v1/ne/mvt/trees.geojson?bbox=9,46,17,49": 413,
-		"/api/v1/ne/mvt/trees.geojson":                 400,
+		"/api/v1/ne/mvt/14/8904/5653.pbf":                                  -1, // the cells
+		"/api/v1/ne/mvt/pic/parcels/14/8904/5653.png":                      404,
+		"/api/v1/ne/mvt/pic/sub/9/278/176.png":                             204,
+		"/api/v1/ne/mvt/trees/13/4452/2826.pbf":                            204,
+		"/api/v1/ne/mvt/relief/5/17/11.png":                                204,
+		"/api/v1/ne/mvt/relief/12/0/0.png":                                 204, // outside Austria
+		"/api/v1/ne/mvt/trees.geojson?bbox=9,46,17,49":                     413,
+		"/api/v1/ne/mvt/trees.geojson":                                     400,
+		"/api/v1/ne/mvt/cells.geojson":                                     400,
+		"/api/v1/ne/mvt/cells.geojson?bbox=9,46,17,49":                     413,
+		"/api/v1/ne/mvt/cells.geojson?bbox=10.07,47.13,10.09,47.14&veil=1": 400, // a veil needs its filter
 	} {
 		if got := get(p); got != want {
 			t.Errorf("%s → %d, want %d", p, got, want)

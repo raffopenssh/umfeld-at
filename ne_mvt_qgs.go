@@ -370,6 +370,118 @@ func neQGSVector(id, name, url, geom, rights, renderer string, checked bool, opa
 
 const neQGSCRS4326 = `<spatialrefsys nativeFormat="Wkt"><wkt>GEOGCRS["WGS 84",DATUM["World Geodetic System 1984",ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1]]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],CS[ellipsoidal,2],AXIS["geodetic latitude (Lat)",north,ORDER[1],ANGLEUNIT["degree",0.0174532925199433]],AXIS["geodetic longitude (Lon)",east,ORDER[2],ANGLEUNIT["degree",0.0174532925199433]],ID["EPSG",4326]]</wkt><proj4>+proj=longlat +datum=WGS84 +no_defs</proj4><srsid>3452</srsid><srid>4326</srid><authid>EPSG:4326</authid><description>WGS 84</description><projectionacronym>longlat</projectionacronym><ellipsoidacronym>EPSG:7030</ellipsoidacronym><geographicflag>true</geographicflag></spatialrefsys>`
 
+// neQGSHexShade — the page's shade as a data-defined fill: the group colour at
+// the alpha of its dominance step (neGlyphPaintLU: four steps from a third to
+// the whole cell, neGlyphTileAlphaMin … 1). share = the field holding the
+// dominant group's share in percent.
+func neQGSHexShade(rgb, share string) string {
+	ex := fmt.Sprintf(`set_color_part('%s','alpha',255*(%.2f+%.2f*clamp(0,floor((coalesce("%s",100)/100-1/3)*6),3)/3))`, rgb, neGlyphTileAlphaMin, 1-neGlyphTileAlphaMin, share)
+	prop := func(n string) string {
+		return `<Option type="Map" name="` + n + `"><Option type="bool" name="active" value="true"/><Option type="QString" name="expression" value="` + html.EscapeString(ex) + `"/><Option type="int" name="type" value="3"/></Option>`
+	}
+	return `<data_defined_properties><Option type="Map"><Option type="QString" name="name" value=""/><Option type="Map" name="properties">` + prop("fillColor") + prop("outlineColor") + `</Option><Option type="QString" name="type" value="collection"/></Option></data_defined_properties>`
+}
+
+// neQGSHexStyles — the legend of the hexagon layer (cells.geojson at res): the
+// cell layer's rules that exist at that resolution, the group fills shaded by
+// share like the page's picture. Which rules start ticked is the page's state
+// (declared / observed profile, change, mismatch).
+func neQGSHexStyles(v neQGSView, res int) string {
+	z := res + 2
+	var r, sy strings.Builder
+	r.WriteString(`<renderer-v2 type="RuleRenderer" symbollevels="0" forceraster="0" enableorderby="0" referencescale="-1"><rules key="{00000000-0000-4000-8000-0000000d0000}">`)
+	k := 0
+	for _, x := range neQGSRules(v, false) {
+		if x.minz > z || x.maxz < z || strings.HasPrefix(x.name, "trees · tallest") {
+			continue
+		}
+		chk := ""
+		if !x.on {
+			chk = ` checkstate="0"`
+		}
+		sym := strings.Replace(x.sym, `name="0"`, fmt.Sprintf(`name="%d"`, k), 1)
+		for i, g := range neGlyphGroups {
+			c := neGlyphGroupRGB[i]
+			rgb := fmt.Sprintf("%d,%d,%d", c[0], c[1], c[2])
+			for _, pf := range [][3]string{{"declared · ", "dsh", "d_pct"}, {"observed · ", "osh", "o_pct"}} {
+				if x.name == pf[0]+neQGSGroupLabel[i]+" ("+g+")" {
+					share := pf[1]
+					if res < 12 {
+						share = pf[2]
+					}
+					sym = strings.Replace(sym, `</Option></layer>`, `</Option>`+neQGSHexShade(rgb, share)+`</layer>`, 1)
+				}
+			}
+		}
+		fmt.Fprintf(&r, `<rule filter="%s" symbol="%d" key="{00000000-0000-4000-8000-0000000d%04d}" label="%s"%s/>`, html.EscapeString(x.expr), k, k+1, html.EscapeString(x.name), chk)
+		sy.WriteString(sym)
+		k++
+	}
+	r.WriteString(`</rules><symbols>` + sy.String() + `</symbols></renderer-v2>`)
+	return r.String()
+}
+
+// neQGSVeilStyle — the page's veil: its paper colour at 82 % over what the filter leaves out.
+func neQGSVeilStyle() string {
+	return `<renderer-v2 type="singleSymbol" symbollevels="0" forceraster="0" enableorderby="0" referencescale="-1"><symbols>` + neQGSFill("0", "250,250,247,209", "250,250,247,209", "0.1") + `</symbols></renderer-v2>`
+}
+
+// neQGSHexExtras — what makes the hexagon layer pleasant to read: a field
+// alias per catalogue field (its label and unit, shown by identify and the
+// attribute table), the cell id as the feature title, a map tip.
+func neQGSHexExtras(res int) string {
+	var b strings.Builder
+	b.WriteString(`<aliases>`)
+	al := func(f, n string) { fmt.Fprintf(&b, `<alias field="%s" name="%s"/>`, f, html.EscapeString(n)) }
+	al("h3", "H3 cell id")
+	al("res", "H3 resolution")
+	al("match", "passes the filter")
+	if res == 12 {
+		for i := range neFiltFields {
+			fd := &neFiltFields[i]
+			if fd.Col != "" || fd.Label == "" {
+				continue
+			}
+			n := fd.ID + " · " + fd.Label
+			if fd.Unit != "" {
+				n += " (" + fd.Unit + ")"
+			}
+			al(fd.ID, n)
+			if fd.Kind == nfBucket {
+				al(fd.ID+"_min", fd.ID+"_min · "+fd.Label+", lower bound of the band")
+			}
+		}
+		al("cont_open", "patch runs on beyond what was counted (cont is a lower bound)")
+		al("area_m2", "cell area (m²)")
+		al("lon", "centre longitude")
+		al("lat", "centre latitude")
+	} else {
+		for _, a := range [][2]string{{"n", "cells (res 12) inside"}, {"n_all", "cells inside, matching or not"}, {"match_pct", "share of the cells that pass the filter (%)"}, {"area_ha", "area (ha)"},
+			{"d", "d · dominant declared use"}, {"d_pct", "its share of the cells (%)"}, {"d_known_pct", "cells with a declared use (%)"},
+			{"o", "o · dominant observed use"}, {"o_pct", "its share of the cells (%)"}, {"o_known_pct", "cells with an observed use (%)"},
+			{"diff_pct", "declared ≠ observed (% of the cells)"}, {"chg_conf", "cells with a confirmed change"}, {"chg_cand", "cells with a candidate change"}, {"chg_pct", "changed cells (%)"}, {"sub_pct", "cells under a subsidy claim (%)"}} {
+			al(a[0], a[1])
+		}
+	}
+	al("srtm_epoch", "observed layer: epoch")
+	al("sub_year", "subsidy claims: year")
+	al("sub_release", "subsidy claims: release")
+	b.WriteString(`</aliases><previewExpression>"h3"</previewExpression>`)
+	tip := `<b>[% coalesce("d",'no declared use') %]</b> declared · <b>[% coalesce("o",'not observed') %]</b> observed[% if("chg" in ('conf','cand'), '<br/>change: ' || "chg", '') %]<br/><small>[% "h3" %]</small>`
+	b.WriteString(`<mapTip enabled="1">` + html.EscapeString(tip) + `</mapTip>`)
+	return b.String()
+}
+
+// neQGSHexLayer — a cells.geojson layer (the hexagons, or their veil).
+func neQGSHexLayer(id, name, url, abstract, rights, renderer, extras, opacity string) (tree, layer string) {
+	id = neQGSID(id)
+	src := html.EscapeString(url)
+	tree = fmt.Sprintf(`<layer-tree-layer id="%s" name="%s" source="%s" providerKey="ogr" checked="Qt::Unchecked" expanded="0" legend_exp="" patch_size="-1,-1"><customproperties><Option/></customproperties></layer-tree-layer>`, id, html.EscapeString(name), src)
+	layer = fmt.Sprintf(`<maplayer type="vector" geometry="Polygon" hasScaleBasedVisibilityFlag="0" autoRefreshMode="Disabled" styleCategories="AllStyleCategories" readOnly="1"><id>%s</id><datasource>%s</datasource><layername>%s</layername><srs>%s</srs><resourceMetadata><title>%s</title><abstract>%s</abstract><rights>%s</rights></resourceMetadata><provider encoding="UTF-8">ogr</provider><flags><Identifiable>1</Identifiable><Removable>1</Removable><Searchable>1</Searchable><Private>0</Private></flags><customproperties><Option/></customproperties>%s<blendMode>0</blendMode><layerOpacity>%s</layerOpacity><featureBlendMode>0</featureBlendMode>%s</maplayer>`,
+		id, src, html.EscapeString(name), neQGSCRS4326, html.EscapeString(name), html.EscapeString(abstract), html.EscapeString(rights), renderer, opacity, extras)
+	return
+}
+
 func neQGSLine(name, color, width, style string) string {
 	return `<symbol type="line" name="` + name + `" alpha="1" clip_to_extent="1" force_rhr="0"><layer class="SimpleLine" enabled="1" locked="0" pass="0"><Option type="Map"><Option type="QString" name="line_color" value="` + color + `"/><Option type="QString" name="line_width" value="` + width + `"/><Option type="QString" name="line_width_unit" value="MM"/><Option type="QString" name="line_style" value="` + style + `"/><Option type="QString" name="capstyle" value="round"/><Option type="QString" name="joinstyle" value="round"/></Option></layer></symbol>`
 }
@@ -560,6 +672,35 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 	t, l = neQGSRaster(neQGSRasterOpt{id: "picdecl", name: "cells · declared, as on the map", url: q(base + "/api/v1/ne/mvt/pic/declared/{z}/{x}/{y}.png"), rights: BEVNotice(),
 		zmin: neLayerPicMinZ, zmax: neLayerPicMaxZ, opacity: dop * otf * veil, checked: sp.archive == "", hidpi: true})
 	pics = append(pics, bm{t, l, "picdecl"})
+	// the same cells as plain vector layers (cells.geojson): what the identify
+	// tool, the attribute table and the processing tools work on. Off at first,
+	// over the pictures; with a filter the hexagons are the matching cells and
+	// the veil is the rest, so the two tile the view.
+	if hres := neCellsJSONRes(km2); hres > 0 && sp.archive == "" {
+		prof := "declared"
+		if view.obs {
+			prof = "observed"
+		}
+		if view.change {
+			prof += " + change"
+		}
+		what := map[int]string{12: "9 m cells", 11: "25 m aggregates", 10: "66 m aggregates"}[hres]
+		rights := BEVNotice() + " · " + pr.ObsName + " · " + pr.SubName
+		abs := "The H3 cells of this view as a plain vector layer (" + what + ") with every attribute: identify, attribute table, select by expression, and the processing tools (intersection, join by location, statistics). Legend entries are the page's toggles. Field meanings: " + base + "/api/v1/docs/qgis-layer.md"
+		var hx []bm
+		if sp.canon != "" {
+			t, l := neQGSHexLayer("veil", "veil · cells the filter leaves out (this view)", q(base+"/api/v1/ne/mvt/cells.geojson", "bbox="+bb, fq, "veil=1"),
+				"The cells of this view that do NOT pass the filter ("+neFiltParse(sp.canon).Words()+") — the page's veil as polygons, with every attribute. Together with the hexagon layer it tiles the view: use it as the overlay of a Difference, or the hexagons as the overlay of an Intersection.", rights, neQGSVeilStyle(), neQGSHexExtras(hres), "1")
+			hx = append(hx, bm{t, l, "veil"})
+		}
+		hn := "cells · hexagons, " + prof + " (this view)"
+		if sp.canon != "" {
+			hn = "cells · hexagons passing the filter, " + prof + " (this view)"
+		}
+		t, l := neQGSHexLayer("hex", hn, q(base+"/api/v1/ne/mvt/cells.geojson", "bbox="+bb, fq), abs, rights, neQGSHexStyles(view, hres), neQGSHexExtras(hres), "1")
+		hx = append(hx, bm{t, l, "hex"})
+		bms = append(hx, bms...)
+	}
 	bms = append(bms, pics...) // under the water outlines, over the photo
 	t, l = neQGSRaster(neQGSRasterOpt{id: "ortho", name: "orthophoto · basemap.at", url: neQGSOrthoURL, rights: "basemap.at, CC BY 4.0", zmax: 19, opacity: view.orthoOp, checked: view.ortho})
 	bms = append(bms, bm{t, l, "ortho"})
@@ -700,6 +841,7 @@ func handleNEMVTProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	xml, _ := neQGSProject(sp)
+	neCellsJSONPrepare(sp.box) // the hexagon layer's bins: ready by the time the file is opened
 	fn := "umfeld-at-cells-" + sp.name
 	if sp.canon != "" {
 		fn += "-filtered"

@@ -294,6 +294,11 @@ GET /api/v1/ne/mvt/{z}/{x}/{y}.pbf          the cells as VECTOR TILES for QGIS /
                                             z 12–13 hexagons with ≥ 1 match, aggregates over the matching cells + n_all, match_pct,
                                             area_ha = the matching share; z 9–11 the same from the national 1-in-49 sample (approx=true,
                                             sample=49; every term, k>= excepted). /api/v1/ne/mvt.json?f= = a TileJSON with the filter baked in.
+GET /api/v1/ne/mvt/cells.geojson?bbox=w,s,e,n[&f=][&veil=1][&res=10|11]
+                                            the cells of ONE VIEW as GeoJSON polygons, every attribute of the tiles + area_m2, lon,
+                                            lat, match — a plain vector layer for identify, the attribute table and processing tools.
+                                            f= the matching cells, f=…&veil=1 the rest (together: the view). res 12 up to 16 km²,
+                                            res-11 aggregates up to 110 km², res-10 up to 700 km², larger → 413.
 GET /api/v1/ne/mvt.qgs?bbox=|kg=|adm=|share=[&f=][&key=]
                                             a QGIS PROJECT (.qgs, a few KB): opens on the box (share= with ;at= = the page's view),
                                             the live tile layer with a legend of the page's toggles (declared/observed · change ·

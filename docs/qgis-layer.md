@@ -8,6 +8,7 @@ statistics) as **H3 cell polygons with every attribute**, in two forms:
 | **QGIS project** | `{PUBLIC_URL}/api/v1/ne/mvt.qgs?bbox=w,s,e,n` (or `kg=`, `adm=`, `share=`) | **start here**: one small `.qgs` — double-click and QGIS opens on that view with the live cell layer styled and a legend, basemaps underneath |
 | Vector tiles (MVT) | `{PUBLIC_URL}/api/v1/ne/mvt/{z}/{x}/{y}.pbf` | live layer, always current (what the project uses) |
 | PMTiles archive | `{PUBLIC_URL}/api/v1/ne/pmtiles?bbox=w,s,e,n` (`&format=zip`: with style and project) | one file per area, works offline |
+| **Cells as a plain vector layer** | `{PUBLIC_URL}/api/v1/ne/mvt/cells.geojson?bbox=w,s,e,n` (`&f=` the matching cells · `&f=…&veil=1` the rest) | one view as GeoJSON polygons with every attribute: identify, attribute table, **processing tools** (in the project, off at first) |
 | Companion layers | `…/ne/mvt/trees.geojson?bbox=` · `…/ne/mvt/trees/14/{x}/{y}.pbf` · `…/ne/mvt/relief/{z}/{x}/{y}.png` · `…/ne/mvt/pic/{declared\|observed\|sub\|subc\|roads}/{z}/{x}/{y}.png` | what the page draws around the cells: tree crowns, hillshade, the page's own pictures (used by the project) |
 | Style (QML) | `{PUBLIC_URL}/api/v1/ne/mvt.qml?for=tiles` / `?for=ogr` (`&share=` for a state of the page) | the legend alone, for a layer you added yourself / for an archive |
 
@@ -121,6 +122,25 @@ basemaps (basemap.at, OpenStreetMap) are asked directly. Top to bottom:
   (*declared · group* by `d`, *observed · group* by `o`). While the pictures below
   are in charge the fills cover the aggregates up to zoom 11 only; with a filter
   they paint the matching cells at every zoom. Styles run to zoom 24.
+- **cells · hexagons (this view)** — off at first. The same cells as a **plain
+  vector layer** (`mvt/cells.geojson?bbox=`, one fetch of the view): tick it and
+  the identify tool ⓘ lists every attribute under its label and unit, the
+  attribute table and *select by expression* work, and so do the processing
+  tools — a vector-tile layer cannot be an input there. Legend = the page's
+  toggles as rules (declared or observed groups by the profile of the link, the
+  fill shaded by the group's share like the picture; change · confirmed /
+  candidate; declared ≠ observed; subsidy cells off). Extra fields: `area_m2`,
+  `lon`, `lat` (centre), `match`. Resolution follows the view: the cells
+  themselves up to 16 km², res-11 aggregates up to 110 km², res-10 up to
+  700 km² (`&res=10|11` asks for the coarser one); beyond that the layer is
+  left out (`413`) — use the tiles or an archive.
+- **veil · cells the filter leaves out (this view)** — only with a filter, off
+  at first: `cells.geojson?bbox=&f=…&veil=1`, the complement, painted as the
+  page's veil. The hexagon layer then holds the cells that pass (`match=true`),
+  the veil the rest (`match=false`) — every cell of the view in exactly one, so
+  *Intersection* with the hexagons or *Difference* with the veil cuts any layer
+  (trees, your own polygons) to what the filter keeps. On aggregates a hexagon
+  is in each layer with the cells of that side (`n`, `n_all`, `match_pct`).
 - **cells · observed / declared, as on the map** — the page's own cell picture
   (`mvt/pic/observed|declared/{z}/{x}/{y}.png`, zoom 12–16): dominant group,
   shade = its share, the second group as an inner hexagon from 25 %. Opacities

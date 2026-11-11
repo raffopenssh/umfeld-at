@@ -58,14 +58,14 @@ var (
 	neLayerClient  = &http.Client{Timeout: 25 * time.Second}
 	neLayerSem     = make(chan struct{}, 2) // picture renders
 	neLayerPeerSem = make(chan struct{}, 8) // relays in flight
-	neLayerServed  [3]atomic.Int64          // relief, trees, pic
+	neLayerServed  [4]atomic.Int64          // relief, trees, pic, cells.geojson
 	neLayerPeerErr atomic.Int64
 )
 
 // NELayerStats — the inflight line `ne_mvt.layers`.
 func NELayerStats() map[string]interface{} {
 	m := neLayerLRU.stats()
-	m["relief"], m["trees"], m["pic"] = neLayerServed[0].Load(), neLayerServed[1].Load(), neLayerServed[2].Load()
+	m["relief"], m["trees"], m["pic"], m["cells_geojson"] = neLayerServed[0].Load(), neLayerServed[1].Load(), neLayerServed[2].Load(), neLayerServed[3].Load()
 	m["peer_errors"] = neLayerPeerErr.Load()
 	return m
 }
@@ -74,6 +74,10 @@ func NELayerStats() map[string]interface{} {
 func handleNEMVTLayer(w http.ResponseWriter, r *http.Request, rest string) bool {
 	if rest == "mvt/trees.geojson" {
 		handleNELayerTreesGeoJSON(w, r)
+		return true
+	}
+	if rest == "mvt/cells.geojson" {
+		handleNELayerCellsGeoJSON(w, r)
 		return true
 	}
 	p := strings.Split(strings.TrimPrefix(rest, "mvt/"), "/")
