@@ -145,6 +145,10 @@ func neGlyphTilePalette() color.Palette {
 	return p
 }
 
+// neGlyphTreeSheetAlpha — the canopy sheet's opacity, applied by the page on the tile group
+// (CSS `.ov-tree>[data-lod]`, spliced into neGlyphCSS); the v=tree bitmap itself is opaque.
+const neGlyphTreeSheetAlpha = 215.0 / 255
+
 // neGlyphOverlayPalette — transparent + the view's shades.
 func neGlyphOverlayPalette(view string) color.Palette {
 	p := color.Palette{color.NRGBA{0, 0, 0, 0}}
@@ -155,8 +159,11 @@ func neGlyphOverlayPalette(view string) color.Palette {
 	if view == "tree" {
 		// the five height bands in the page's crown ramp (AP_COL: lit greens, greener = taller) — the LOD-2
 		// canopy sheet, one tinted cell per wooded cell, over the profile fill
+		// OPAQUE in the bitmap: the page puts the sheet's opacity (neGlyphTreeSheetAlpha) on the <g> that holds
+		// the tiles, so the 1-px rings of two neighbours composite once. With the alpha in the pixels the
+		// overlap doubled it — a pale stripe along every tile seam, widest at LOD 2 (a tile px ≥ 1.6 screen px).
 		for _, c := range neGlyphTreeRGB {
-			p = append(p, color.NRGBA{c[0], c[1], c[2], 215})
+			p = append(p, color.NRGBA{c[0], c[1], c[2], 255})
 		}
 		return p
 	}
@@ -275,9 +282,10 @@ func neGlyphTileBox(lod neGlyphLOD, i, j int) (w, s, e, n float64) {
 	return float64(i) * lod.deg, float64(j) * lod.deg, float64(i+1) * lod.deg, float64(j+1) * lod.deg
 }
 
-// neGlyphTileBleed — the translucent overlays (chg, dif, tree, sub, rd) carry one extra pixel ring so
+// neGlyphTileBleed — the overlays (chg, dif, tree, sub, rd) carry one extra pixel ring so
 // resampled edges never show a seam; the client widens the image rect by 1/px (BLEED). Wider would double
-// their alpha over a visible band where two tiles overlap.
+// the translucent ones' alpha over a visible band where two tiles overlap (sparse marks: unnoticed at 1 px;
+// the tree sheet covers whole cells, so it is opaque and takes its opacity from the group instead).
 const neGlyphTileBleed = 1
 
 // neGlyphTilePicBleed — the opaque pictures (declared base, v=obs) carry a 3-px ring (client BLEED_PIC):
@@ -1147,6 +1155,9 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	}
 	if ds > 1 {
 		key += "/ds" + strconv.Itoa(ds)
+	}
+	if view == "tree" {
+		key += "/o" // opaque bitmap (neGlyphTreeSheetAlpha): never serve a translucent one from before
 	}
 	if view == "dif" {
 		st := neDifEpochStamp()

@@ -561,3 +561,10 @@ Bugs it found on day one (all fixed): a pending KG-outline refit zoomed back aft
 negative after an abort; `zoomTo` ran its first frame inline and re-entered via `place()`; the
 end of a fly let `place()` start a perpetual 320 ms pan loop; the res-7 change count ignored the
 `kg_share ≥ 128` / `absent` dedupe rule the tiles and the summary use.
+
+### Tree sheet opacity (2026-11-11)
+
+The `v=tree` bitmap is **opaque**; its tiles sit in one `g.sh` per LOD group under `.ov-tree` and that group carries the
+sheet's opacity (`.843` = `neGlyphTreeSheetAlpha`). With the alpha in the pixels the 1-px bleed ring two neighbours share
+composited twice — a pale stripe along every tile seam, 3+ screen px at LOD 2. Clipping the ring instead leaves an
+anti-aliased dark hairline. Crown marks (`.ap`) are siblings of `g.sh`. Tile key `/o`, URL `&o=1` (cache bust).
