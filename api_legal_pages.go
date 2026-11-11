@@ -7,7 +7,7 @@
 // "E-Mail anzeigen" (spam harvesters). The page is still complete for a human. Everything here must describe what the service ACTUALLY does — keep
 // it in step with api.go (request log: no IP), api_ne_public.go (IP only in an
 // in-memory rate-limit bucket), api_feedback.go (free-text feedback is stored
-// and published; glyph-trace records deleted after 24 h), ne_glyph_warm.go (shared
+// and published; glyph-trace records — ?trace and ?deep — deleted after 24 h), ne_glyph_warm.go (shared
 // links — link icon clicked: hash without q=/pn=, tile URLs, device class, copy/open counts, day — no IP/UA), ne_glyph.go (localStorage for view prefs, no cookies; locate = Geolocation in the browser only, never sent), and
 // the landing page (no third-party fonts/CSS/JS — the only cross-origin
 // traffic is the glyph's live data fetches to {OBS_NAME}, §3/§4
@@ -102,8 +102,9 @@ Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO.</p>
 <p>Über <code>/api/v1/feedback</code> können Nutzer:innen und automatisierte Agenten freiwillig Rückmeldungen senden (Kategorie, Titel, Text,
 optional Name des sendenden Programms). Diese Einträge werden dauerhaft gespeichert und sind <strong>öffentlich abrufbar</strong>.
 Bitte tragen Sie dort keine personenbezogenen Daten ein. Rechtsgrundlage: Art. 6 Abs. 1 lit. a DSGVO (Einwilligung durch Absenden);
-Löschung auf Anfrage per E-Mail. Ausnahme: technische Ladeprotokolle der Karte, die nur mit dem Zusatz <code>?trace</code> in der
-Adresse entstehen (Betriebs-Diagnose, ohne IP; mit Browserkennung), sind nicht öffentlich abrufbar und werden nach 24 Stunden automatisch gelöscht. Ebenso
+Löschung auf Anfrage per E-Mail. Ausnahme: technische Diagnoseprotokolle der Karte, die nur mit dem Zusatz <code>?trace</code> (Ladeprotokoll) oder
+<code>?deep</code> (Darstellungs-Diagnose: gewählte Schalter, Klickpositionen in der Karte, Zustand der Kartenelemente; gesendet erst
+mit „send“ oder beim Verlassen der Seite) in der Adresse entstehen (Betriebs-Diagnose, ohne IP; mit Browserkennung und der geöffneten Kartenansicht), sind nicht öffentlich abrufbar und werden nach 24 Stunden automatisch gelöscht. Ebenso
 technisch: das Antippen des Link-Symbols in der Karte („link copied“) meldet die geteilte Ansicht und ihre Kachelliste, damit der
 Link nach einem Neustart schnell bleibt – ohne IP und ohne Personendaten, Details unter Punkt 3.</p>
 <h3>2.4 Peer-Beiträge</h3>
