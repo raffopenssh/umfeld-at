@@ -592,7 +592,7 @@ button is text-like (muted ink, hairline; full ink and a thicker stroke when on)
 same dot loader as the view words. Legend gets a `relief · hillshade, 25 m terrain model ·
 {OBS_NAME}` line. Test hook: `neGlyph.state().relief / reliefZ / reliefLeft`.
 
-**Flags on trees** (the observed-layer peer `#flags`): the card's `⚑ flag` line unfolds in place into five
+**Flags on trees** (since 2026-11-11 the card's `today` row — states and flags, `docs/ne-glyph.md` row *TREE REPORTS*; what follows is the older note form) (the observed-layer peer `#flags`): the card's `⚑ flag` line unfolds in place into five
 claims (*looks right · not a tree · too tall · too short · misplaced* → `looks_right ·
 spurious · too_tall · too_short · misplaced`), an optional public note and *send*; `POST
 …/api/v1/flags {lon, lat, layer:"trees", claim, note, observed{h_m, crown_d_m,

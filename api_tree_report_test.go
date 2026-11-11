@@ -61,6 +61,18 @@ func TestTreeReportRelay(t *testing.T) {
 	if w := post(`{"lon":15.1,"lat":47.1,"layer":"trees","claim":"spurious","retract":true,"reporter":"abc"}`); w.Code != 201 || got["retract"] != true || got["claim"] != "spurious" {
 		t.Fatalf("flag withdraw: %d %v", w.Code, got)
 	}
+	// a state since the flight is set with a date as entered and taken back with null; a single false apex and a linear chain differ only in "expected"
+	if w := post(`{"lon":15.1,"lat":47.1,"state":"logged","date":"2025-08","reporter":"abc"}`); w.Code != 201 || got["state"] != "logged" || got["date"] != "2025-08" || got["claim"] != "tree" {
+		t.Fatalf("state: %d %v", w.Code, got)
+	}
+	if w := post(`{"lon":15.1,"lat":47.1,"state":null,"reporter":"abc"}`); w.Code != 201 || got["claim"] != "tree" {
+		t.Fatalf("unstate: %d %v", w.Code, got)
+	} else if v, ok := got["state"]; !ok || v != nil {
+		t.Fatalf("state:null must reach the peer as null: %v", got)
+	}
+	if w := post(`{"lon":15.1,"lat":47.1,"layer":"trees","claim":"spurious","observed":{"h_m":4},"expected":{"absent":true,"hint":"linear"}}`); w.Code != 201 || got["expected"].(map[string]interface{})["hint"] != "linear" {
+		t.Fatalf("linear: %d %v", w.Code, got)
+	}
 	status = 409
 	if w := post(`{"lon":15.1,"lat":47.1,"dbh_cm":40}`); w.Code != 409 {
 		t.Fatalf("409 must pass through, got %d", w.Code)

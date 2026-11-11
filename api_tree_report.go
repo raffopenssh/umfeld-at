@@ -100,7 +100,7 @@ func treeReportClean(m map[string]interface{}) string {
 	}
 	m["layer"] = "trees"
 	if c, _ := m["claim"].(string); c == "" {
-		// no claim = a report on the tree itself (species, measure, withdraw, undo one step =
+		// no claim = a report on the tree itself (species, measure, state since the flight ("state": "logged" | null), withdraw, undo one step =
 		// retract:"last"). A flag and its withdraw always name their claim.
 		m["claim"] = "tree"
 	}
