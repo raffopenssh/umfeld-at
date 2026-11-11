@@ -54,6 +54,13 @@ func TestTreeReportRelay(t *testing.T) {
 	if w := post(`{"reports":[{"lon":1,"lat":2,"layer":"trees","claim":"missing","client_id":"u"}]}`); w.Code != 201 || got["reports"] == nil {
 		t.Fatalf("batch: %d %v", w.Code, got)
 	}
+	// undo one step and a flag withdraw go through as they are (peer contract 2026-11-11)
+	if w := post(`{"client_id":"u","retract":"last","reporter":"abc"}`); w.Code != 201 || got["retract"] != "last" || got["claim"] != "tree" {
+		t.Fatalf("undo: %d %v", w.Code, got)
+	}
+	if w := post(`{"lon":15.1,"lat":47.1,"layer":"trees","claim":"spurious","retract":true,"reporter":"abc"}`); w.Code != 201 || got["retract"] != true || got["claim"] != "spurious" {
+		t.Fatalf("flag withdraw: %d %v", w.Code, got)
+	}
 	status = 409
 	if w := post(`{"lon":15.1,"lat":47.1,"dbh_cm":40}`); w.Code != 409 {
 		t.Fatalf("409 must pass through, got %d", w.Code)

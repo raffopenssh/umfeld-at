@@ -100,7 +100,8 @@ func treeReportClean(m map[string]interface{}) string {
 	}
 	m["layer"] = "trees"
 	if c, _ := m["claim"].(string); c == "" {
-		// the peer reads a bare {identity, retract} as a generic flag — say what it is
+		// no claim = a report on the tree itself (species, measure, withdraw, undo one step =
+		// retract:"last"). A flag and its withdraw always name their claim.
 		m["claim"] = "tree"
 	}
 	delete(m, "reporter_key")
@@ -125,7 +126,7 @@ func handleV1TreeReport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", "POST")
-		apiError(w, "POST a tree report (species, measures, add, withdraw) — relayed to "+peers().ObsName, http.StatusMethodNotAllowed)
+		apiError(w, "POST a tree report (species, measures, add, withdraw, undo) — relayed to "+peers().ObsName, http.StatusMethodNotAllowed)
 		return
 	}
 	target := treeReportURL()

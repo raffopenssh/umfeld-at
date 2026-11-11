@@ -298,7 +298,7 @@ POST /api/v1/feedback        {"title": "...", "agent": "...", "category": "bug|f
                              "severity": "critical|high|normal|low", "description": "...", "endpoint": "...", "context": {}}
 GET /api/v1/feedback?status=open
 POST /api/v1/trees/report    the map's own relay for a reader's tree report (species, height, DBH, add a missing tree,
-                             withdraw) to {OBS_NAME} — same body and answers as its POST /api/v1/flags on the tree layer;
+                             withdraw, undo one step, take a flag back) to {OBS_NAME} — same body and answers as its POST /api/v1/flags on the tree layer;
                              same-origin only, nothing is stored here. Other clients: report to {OBS_NAME} directly.
 
 Fair use: every client address has a budget of requests, transferred bytes and server time, sized
