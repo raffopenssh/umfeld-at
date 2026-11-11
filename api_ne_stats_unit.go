@@ -1871,8 +1871,18 @@ func handleNEStatsUnit(w http.ResponseWriter, r *http.Request, gateID string) {
 	} else {
 		w.Header().Set("Cache-Control", "public, max-age=600")
 	}
-	if format == "csv" && q.Get("download") != "" {
-		w.Header().Set("Content-Disposition", "attachment; filename=\"umfeld-stats-"+neStatsFileName(units)+".csv\"")
+	{ // a telling name whether downloaded (csv&download=1) or saved from the tab (ne_export_name.go)
+		canon, disp, ext := "", "inline", format
+		if filt {
+			canon = expr.Canonical()
+		}
+		if format == "csv" && q.Get("download") != "" {
+			disp = "attachment"
+		}
+		if format == "flat" {
+			ext = "flat.json"
+		}
+		w.Header().Set("Content-Disposition", disp+"; filename=\""+neExportStem("stats", neExportUnitPlace(units), "", canon, "")+"."+ext+"\"")
 	}
 	if neNotModified(w, r, etag) {
 		return
@@ -1881,13 +1891,6 @@ func handleNEStatsUnit(w http.ResponseWriter, r *http.Request, gateID string) {
 	w.WriteHeader(200)
 	_, _ = w.Write(body)
 	exportAccount(gateID, len(body))
-}
-
-func neStatsFileName(units []*neStatsUnit) string {
-	if len(units) == 1 {
-		return units[0].kind + "-" + strings.NewReplacer(",", "_", ".", "p").Replace(units[0].key)
-	}
-	return fmt.Sprintf("%d-units", len(units))
 }
 
 // handleNEGlyphArea — GET /api/v1/ne/glyph/area?u=kg=a,b;adm=c — the card's

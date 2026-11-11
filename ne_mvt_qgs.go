@@ -841,10 +841,12 @@ func neQGSSpecOf(r *http.Request) (sp neQGSSpec, msg string, code int) {
 	// names a unit — the project mirrors the page, the archive covers the unit
 	if share != "" {
 		if vb := neShareViewBox(share); vb != nil {
-			box, name = *vb, "view"
-			if k, v, _ := neStatsParseShare(share); k != "" {
-				name = k + "-" + v + "-view"
+			if k, _, _ := neStatsParseShare(share); k != "" {
+				name += "-view" // the unit's name, opened on the page's view
+			} else {
+				name = "view-" + neExportBoxPlace(*vb)
 			}
+			box = *vb
 		}
 	}
 	sp = neQGSSpec{base: publicBaseURL(r), box: box, name: name, canon: canon, share: share}
@@ -862,11 +864,8 @@ func handleNEMVTProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	xml, _ := neQGSProject(sp)
-	neCellsJSONPrepare(sp.box) // the hexagon layer's bins: ready by the time the file is opened
-	fn := "umfeld-at-cells-" + sp.name
-	if sp.canon != "" {
-		fn += "-filtered"
-	}
+	neCellsJSONPrepare(sp.box)                                   // the hexagon layer's bins: ready by the time the file is opened
+	fn := neExportStem("cells", sp.name, sp.share, sp.canon, "") // ne_export_name.go
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/x-qgis-project; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+fn+`.qgs"`)
@@ -898,7 +897,7 @@ func handleNEMVTStyle(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
-	w.Header().Set("Content-Disposition", `attachment; filename="umfeld-at-cells.qml"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+neExportStem("cells", "style", q.Get("share"), "", map[bool]string{true: "archive", false: "tiles"}[kind == "ogr" || kind == "pmtiles"])+`.qml"`)
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	w.WriteHeader(200)
 	w.Write([]byte(neQGSStyleQML(!(kind == "ogr" || kind == "pmtiles"), q.Get("share"), maxZ)))

@@ -259,7 +259,7 @@ func TestNEMVTProject(t *testing.T) {
 		return w, w.Body.String()
 	}
 	w, body := get("/api/v1/ne/mvt.qgs?bbox=10.07,47.13,10.10,47.145")
-	if w.Code != 200 || !strings.Contains(w.Header().Get("Content-Disposition"), "umfeld-at-cells-bbox.qgs") {
+	if w.Code != 200 || !strings.Contains(w.Header().Get("Content-Disposition"), "umfeld-at-cells-bbox-") {
 		t.Fatalf("bbox project → %d %s", w.Code, w.Header().Get("Content-Disposition"))
 	}
 	if err := xml.Unmarshal([]byte(body), new(struct{})); err != nil {
@@ -301,7 +301,7 @@ func TestNEMVTProject(t *testing.T) {
 		if w.Code != 200 {
 			t.Fatalf("share project → %d %s", w.Code, body)
 		}
-		for _, want := range []string{`enabled="1" name="observed · forest (wald)"`, `enabled="0" name="declared · forest (wald)"`, `enabled="1" name="trees · tallest 5–15 m (hexagons, far zooms)"`, `enabled="0" name="change · confirmed"`, `.pbf?f%3Dht%3E%3D20`, `name="Trees · crowns by height · ≥ 20 m" source="type=xyz`, `providerKey="ogr"`, `/api/v1/ne/mvt/trees.geojson?bbox=`, `ht=20..`, `type="graduatedSymbol" attr="h"`, `/api/v1/ne/mvt/pic/sub/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/pic/observed/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/relief/{z}/{x}/{y}.png`, `<blendMode>8</blendMode>`, `max-zoom="24"`, "umfeld-at-cells-view-filtered.qgs", `name="Filter veil" source="type=xyz`, `%26veil%3D1`, `name="Cells outside the filter"`, `&amp;f=ht%3E%3D20&amp;veil=1`, `name="Cells in the filter"`, `name="Trees as points · ≥ 20 m"`, `name="Land use · observed (LiDAR)"`, `set_color_part(&#39;`} {
+		for _, want := range []string{`enabled="1" name="observed · forest (wald)"`, `enabled="0" name="declared · forest (wald)"`, `enabled="1" name="trees · tallest 5–15 m (hexagons, far zooms)"`, `enabled="0" name="change · confirmed"`, `.pbf?f%3Dht%3E%3D20`, `name="Trees · crowns by height · ≥ 20 m" source="type=xyz`, `providerKey="ogr"`, `/api/v1/ne/mvt/trees.geojson?bbox=`, `ht=20..`, `type="graduatedSymbol" attr="h"`, `/api/v1/ne/mvt/pic/sub/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/pic/observed/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/relief/{z}/{x}/{y}.png`, `<blendMode>8</blendMode>`, `max-zoom="24"`, "-observed-trees-photo-subsidy-f-ht-ge-20-", `name="Filter veil" source="type=xyz`, `%26veil%3D1`, `name="Cells outside the filter"`, `&amp;f=ht%3E%3D20&amp;veil=1`, `name="Cells in the filter"`, `name="Trees as points · ≥ 20 m"`, `name="Land use · observed (LiDAR)"`, `set_color_part(&#39;`} {
 			if !strings.Contains(body, want) && !strings.Contains(w.Header().Get("Content-Disposition"), want) {
 				t.Errorf("share project lacks %q", want)
 			}

@@ -88,7 +88,7 @@ drops means, codes and names (`coverage.note` says so; `units_n` counts the memb
 ```
 format=json   the envelope (default); several units → {"schema","service","units":[…]}
 format=flat   ONE flat object: unit.kind unit.key unit.name unit.bbox coverage.complete [filter] <figures> srtm.<key> sub.<key> link
-format=csv    header row + one row per unit (text/csv, UTF-8, no BOM); &download=1 adds a filename
+format=csv    header row + one row per unit (text/csv, UTF-8, no BOM); every answer carries a telling file name (unit, filter, day); &download=1 makes it a download
 keys=a,b      only these keys (prefix match: keys=declared_ha,srtm.cover_ha,sub.claimed)
 peers=srtm,sub|none   which peers to ask (default both; none with f=)      year=   passed to {SUB_NAME}
 ```

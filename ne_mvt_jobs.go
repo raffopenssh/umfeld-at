@@ -369,7 +369,10 @@ func nePMTBox(r *http.Request) ([4]float64, string, string, string, int) {
 			return neMVTAustria, "austria", canon(), "", 0
 		}
 		b, msg := neMVTParseBox(s)
-		return b, "bbox", canon(), msg, 400
+		if msg != "" {
+			return b, "", "", msg, 400
+		}
+		return b, "bbox-" + neExportBoxPlace(b), canon(), "", 0
 	}
 	if s := q.Get("share"); s != "" {
 		if k, _, _ := neStatsParseShare(s); k == "" { // a view-only share link: what the page showed
@@ -382,7 +385,7 @@ func nePMTBox(r *http.Request) ([4]float64, string, string, string, int) {
 				if e := neFiltParse(f); f != "" && !e.empty() {
 					c = e.Canonical()
 				}
-				return *vb, "view", c, "", 0
+				return *vb, "view-" + neExportBoxPlace(*vb), c, "", 0
 			}
 		}
 	}
@@ -396,11 +399,7 @@ func nePMTBox(r *http.Request) ([4]float64, string, string, string, int) {
 		b[0], b[1] = min(b[0], v.bbox[0]), min(b[1], v.bbox[1])
 		b[2], b[3] = max(b[2], v.bbox[2]), max(b[3], v.bbox[3])
 	}
-	name := u.kind + "-" + u.key
-	if len(units) > 1 {
-		name += fmt.Sprintf("+%d", len(units)-1)
-	}
-	return b, name, canon(), "", 0
+	return b, neExportUnitPlace(units), canon(), "", 0
 }
 
 // handleNEPMTiles — see file header.
@@ -424,9 +423,6 @@ func handleNEPMTiles(w http.ResponseWriter, r *http.Request, rest string) {
 	if msg != "" {
 		apiError(w, msg, code)
 		return
-	}
-	if canon != "" {
-		name += "-filtered"
 	}
 	minZ, maxZ := neMVTMinZ, 14
 	if v, err := strconv.Atoi(q.Get("minz")); err == nil {
@@ -514,13 +510,15 @@ func handleNEPMTiles(w http.ResponseWriter, r *http.Request, rest string) {
 		}
 		defer f.Close()
 		fi, _ := f.Stat()
+		// named like the page's recent list: place, the view's state words, filter, zooms, day (ne_export_name.go)
+		stem := neExportStem("cells", name, q.Get("view"), canon, "z"+strconv.Itoa(c.MinZ)+"-"+strconv.Itoa(c.MaxZ))
 		if fm := neQuery(r).Get("format"); fm == "zip" || fm == "qgis" {
 			// the archive with its style and project (ne_mvt_qgs.go): what QGIS opens styled
-			neQGSBundle(w, r, c.path, "umfeld-at-cells-"+name+"-z"+strconv.Itoa(c.MinZ)+"-"+strconv.Itoa(c.MaxZ), c.MaxZ)
+			neQGSBundle(w, r, c.path, stem, c.MaxZ)
 			return
 		}
 		w.Header().Set("Content-Type", "application/vnd.pmtiles")
-		w.Header().Set("Content-Disposition", `attachment; filename="umfeld-at-cells-`+name+`-z`+strconv.Itoa(c.MinZ)+`-`+strconv.Itoa(c.MaxZ)+`.pmtiles"`)
+		w.Header().Set("Content-Disposition", `attachment; filename="`+stem+`.pmtiles"`)
 		w.Header().Set("Cache-Control", "private, max-age=3600")
 		w.Header().Set("ETag", `"`+c.ID+`"`)
 		http.ServeContent(w, r, c.ID+".pmtiles", fi.ModTime(), f)
