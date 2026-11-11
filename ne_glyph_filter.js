@@ -6,7 +6,7 @@
    (OffscreenCanvas → PNG blob). The page only places <image>s.
 
    in : {t:'init', base, veil:[r,g,b], acc:[r,g,b]}
-        {t:'expr', f}                        → {t:'expr', canon, words, ignored, incomplete:[{t,f,start}], ext, empty}
+        {t:'expr', f}                        → {t:'expr', canon, words, groups:[{canon,words,terms:[{canon,words}]}], ignored, incomplete:[{t,f,start}], ext, empty}
         {t:'want', tiles:[{k,b,bi,bj,x,y,w,h}], px} → one {t:'tile', k, b, url|null, err} per tile as it lands / repaints, plus
                                              {t:'bin', b, n, match, state} per bin (counts) — b = bin key 'i/j' (0.025°), tiles are the view's
                                              LOD-0/1 tiles painted at px screen pixels per frame unit (crisp at any zoom, bounded canvas)
@@ -154,7 +154,7 @@ self.onmessage=function(ev){var m=ev.data;
  if(m.t==='init'){BASE=m.base||'';if(m.veil)VEIL=m.veil;if(m.acc)ACC=m.acc;DBG=!!m.dbg;catalogue().then(function(c){post({t:'cat',cat:c})},function(e){post({t:'err',err:'fields: '+(e&&e.message||e)})});return}
  if(m.t==='theme'){if(m.veil)VEIL=m.veil;if(m.acc)ACC=m.acc;for(var t in TILES)TILES[t].dirty=true;repaintAll();return}
  catalogue().then(function(){
-  if(m.t==='expr'){EXPR=parse(m.f);EXPR.empty=!EXPR.groups.length&&!EXPR.k;EXT=needsExt(EXPR);TH=needsTH(EXPR);ESEQ++;post({t:'expr',f:m.f,canon:canonical(EXPR),words:words(EXPR),incomplete:EXPR.incomplete,groups:EXPR.groups.map(function(g){return{canon:g.map(termStr).join('|'),words:g.map(termWords).join(' or ')}}).concat(EXPR.k>1?[{canon:'k>='+EXPR.k,words:'clusters \u2265 '+EXPR.k+' cells'}]:[]),ignored:EXPR.ignored,ext:EXT,empty:EXPR.empty});repaintAll();ptsTouch(null);return}
+  if(m.t==='expr'){EXPR=parse(m.f);EXPR.empty=!EXPR.groups.length&&!EXPR.k;EXT=needsExt(EXPR);TH=needsTH(EXPR);ESEQ++;post({t:'expr',f:m.f,canon:canonical(EXPR),words:words(EXPR),incomplete:EXPR.incomplete,groups:EXPR.groups.map(function(g){return{canon:g.map(termStr).join('|'),words:g.map(termWords).join(' or '),terms:g.map(function(t){return{canon:termStr(t),words:termWords(t)}})}}).concat(EXPR.k>1?[{canon:'k>='+EXPR.k,words:'clusters \u2265 '+EXPR.k+' cells'}]:[]),ignored:EXPR.ignored,ext:EXT,empty:EXPR.empty});repaintAll();ptsTouch(null);return}
   if(m.t==='want'){/* keep: add to the wants (the card's one-bin want beside the tree-point wants); otherwise the list replaces them, except the kept 'at:' entries; paint:false = bins only, no PNG (the veil itself is a server tile since 2026-11-03) */if(!m.keep){var kept={};for(var kk in WANT)if(kk.slice(0,3)==='at:')kept[kk]=WANT[kk];WANT=kept}if(m.px)PX=m.px;m.tiles.forEach(function(w){if(m.paint===false||m.keep)w.np=true;WANT[w.k]=w;var T=TILES[w.k];if(T&&T.bins.join()!==w.bins.join()){T.bins=w.bins;T.dirty=true}});evict();repaintAll();return}
   if(m.t==='at'){post({t:'at',id:m.id,hit:EXPR?at(m.x,m.y):null});return}
   if(m.t==='pts'){if(m.drop){delete PTS[m.k];return}var P=PTS[m.k]={k:m.k,xs:m.xs,ys:m.ys,bk:m.bk,bi:m.bi,dirty:true};P.bk.forEach(function(b){ensure(b)});if(!PTSR)PTSR=setTimeout(ptsFlush,0);return}

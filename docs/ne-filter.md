@@ -72,6 +72,16 @@ match (aggregates over the matching cells, `n_all`, `match_pct`; res 7–9 from 
 columns are filtered like ours; the export menu puts `;f=` on the tile URL and the archive link
 (`xF()`). Tests `TestNEMVTFilter`, `TestNESampFnat` (sample tiles).
 
+(13) **and / or switch** (2026-11-11): the row shows one chip per *term*; the word before a chip (and
+before the input, for the next condition) is the switch — plain text with a dotted underline and the export
+menu's chevron, opening a two-line menu (`fltJMenu`: and · both must hold / or · either is enough). The grammar
+is unchanged (`,` = and, `|` = or, or binds tighter: `a,b|c` = a and (b or c)), so every older link reads as
+before; no bracket is drawn around an or-run, and / or read in the same ink. `fltTermsOf` flattens the Worker's
+`groups[].terms[]`, `fltJoin` writes them back; removing the head of an or-run hands its *and* to the next
+term. Typing `or …` / `and …` flips the switch; `o` / `a` on a focused chip too. Order: `flt.f` stays the
+canonical form (terms sorted inside a group — tile and cache keys), `flt.disp` keeps the reader's order for
+the chips, the link (`;f=`) and the held filter; the `k>=` chip keeps a fixed *and* and stays last.
+
 Original design (kept as the rationale):
 
 Status at design time: **design, nothing built.** Scope: one filter component on the landing glyph that veils every
