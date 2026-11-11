@@ -180,3 +180,38 @@ L=mk();L.t.down(1,0,0,0);assert.strictEqual(L.t.up(1),false);assert.deepStrictEq
 L=mk();L.t.tick(600);L.t.move(1,9,9);assert.strictEqual(L.t.up(1),false);assert.deepStrictEqual(L.f,[]);assert.deepStrictEqual(L.c,[],'idle is inert');
 L=mk();L.t.down(1,0,0,0);L.t.tick(500);L.t.up(1);L.t.down(1,3,3,1000);L.t.tick(1500);assert.strictEqual(L.f.length,2,'a new press after release fires again');
 `
+
+// TestGlyphTreeMatch — the species search of the tree card (neGlyphTreeMatchJS) over the
+// observed-layer peer's dictionary rev 2 (testdata/tree_taxa_rev2.json): the inputs the peer's
+// resolver was verified with, typing order, the caller's order inside a step, the via hint.
+func TestGlyphTreeMatch(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node not installed")
+	}
+	p := filepath.Join(t.TempDir(), "match.js")
+	if err := os.WriteFile(p, []byte(neGlyphTreeMatchJS+"\n"+glyphTreeMatchHarness), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command(node, p, "testdata/tree_taxa_rev2.json").CombinedOutput(); err != nil {
+		t.Fatalf("tree match: %v\n%s", err, out)
+	}
+}
+
+const glyphTreeMatchHarness = `
+var assert=require('assert'),T=JSON.parse(require('fs').readFileSync(process.argv[2],'utf8')),IX=trIndex(T);
+function top(q,pri){var r=trSearch(IX,q,pri);return r.length?T[r[0].i][0]:null}
+function all(q,pri){return trSearch(IX,q,pri).map(function(e){return T[e.i][0]})}
+var C={'Fi':'Picea abies','PiAb':'Picea abies','PIEAB':'Picea abies','P. abies':'Picea abies','picea abies':'Picea abies','Fichte':'Picea abies','Rottanne':'Picea abies','norway spruce':'Picea abies','Weisskiefer':'Pinus sylvestris','Weißkiefer':'Pinus sylvestris','Zwetschge':'Prunus domestica','Akazie':'Robinia pseudoacacia','FaSy':'Fagus sylvatica','BAh':'Acer pseudoplatanus','Lae':'Larix decidua','Lä':'Larix decidua','laerche':'Larix decidua','Larche':'Larix decidua','PicAbi':'Picea abies','PiceAbie':'Picea abies','Pic. abi.':'Picea abies','Quercus ro':'Quercus robur','Ki':'Pinus sylvestris','Kir':'Prunus avium','Ei':'Quercus','oak':'Quercus','Eiche':'Quercus','Kastanie':'Aesculus hippocastanum','Maroni':'Castanea sativa','Buche':'Fagus sylvatica','Tanne':'Abies alba','Picea abis':'Picea abies','Fihcte':null,'Fichet':'Picea abies','Bergahron':'Acer pseudoplatanus','Tilia x europaea':'Tilia x europaea','tilia europaea':'Tilia x europaea','Quercus sp.':'Quercus','Ginkgo':'Ginkgo biloba','GEr':'Alnus incana','SaWei':'Salix caprea','xyzzy':null};
+for(var q in C)if(q!=='Fihcte')assert.strictEqual(top(q),C[q],q+' → '+top(q));
+/* typing: every prefix of a German name keeps a sane first chip by rank */
+assert.strictEqual(top('fic'),'Picea abies');assert.strictEqual(top('bu'),'Fagus sylvatica');assert.strictEqual(top('spru'),'Picea abies');
+/* empty: species only, rank order; pri lifts what is in view */
+assert.deepStrictEqual(all('').slice(0,3),['Picea abies','Fagus sylvatica','Larix decidua']);
+var gi=T.findIndex(function(t){return t[0]==='Ginkgo biloba'});assert.strictEqual(top('',function(i){return i===gi?-5:0}),'Ginkgo biloba');
+/* within one step pri decides: "ahorn" with a field maple in view */
+var fa=T.findIndex(function(t){return t[0]==='Acer campestre'});var ah=all('ahorn',function(i){return i===fa?-5:0});assert.strictEqual(ah[1],'Acer campestre',ah.join());assert(all('ahorn').indexOf('Acer pseudoplatanus')<all('ahorn').indexOf('Acer campestre'));
+assert.deepStrictEqual(all('nuss').filter(function(t){return/^(Pinus|Prunus)/.test(t)}),[]);assert.deepStrictEqual(all('p. ab'),['Picea abies']);assert.strictEqual(top('pini'),'Pinus nigra');assert.deepStrictEqual(all('ahorn').slice(0,3),['Acer','Acer pseudoplatanus','Acer platanoides']);
+/* via: named only when the shown name did not match */
+assert.strictEqual(trSearch(IX,'Fichte')[0].via,null);assert.strictEqual(trSearch(IX,'PIEAB')[0].via,'PIEAB');assert.strictEqual(trSearch(IX,'Rottanne')[0].via,'Rottanne');assert.strictEqual(trSearch(IX,'PiAb')[0].via,'Picea abies');
+`
