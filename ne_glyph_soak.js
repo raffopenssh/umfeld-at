@@ -160,6 +160,7 @@ export async function run(o) {
         want(P + 'locate stage 2 pinned as pt= at full resolution', lg.classList.contains('pin') && lb.classList.contains('fix') && /pt=/.test(location.hash) && /;full/.test(location.hash) && G.locate().stage === 2, { hash: location.hash, st: G.locate() });
         want(P + 'locate never in the recent list', !JSON.stringify(localStorage).includes(ll[1].toFixed(4)), null);
         s = await G.locate(false); await sleep(400);
+        want(P + 'locate failure hints nudge to GPS', /turn on GPS/.test(G.locate({ err: 1, perm: 'granted', dt: 5000 })) && /turn on GPS/.test(G.locate({ err: 1, dt: 20 })) && /tap again to ask/.test(G.locate({ err: 1, perm: 'prompt', dt: 5000 })) && /GPS/.test(G.locate({ err: 2 })) && /GPS/.test(G.locate({ err: 3 })), null);
         want(P + 'locate off removes everything', !lg.classList.contains('on') && lb.getAttribute('aria-pressed') === 'false' && !/pt=|kg=|cell=/.test(location.hash) && !document.querySelector('svg.glyph g.pt.on'), { hash: location.hash });
       }
       /* filter (docs/ne-filter.md): ;f= round trip, worker bins + tiles complete, veil group shown, counts sane, chips, legend row, label input canonicalised, LOD-2 readout, clear */
