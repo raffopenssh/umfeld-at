@@ -73,6 +73,7 @@ change_n.<none|candidate|confirmed>  change_ha.<same>  change.log_versions  chan
 subsidy_ha.<acker|gruenland|alm|wein|dauerkultur|gloez|sonst>  subsidy.claimed_ha .claimed_pct .bio_ha .bio_pct .known_pct   INVEKOS class × claimed share per cell
 natura2000_ha natura2000_pct  structures_n structures.cover_ha
 terrain.elev_mean_m terrain.slope_mean_deg height.p90_mean_m canopy.cover_pct ndvi.mean       area-weighted means over cells with a value
+trees_n                                              tree apices (≥ 3 m) of the counted cells; under a height term (ht=, htmax=, hc=) only the apices inside it — absent when a cell had no apex list
 kg.dominant kg.n kg.name gemeinde.code gemeinde.name bezirk.name bundesland.name             where the unit sits (h3 / bbox / Natura: the dominant KG)
 ```
 Every per-cell number comes from the filter index bins (`/api/v1/ne/glyph/fidx`) joined with the cells'

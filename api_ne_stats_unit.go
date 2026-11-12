@@ -624,6 +624,8 @@ type neStatsAcc struct {
 	states                                          []string
 	ids                                             []uint64 // the matching cells (filtered units: the peers get this list)
 	scale                                           int      // 1, or neSampK when ids are sampled cells
+	trees, treesX                                   int      // tree apices of the counted cells (inside the filter's height term when the cell has an apex list) · cells counted from a list
+	treesRng                                        bool     // the filter has a height term: trees is only right when every counted cell had a list
 }
 
 func (a *neStatsAcc) mean(v [2]float64, dec int) interface{} {
@@ -713,6 +715,8 @@ func neStatsComputeMax(u *neStatsUnit, expr *neFiltExpr, maxBins int) (*neStatsA
 			if filt {
 				mask = b.eval(expr)
 			}
+			tc := neNewTreeCounter(b.TH, b.col("tn"), expr)
+			acc.treesRng = tc.rng
 			ids := make([]uint64, 0, b.N/4)
 			mem := make(map[uint64]memb, b.N/4)
 			for k := 0; k < b.N; k++ {
@@ -745,6 +749,12 @@ func neStatsComputeMax(u *neStatsUnit, expr *neFiltExpr, maxBins int) (*neStatsA
 					acc.ids = append(acc.ids, id)
 				}
 				mem[id] = memb{k, wa}
+				if v, exact := tc.at(k); exact {
+					acc.trees += v
+					acc.treesX++
+				} else {
+					acc.trees += v
+				}
 				neStatsAddCols(acc, b, k, wa)
 			}
 			if len(ids) == 0 {
@@ -808,6 +818,8 @@ func neStatsSample(sp *neSamp, u *neStatsUnit, expr *neFiltExpr) (*neStatsAcc, i
 	bin := sp.asBin()
 	d, dsh, o, osh := sp.col("d"), sp.col("dsh"), sp.col("o"), sp.col("osh")
 	acc.states = []string{sp.Hdr.State}
+	tc := neNewTreeCounter(sp.th, sp.col("tn"), expr)
+	acc.treesRng = tc.rng
 	for _, k := range sp.rowsNear(bb[0], bb[1], bb[2], bb[3]) {
 		id := sp.id(k)
 		lon, lat := neCellCentre(id)
@@ -829,6 +841,12 @@ func neStatsSample(sp *neSamp, u *neStatsUnit, expr *neFiltExpr) (*neStatsAcc, i
 			acc.scale = neSampK
 		}
 		neStatsAddCols(acc, bin, k, wa)
+		if v, exact := tc.at(int(k)); exact {
+			acc.trees += v * neSampK
+			acc.treesX += neSampK
+		} else {
+			acc.trees += v * neSampK
+		}
 		if d != nil && d[k] != 255 && int(d[k]) < 9 {
 			acc.declared += neSampK
 			sh := 1.0
@@ -925,6 +943,11 @@ func neStatsFigures(u *neStatsUnit, acc *neStatsAcc, filt bool) map[string]inter
 		f["unit_cells_n"] = acc.cells
 		f["unit_area_ha"] = neRound(acc.unitArea, 2)
 		f["match_pct"] = neStatsPct(acc.area, acc.unitArea)
+	}
+	// tree apices (≥ 3 m) of the counted cells; with a height term in the filter
+	// only the apices inside it — left out when not every cell carried a list
+	if !acc.treesRng || acc.treesX == acc.match {
+		f["trees_n"] = acc.trees
 	}
 	f["cells_declared_n"] = acc.declared
 	f["cells_observed_n"] = acc.observed
@@ -1893,7 +1916,7 @@ func handleNEStatsUnit(w http.ResponseWriter, r *http.Request, gateID string) {
 	exportAccount(gateID, len(body))
 }
 
-// handleNEGlyphArea — GET /api/v1/ne/glyph/area?u=kg=a,b;adm=c — the card's
+// handleNEGlyphArea — GET /api/v1/ne/glyph/area?u=kg=a,b;adm=c[&clip=w,s,e,n][&f=expr] — the card's
 // area line for a selection: the SAME unit, cells and area the export
 // (/ne/stats/unit?share=) answers with, taken from the same memo — the page
 // and the sheet cannot disagree. Not an export: no rows, not gated as one.
@@ -1924,7 +1947,15 @@ func handleNEGlyphArea(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	e, code, _ := neStatsOwn(units[0], nil)
+	// f=<expr> — the filter readout of a selection: the matching cells of the
+	// unit (figures cells_n / area_ha / trees_n beside unit_cells_n / unit_area_ha)
+	var expr *neFiltExpr
+	if fs := r.URL.Query().Get("f"); fs != "" && len(fs) <= 1024 {
+		if x := neFiltParse(fs); x != nil && !x.empty() {
+			expr = x
+		}
+	}
+	e, code, _ := neStatsOwn(units[0], expr)
 	if code != 0 || e == nil {
 		w.Header().Set("Retry-After", "30")
 		apiError(w, "not available", 503)
