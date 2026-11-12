@@ -108,7 +108,7 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
 - **Filter readout × selection** (`fltIv`/`fltSelS` in `ne_glyph_filt.go`): with a KG / area / combined selection
   (`ivTok()`) the readout and the legend's filter line count the cells of THAT unit — "m of n cells selected · ha / ha
   · trees" — from `/api/v1/ne/glyph/area?u=<unit>&f=<expr>` (the whole unit, = the export's row; figure `trees_n`;
-  ≈ when the unit is answered from the 1-in-49 sample). The veil and the tile sums are untouched; without a
+  with `f=` the handler runs the light count `neStatsComputeOpt(…, light)` — cell-exact up to `neStatsReadoutBins`=400 bins from the bins at hand (`neFidxPeek`; missing bins = `pending`, the page asks again after 3 s), since a rare match is invisible to the sample; beyond that the 1-in-49 sample, ≈). The veil and the tile sums are untouched; without a
   selection, or without an answer, the tile sums stand. Debounced, cached per unit+expr, last answer stands.
 - **Filter overview preview** (`ne_glyph_filt.go` `fv*`, state `fv {f lf d ld err h}`): `fvOn()` = filter active
   AND `fltFar()` (full res off or the view spans > 36 bins) · `fvSync()` (from `setVB`, `fltView`, `fltSet`)

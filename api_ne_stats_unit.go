@@ -56,11 +56,14 @@ const (
 	// a unit beyond neStatsMaxBins answers from the national sample at once (approx)
 	// and — up to this many bins, unfiltered — is computed cell-exact in the
 	// background (one worker, ≤ neStatsExactQueue waiting); the next call has it
-	neStatsExactBins  = 640
-	neStatsExactQueue = 8
-	neStatsExactTTL   = 2 * time.Hour
-	neStatsTTL        = 10 * time.Minute
-	neStatsPeerTO     = 5 * time.Second
+	neStatsExactBins = 640
+	// the glyph's filter readout of a selection (handleNEGlyphArea f=): the light
+	// count, cell-exact up to this many bins (≈ 2 000 km² of box), the sample beyond
+	neStatsReadoutBins = 400
+	neStatsExactQueue  = 8
+	neStatsExactTTL    = 2 * time.Hour
+	neStatsTTL         = 10 * time.Minute
+	neStatsPeerTO      = 5 * time.Second
 )
 
 var (
@@ -646,6 +649,14 @@ func neStatsCompute(u *neStatsUnit, expr *neFiltExpr) (*neStatsAcc, int) {
 }
 
 func neStatsComputeMax(u *neStatsUnit, expr *neFiltExpr, maxBins int) (*neStatsAcc, int) {
+	return neStatsComputeOpt(u, expr, maxBins, false)
+}
+
+// neStatsComputeOpt — light: the count only (cells, match, areas, trees) for
+// the glyph's filter readout: the same cells and weights, but no declared /
+// observed rows are read and a bin that is not built yet is never waited for
+// (neFidxPeek queues it; it counts as partial and the caller asks again).
+func neStatsComputeOpt(u *neStatsUnit, expr *neFiltExpr, maxBins int, light bool) (*neStatsAcc, int) {
 	acc := &neStatsAcc{kgHa: map[string]float64{}}
 	if err := neGlyphLoadFrame(); err != nil {
 		return acc, 503
@@ -687,12 +698,24 @@ func neStatsComputeMax(u *neStatsUnit, expr *neFiltExpr, maxBins int) (*neStatsA
 		w float64
 	}
 	seen := map[string]bool{}
+	stamp := time.Now().UnixNano()
 	{
 		for _, ij := range bins {
 			i, j := ij[0], ij[1]
 			acc.bins++
-			full, st, err := neFidxGet(i, j)
-			if err != nil {
+			var full []byte
+			var st string
+			var err error
+			if light {
+				var ok bool
+				if full, st, ok = neFidxPeek(i, j, stamp); !ok {
+					acc.partial++
+					continue
+				}
+				if full == nil {
+					continue
+				}
+			} else if full, st, err = neFidxGet(i, j); err != nil {
 				acc.partial++
 				continue
 			}
@@ -744,17 +767,20 @@ func neStatsComputeMax(u *neStatsUnit, expr *neFiltExpr, maxBins int) (*neStatsA
 				}
 				acc.match++
 				acc.area += wa
-				ids = append(ids, id)
-				if filt {
-					acc.ids = append(acc.ids, id)
-				}
-				mem[id] = memb{k, wa}
 				if v, exact := tc.at(k); exact {
 					acc.trees += v
 					acc.treesX++
 				} else {
 					acc.trees += v
 				}
+				if light {
+					continue
+				}
+				ids = append(ids, id)
+				if filt {
+					acc.ids = append(acc.ids, id)
+				}
+				mem[id] = memb{k, wa}
 				neStatsAddCols(acc, b, k, wa)
 			}
 			if len(ids) == 0 {
@@ -1953,6 +1979,42 @@ func handleNEGlyphArea(w http.ResponseWriter, r *http.Request) {
 	if fs := r.URL.Query().Get("f"); fs != "" && len(fs) <= 1024 {
 		if x := neFiltParse(fs); x != nil && !x.empty() {
 			expr = x
+		}
+	}
+	if expr != nil {
+		// cell-exact where the unit fits (a rare match is invisible to the 1-in-49
+		// sample): the light count over the bins at hand; beyond, the sample below
+		key := "fc/" + units[0].kind + "/" + units[0].key + "/" + expr.Canonical()
+		if b, ok := neStatsLRU.get(key); ok && len(b) > 8 && time.Since(time.Unix(int64(binary.LittleEndian.Uint64(b)), 0)) < neStatsTTL {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Cache-Control", "public, max-age=600")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(b[8:])
+			return
+		}
+		if acc, code := neStatsComputeOpt(units[0], expr, neStatsReadoutBins, true); code == 0 {
+			f := map[string]interface{}{"cells_n": acc.match, "area_ha": neRound(acc.area, 2), "unit_cells_n": acc.cells, "unit_area_ha": neRound(acc.unitArea, 2)}
+			if !acc.treesRng || acc.treesX == acc.match {
+				f["trees_n"] = acc.trees
+			}
+			out := map[string]interface{}{"pending": acc.partial > 0, "kind": units[0].kind, "key": units[0].key, "area_ha": f["area_ha"], "cells_n": acc.match,
+				"approx": false, "complete": acc.partial == 0, "bins": acc.bins, "bins_pending": acc.partial, "figures": f}
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			if acc.partial > 0 {
+				w.Header().Set("Cache-Control", "no-store")
+			} else {
+				w.Header().Set("Cache-Control", "public, max-age=600")
+				b, _ := json.Marshal(out)
+				buf := make([]byte, 8, 8+len(b))
+				binary.LittleEndian.PutUint64(buf, uint64(time.Now().Unix()))
+				neStatsLRU.put(key, append(buf, b...))
+			}
+			writeJSON(w, 200, out)
+			return
+		} else if code != 413 {
+			w.Header().Set("Retry-After", "30")
+			apiError(w, "not available", 503)
+			return
 		}
 	}
 	e, code, _ := neStatsOwn(units[0], expr)
