@@ -410,7 +410,12 @@ write`, process restart mid-session). Now `rowsMu`/`deltasMu`, and `neChangeAppe
 **Picture tile seams**: base and `v=obs` tiles carry a 3-px ring but are translucent (alpha = dominance), so the ring two
 neighbours share composited twice — a band of other tone along every seam, 14 px at 2400×. Each picture is clipped to exactly its
 tile (`clip-path: inset(ring − var(--pe,0px))`; `--pe` is only the `?deep` panel's knob). Safari 26, checked with the panel: any
-overlap, even one screen px, is a visible hairline; exact is not.
+overlap, even one screen px, is a visible hairline; exact is not. Blink (Android, 2026-11-12) anti-aliases that clip: two
+neighbours covering a seam pixel c and 1−c composite source-over to 1−c(1−c), so up to a quarter of the page shows through — a pale
+hairline at fractional scales (DPR 2.625). There the pictures of one LOD group **add up** (`mix-blend-mode: plus-lighter`, the
+`[data-lod]` group under `.b` / `.ov-obs` isolated): c + (1−c) = 1. Behind `@supports … and (not (font:-apple-system-body))`, i.e.
+not WebKit, where exact was checked; `?deep` switches `add` / `noadd` force either. Repro without a phone: emulate 412×800 @ 2.625,
+`#full;at=4882,2441,317`, look for a 1-px paler column in the forest.
 
 **Flag marks are canvas** (`trFlagDraw`, called from `trDraw`): reported apexes used to be SVG `<use href="#ng-tr">` clones (dashed
 non-scaling strokes, scaled). Safari 26 left a strip of the map unpainted (page colour, map top down to the tapped tree, ~6 px
