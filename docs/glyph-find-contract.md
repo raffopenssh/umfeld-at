@@ -128,3 +128,18 @@ Every find landing (KG, admin unit, point — typed or from a bare `#kg=`/`#adm=
 full resolution when the fit is deep enough (`landFull`: waits for the animation and any outline
 refit, then `hiOn()` if zoom ≥ `HI_MIN`, unless the overview was asked for via ⤢/`;nofull` or the
 user moved meanwhile). Small units lift `ZMAX` to `HI_ZMAX` before the fit like `selectKG` does.
+
+## Phone behaviour of the box (2026-11)
+
+- **Typed text is never thrown away by a stray touch.** A finger outside the box closes it only when the touch
+  turns out to be a tap (`click`); a touch that scrolls the page or pans the map leaves box, keyboard, list and
+  text alone. A tap / mouse press outside closes the box but keeps the text as a *draft* (`collapse(true)`,
+  `draft`): the next open brings it back selected (typing replaces it). A pick, ×, Esc drop it; it lapses after 2 min.
+- **An address lands where it can be read.** `goPoint` fits `sp` metres (house 450 m; street 400 m + 12 m per
+  address, 600–2500 m) at full resolution, lifting the zoom cap like `selectKG` — one tile set is loaded, nobody
+  pinches from the city (z 24) down to the street. Names (toponyms) keep the res-7 hexagon fit.
+- **A pinch does not order the tile sets it passes through** (`hiView`: held while the fingers are still zooming
+  across a LOD / downscale boundary; 260 ms rest, lift, or 1.5 s release it). z 24 → 400 used to fetch and decode
+  ~30 megapixel pictures for levels nobody looked at — the freeze on a 4 GB phone.
+- **Each further key scans the survivors** (`nar`): a text extending the previous one can only match what that
+  matched, so KG and outline search stop rescanning 10 k entries per key.

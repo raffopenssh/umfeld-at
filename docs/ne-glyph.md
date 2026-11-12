@@ -435,11 +435,15 @@ ring `g.tp` only.
 ## Phone load triage — `?trace` field recorder + emulated screencast
 
 A load that "flashes" on a phone we cannot hold: add `?trace` (hard reload with a fresh `?r=N` after every
-deploy — the page is cached) to the URL and keep the tab in front 45 s. Every 120 ms the page samples
+deploy — the page is cached) to the URL and use the page (up to six minutes are recorded). Every 120 ms the page samples
 `t | svg top:bottom:w | card rect | card classes | tools rect | filter-row rect | chips/<row children with px>
 | visible imgs | relief imgs | all imgs | vb w/h | hi.left | relief pending | fs | innerWxH | vv height | dpr
 | visibility | card head`, keeps the rows that changed and POSTs them with `dbg` and the error list to
-`/api/v1/feedback` (agent `glyph-trace`). Trace records are triage material, not feedback: `feedbackPurgeLoop` (api_feedback.go) deletes
+`/api/v1/feedback` (agent `glyph-trace`). The first record goes out after 45 s; after that a part (`trace +N`, `context.part`)
+follows every 30 s with the rows since the last one, for six minutes / 12 parts (the feedback store takes 20 writes
+an hour, 64 KB each) and when the tab is hidden — a freeze minutes into a session is on the server up to its last
+30 s; read ALL parts of a session, not only the newest record. `frame Nms z= imgs= [pinch] left=` rows = no
+animation frame for N ms while the tab was in front (script, raster or GPU). Trace records are triage material, not feedback: `feedbackPurgeLoop` (api_feedback.go) deletes
 them 24 h after arrival (at start, then hourly; Datenschutz 2.3). They are served on the private tier only
 (the public list and its counts skip them). Read the newest record (`$P` = private prefix, `$T` = a private token):
 
