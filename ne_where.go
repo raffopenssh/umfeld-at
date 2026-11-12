@@ -106,11 +106,14 @@ func neWhereParseShare(raw string) neWhereView {
 			switch k {
 			case "full", "nofull", "trees", "relief", "change", "diff", "subsidy", "ortho", "roads", "screen", "open", "below", "export", "info":
 				v.Flags = append(v.Flags, k)
+			case "obs", "observed": // the view named bare (the page reads it too and writes v=obs back)
+				v.Profile = "obs"
+			case "declared", "lu":
 			default:
 				v.dropped = append(v.dropped, t)
 			}
 		case k == "v":
-			if strings.EqualFold(val, "obs") {
+			if strings.EqualFold(val, "obs") || strings.EqualFold(val, "observed") {
 				v.Profile = "obs"
 			} else if strings.EqualFold(val, "chg") {
 				v.Flags = append(v.Flags, "change")

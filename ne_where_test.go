@@ -21,6 +21,11 @@ func TestNEWhereParseShare(t *testing.T) {
 			t.Errorf("%q f → held=%v %q", raw, v.FHeld, v.F)
 		}
 	}
+	for _, raw := range []string{"#full;obs;at=4882,2441,317", "#observed;full", "#v=observed"} {
+		if w := neWhereParseShare(raw); w.Profile != "obs" || len(w.dropped) != 0 {
+			t.Errorf("%q → %+v", raw, w)
+		}
+	}
 	v := neWhereParseShare("#pt=47.2,10.7;kg=1234;z=400;bogus")
 	if v.pt == nil || v.pt[0] != 10.7 || v.kg != "01234" || v.z != 400 || len(v.dropped) != 1 {
 		t.Errorf("%+v", v)
