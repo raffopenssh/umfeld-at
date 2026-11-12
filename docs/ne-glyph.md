@@ -260,6 +260,19 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   Wheel zoom is coalesced per frame (`whl`/`wheelFlush`): deltas of one frame are summed, one
   `zoomAt` per rAF, events older than 250 ms dropped — slow office PCs otherwise replay a stale
   backlog after the hand stopped or reversed, which looked like inverted zoom.
+  **The hump — leaving full resolution has a soft detent, entering has none** (`hp`, `hpW`, `hpRel`,
+  `hpSettle`, block before `hiLOD`). Zooming *out* by wheel, pinch or the − key, the view rests at
+  `HP_Z` = `HI_MIN`×1.06, the widest view that is still full resolution, so the reader sees the largest
+  area at res 12 before it turns into res-7 hexagons. Model: coming up from under water. Surface tension =
+  the view gives ≤ 4 % under the hand (`HP_R`, saturating) and settles back to `HP_Z` (220 ms, one-time hint)
+  if the hand stops; pushing on — travel `T` in log-zoom (wheel .8, keys .3, pinch .25) and ≥ `HP_DWELL`
+  200 ms — or zooming out a second time breaks the surface: the withheld travel is given back over
+  ~3×`HP_TAU` (`hpRel`; a pinch decays an offset inside `hpW`, wheel/keys add the remainder per frame), so
+  the view rises to where the hand is. One wheel notch never clears it (first contact capped at T/2).
+  Armed only after a view ≥ `HP_Z`×1.15 at full resolution (`hpArm` in `setVB`/`hiOn`), one hold per
+  approach; `zoomTo` (find, reset, links, ⤢) drops it — programmatic moves never meet it. Rubber stays
+  ≥ `HI_MIN`, so `hiOff` cannot fire inside the band. Haptic tick (`navigator.vibrate(6)`) on pinch
+  contact where the browser has it. `neGlyph.hump()` → `{z,arm,v,n}`.
 - **Card buttons** (`.glyph-tip`, right of the header): dock toggle `.glyph-dk` (desktop; `;below`), minimiser
   `.glyph-mn` (phones/touch, docked desktop cards and every full-screen card; `;min`; folds to the header line, header or chevron unfolds,
   undocking unfolds), × `.glyph-x` (`dismiss` — **always a close, in full screen too**; the way back is the ⓘ in-view note in the
