@@ -1982,32 +1982,12 @@ func handleNEGlyphArea(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if expr != nil {
-		// cell-exact where the unit fits (a rare match is invisible to the 1-in-49
-		// sample): the light count over the bins at hand; beyond, the sample below
-		key := "fc/" + units[0].kind + "/" + units[0].key + "/" + expr.Canonical()
-		if b, ok := neStatsLRU.get(key); ok && len(b) > 8 && time.Since(time.Unix(int64(binary.LittleEndian.Uint64(b)), 0)) < neStatsTTL {
+		if out, code := neStatsReadout(units[0], expr); code == 0 {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Cache-Control", "public, max-age=600")
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write(b[8:])
-			return
-		}
-		if acc, code := neStatsComputeOpt(units[0], expr, neStatsReadoutBins, true); code == 0 {
-			f := map[string]interface{}{"cells_n": acc.match, "area_ha": neRound(acc.area, 2), "unit_cells_n": acc.cells, "unit_area_ha": neRound(acc.unitArea, 2)}
-			if !acc.treesRng || acc.treesX == acc.match {
-				f["trees_n"] = acc.trees
-			}
-			out := map[string]interface{}{"pending": acc.partial > 0, "kind": units[0].kind, "key": units[0].key, "area_ha": f["area_ha"], "cells_n": acc.match,
-				"approx": false, "complete": acc.partial == 0, "bins": acc.bins, "bins_pending": acc.partial, "figures": f}
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			if acc.partial > 0 {
+			if p, _ := out["pending"].(bool); p {
 				w.Header().Set("Cache-Control", "no-store")
 			} else {
 				w.Header().Set("Cache-Control", "public, max-age=600")
-				b, _ := json.Marshal(out)
-				buf := make([]byte, 8, 8+len(b))
-				binary.LittleEndian.PutUint64(buf, uint64(time.Now().Unix()))
-				neStatsLRU.put(key, append(buf, b...))
 			}
 			writeJSON(w, 200, out)
 			return
@@ -2033,6 +2013,105 @@ func handleNEGlyphArea(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]interface{}{"pending": pending, "kind": units[0].kind, "key": units[0].key, "area_ha": e.Unit["area_ha"], "cells_n": e.Unit["cells_n"],
 		"approx": approx, "complete": complete, "figures": e.Figures})
+}
+
+// ── the filter readout of a selection ────────────────────────────────────────
+//
+// Cell-exact where the unit fits (a rare match is invisible to the 1-in-49
+// sample): the light count over the bins at hand, run off the request — one
+// job per unit+expr, two at a time. The handler waits neStatsReadoutWait for
+// it; past that it answers the sample's figures at once (approx, pending) and
+// the page asks again — the exact answer is in the memo by then.
+
+const (
+	neStatsReadoutWait = 350 * time.Millisecond
+	neStatsReadoutJobs = 16 // in flight + waiting; beyond: the sample only
+)
+
+type neStatsReadoutJob struct {
+	done chan struct{}
+	out  map[string]interface{}
+	code int
+}
+
+var (
+	neStatsReadoutMu  sync.Mutex
+	neStatsReadoutRun = map[string]*neStatsReadoutJob{}
+	neStatsReadoutSem = make(chan struct{}, 2)
+)
+
+func neStatsReadoutFigs(u *neStatsUnit, acc *neStatsAcc, approx, pending bool) map[string]interface{} {
+	f := map[string]interface{}{"cells_n": acc.match, "area_ha": neRound(acc.area, 2), "unit_cells_n": acc.cells, "unit_area_ha": neRound(acc.unitArea, 2)}
+	if !acc.treesRng || acc.treesX == acc.match {
+		f["trees_n"] = acc.trees
+	}
+	return map[string]interface{}{"pending": pending, "kind": u.kind, "key": u.key, "area_ha": f["area_ha"], "cells_n": acc.match,
+		"approx": approx, "complete": !pending, "bins": acc.bins, "bins_pending": acc.partial, "figures": f}
+}
+
+// neStatsReadout — (answer, 0) · (nil, 413) the unit is beyond the exact
+// count (the caller's sample path stands) · (nil, 503).
+func neStatsReadout(u *neStatsUnit, expr *neFiltExpr) (map[string]interface{}, int) {
+	key := "fc/" + u.kind + "/" + u.key + "/" + expr.Canonical()
+	if b, ok := neStatsLRU.get(key); ok && len(b) > 8 && time.Since(time.Unix(int64(binary.LittleEndian.Uint64(b)), 0)) < neStatsTTL {
+		var out map[string]interface{}
+		if json.Unmarshal(b[8:], &out) == nil {
+			return out, 0
+		}
+	}
+	neStatsReadoutMu.Lock()
+	job := neStatsReadoutRun[key]
+	if job == nil && len(neStatsReadoutRun) < neStatsReadoutJobs {
+		job = &neStatsReadoutJob{done: make(chan struct{})}
+		neStatsReadoutRun[key] = job
+		go func(job *neStatsReadoutJob) {
+			defer func() {
+				if recover() != nil {
+					job.out, job.code = nil, 503
+				}
+				neStatsReadoutMu.Lock()
+				delete(neStatsReadoutRun, key)
+				neStatsReadoutMu.Unlock()
+				close(job.done)
+			}()
+			neStatsReadoutSem <- struct{}{}
+			defer func() { <-neStatsReadoutSem }()
+			acc, code := neStatsComputeOpt(u, expr, neStatsReadoutBins, true)
+			if job.code = code; code != 0 {
+				return
+			}
+			job.out = neStatsReadoutFigs(u, acc, false, acc.partial > 0)
+			if acc.partial == 0 {
+				b, _ := json.Marshal(job.out)
+				buf := make([]byte, 8, 8+len(b))
+				binary.LittleEndian.PutUint64(buf, uint64(time.Now().Unix()))
+				neStatsLRU.put(key, append(buf, b...))
+			}
+		}(job)
+	}
+	neStatsReadoutMu.Unlock()
+	sp := neSampGet()
+	if job != nil {
+		var wait <-chan time.Time
+		if sp != nil {
+			t := time.NewTimer(neStatsReadoutWait)
+			defer t.Stop()
+			wait = t.C
+		}
+		select {
+		case <-job.done:
+			return job.out, job.code
+		case <-wait:
+		}
+	}
+	if sp == nil {
+		return nil, 503
+	}
+	acc, code := neStatsSample(sp, u, expr)
+	if code != 0 {
+		return nil, 503
+	}
+	return neStatsReadoutFigs(u, acc, true, true), 0
 }
 
 // neStatsClip — the unit restricted to a box (cell centre inside, half-open);
