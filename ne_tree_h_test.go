@@ -61,6 +61,11 @@ func TestNEFiltApexRange(t *testing.T) {
 	if n, ex := c.at(0); n != 2 || !ex {
 		t.Fatalf("whole-cell list count %d %v", n, ex)
 	}
+	// no expression at all (an unfiltered unit on the sample path) must not panic
+	c = neNewTreeCounter(th, nil, nil)
+	if n, ex := c.at(0); n != 2 || !ex {
+		t.Fatalf("nil expr count %d %v", n, ex)
+	}
 }
 
 // TestNEFidxTreeHTail — the blob tail round-trips on plane all and is absent on core/ext.

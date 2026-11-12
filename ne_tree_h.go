@@ -111,6 +111,9 @@ func (t *neTreeH) reorder(perm []int) *neTreeH {
 // window.
 func neFiltApexRange(e *neFiltExpr) (lo, hi int, ok bool) {
 	lo, hi = math.MaxInt32, math.MinInt32
+	if e == nil { // an unfiltered unit (stats sample without f=)
+		return lo, hi, false
+	}
 	for _, g := range e.Groups {
 		for _, t := range g {
 			fd := neFiltByID[t.F]
