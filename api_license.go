@@ -164,7 +164,7 @@ func dataSourceLicenses0() []dataSourceLicense {
 			ShareAlike:         true,
 			RedistributionNote: "ODbL, not CC BY. The osm{} block and /api/v1/osm/* geometries are OSM-derived; a redistributed DATABASE that merges them becomes share-alike (ODbL §4.4). Keep OSM-derived fields in separate files or license that database ODbL.",
 			Fields:             []string{"osm{}", "remoteness", "dist_*_m", "major_road_*", "road_fclass"},
-			Endpoints:          []string{"/api/v1/osm/*", "/api/v1/search/address_osm", "osm{} on /api/v1/context"},
+			Endpoints:          []string{"/api/v1/osm/*", "/api/v1/search/address_osm", "osm{} on /api/v1/context", "/api/v1/addresses/search rows with src:\"osm\" (road names no register street covers)"},
 		},
 		{
 			ID: "statistik_austria", Name: "Statistik Austria (Gemeinden; Baugrundstücks-, Häuser-, Boden-/Pachtpreise)",
@@ -185,7 +185,7 @@ func dataSourceLicenses0() []dataSourceLicense {
 			ID: "bev_adressregister", Name: "BEV Adressregister – Adresse Relationale Tabellen, Stichtagsdaten",
 			License: BEVLicenseSPDX, LicenseURL: BEVLicenseURL,
 			Attribution: addressesAttribution(), AttributionDE: addressesAttribution(),
-			Modified: true, ModifiedNote: "re-projected MGI/GK M28/M31/M34 → WGS84; streets indexed for prefix search; one street centroid per street key; house numbers as printed (HNR_ADR_ZUSAMMEN); Gebäude, Grundstücks- and Zählsprengel tables not loaded",
+			Modified: true, ModifiedNote: "re-projected MGI/GK M28/M31/M34 → WGS84; streets indexed for typo-tolerant prefix search; one street centroid per street key; house numbers as printed (HNR_ADR_ZUSAMMEN); Gebäude, Grundstücks- and Zählsprengel tables not loaded",
 			SourceURL:          addressesSourceURL,
 			SourceDate:         "Stichtag " + addressesStichtag(),
 			RedistributionNote: "Redistribute under CC BY 4.0 with the notice above (the Stichtag is part of it). Address points are the register's geocoding, not parcel geometry — nothing here identifies a parcel.",

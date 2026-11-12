@@ -269,7 +269,12 @@ GET /api/v1/toponyms/search?q=Lignitzalpe[&layer=&kg=&gemeinde=&district=&state=
 GET /api/v1/addresses/search?q=<text>[&bbox=w,s,e,n][&c=lon,lat][&limit=8]      BEV Adressregister (CC BY 4.0, 2.5 M addresses)
     Free text: street [house number] [PLZ / Ort / Gemeinde], any order, prefixes ok ("maria theres 18 inns").
     results[] kind=address|street with label, sub, street, hnr, plz, ort, gemeinde, gkz, lon, lat, in_view
-    (inside bbox), dist_km (to c). Ranked: in view → exact number → nearest. limit ≤ 20; q < 2 chars → [].
+    (inside bbox), dist_km (to c). Ranked: in view → exact number → nearest (without c: bigger place first).
+    Spelling is forgiving: ß/ss, ae/ä, doubled letters, "str."/"strasse", "sankt"/"st.", glued or split
+    compounds match as typed; beyond that the closest streets come back with approx:true (one or two
+    letters off, PLZ dropped, or one word unanswered). full:true = the text names the whole street.
+    Rows with src:"osm" are named roads without a register address (© OpenStreetMap contributors, ODbL).
+    limit ≤ 20; q < 2 chars → [].
     Attribution travels in the body (attribution, stichtag) and in X-Data-Attribution.
 GET /api/v1/toponyms/{id}                               full row (public tier: without the parcel block)
 GET /api/v1/kg/{kg_code}/toponyms[?layer=ried]          everything named inside one KG, Rieden first

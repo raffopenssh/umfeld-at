@@ -127,6 +127,7 @@ func main() {
 	// a point or an H3 cell, plus the OSM geometry overlay.
 	InitOSMProximity()
 	RegisterOSMProximityAPI(mux)
+	go AddressesIndexWarm() // addresses_index.go: street index for the find box (BEV streets + OSM-only road names)
 
 	// BEV DLM-Namen toponyms: own DB, in-memory trigram index.
 	EnsureToponyms()

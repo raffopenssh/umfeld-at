@@ -70,32 +70,33 @@ func RegisterDebugAPI(mux *http.ServeMux) {
 			"inflight_count":   len(rows),
 			"requests":         rows,
 			"goroutines":       runtime.NumGoroutine(),
-			"kg_universe":      KGUniverseStats(),    // kg_universe.go: /api/v1/kgs body + gzip bytes, peer agreement
-			"kg_bbox_diff":     KGBBoxDiffStats(),    // kg_universe_bbox.go: /api/v1/kgs/bbox_changes rows (≤ 7 850)
-			"ne_manifest":      neManifestStats(),    // api_ne_manifest.go: header cache, build queue
-			"ne_store":         NEStoreStats(),       // ne_store.go: .nex index, K rows, chunk/whole LRUs
-			"ne_change":        NEChangeStats(),      // ne_change.go: parsed chunk-version logs LRU + pending wants
-			"ne_declared_view": NEDeclStateStats(),   // ne_change_declared.go: per-KG state of the declared view on the chunk log
-			"ne_reports":       neReportStats(),      // api_ne_reports.go: observer epoch reports
-			"ne_revisit":       NERevisitStats(),     // api_ne_revisit.go: revisit-hint memo (≤ 1000 rows per list, 10 min)
-			"ne_obs_complete":  NEObsCompleteStats(), // ne_obs_complete.go: observed vs declared view per KG (one row per KG with obs, ~7.6 k × ~100 B)
-			"ne_glyph":         NEGlyphStats(),       // ne_glyph.go: landing-page glyph SVG + tooltip JSON (1 slot)
-			"ne_glyph_admin":   neGlyphAdminStats(),  // ne_glyph_admin.go: admin rings (once) + outline memo (bounded)
-			"osm_remote_grid":  RemoteGridStats(),    // osm_remote_grid.go: 250 m remoteness bytes for the roads ink (fixed, ~3 MB)
-			"ne_warm":          NEWarmStats(),        // ne_glyph_warm.go: opened share links (≤ 150 × 2 × 500 URLs on disk) + replay state
-			"ne_glyph_tiles":   NEGlyphTileStats(),   // ne_glyph_tile.go: rendered res-12 PNG tiles (LRU, 24 MB)
-			"ne_glyph_geom":    NEGlyphGeomStats(),   // ne_glyph_geom.go: per-tile cell list + centres (LRU 96 MB)
-			"ne_passes":        nePassMemoSize(),     // ne_change_passes.go: per-KG pass tables (≤ 512) + national memo age
-			"ne_glyph_sub":     NEGlyphSubStats(),    // ne_glyph_sub.go: INVEKOS H3 bins (LRU 8 MB) + .poly outline bins (LRU 24 MB), 24 h TTL
-			"ne_fidx":          NEFidxStats(),        // ne_glyph_fidx.go: filter index bins (LRU 48 MB + disk 2 GB)
-			"ne_stats":         NEStatsUnitStats(),   // api_ne_stats_unit.go: envelope + peer memo (LRU 16 MB, 10 min)
-			"tree_report":      TreeReportStats(),    // api_tree_report.go: relay to the observed-layer peer
-			"peer_http":        PeerHTTPStats(),      // peer_http.go: subsidy-peer UA / 429 retries / X-RateLimit-Tier check
-			"ne_mvt":           NEMVTStats(),         // ne_mvt.go: cell tiles LRU, ids LRU, build queue, archive jobs
-			"ne_mvt_gate":      NEMVTGateStats(),     // ne_mvt_gate.go: per-name tiles/km² budgets
-			"public_gate":      PublicGateStats(),    // public_gate.go: per-client requests/bytes/compute budgets, top talkers
-			"export_gate":      ExportGateStats(),    // export_gate.go: identities, budgets, top callers
-			"ne_glyph_dif":     NEGlyphDifStats(),    // ne_glyph_dif.go: lidar epoch per KG from the lidar peer (one table, 24 h)
+			"kg_universe":      KGUniverseStats(),     // kg_universe.go: /api/v1/kgs body + gzip bytes, peer agreement
+			"kg_bbox_diff":     KGBBoxDiffStats(),     // kg_universe_bbox.go: /api/v1/kgs/bbox_changes rows (≤ 7 850)
+			"ne_manifest":      neManifestStats(),     // api_ne_manifest.go: header cache, build queue
+			"ne_store":         NEStoreStats(),        // ne_store.go: .nex index, K rows, chunk/whole LRUs
+			"ne_change":        NEChangeStats(),       // ne_change.go: parsed chunk-version logs LRU + pending wants
+			"ne_declared_view": NEDeclStateStats(),    // ne_change_declared.go: per-KG state of the declared view on the chunk log
+			"ne_reports":       neReportStats(),       // api_ne_reports.go: observer epoch reports
+			"ne_revisit":       NERevisitStats(),      // api_ne_revisit.go: revisit-hint memo (≤ 1000 rows per list, 10 min)
+			"ne_obs_complete":  NEObsCompleteStats(),  // ne_obs_complete.go: observed vs declared view per KG (one row per KG with obs, ~7.6 k × ~100 B)
+			"ne_glyph":         NEGlyphStats(),        // ne_glyph.go: landing-page glyph SVG + tooltip JSON (1 slot)
+			"ne_glyph_admin":   neGlyphAdminStats(),   // ne_glyph_admin.go: admin rings (once) + outline memo (bounded)
+			"addresses_index":  AddressesIndexStats(), // addresses_index.go: street keys + postings for /addresses/search (fixed: one entry per street)
+			"osm_remote_grid":  RemoteGridStats(),     // osm_remote_grid.go: 250 m remoteness bytes for the roads ink (fixed, ~3 MB)
+			"ne_warm":          NEWarmStats(),         // ne_glyph_warm.go: opened share links (≤ 150 × 2 × 500 URLs on disk) + replay state
+			"ne_glyph_tiles":   NEGlyphTileStats(),    // ne_glyph_tile.go: rendered res-12 PNG tiles (LRU, 24 MB)
+			"ne_glyph_geom":    NEGlyphGeomStats(),    // ne_glyph_geom.go: per-tile cell list + centres (LRU 96 MB)
+			"ne_passes":        nePassMemoSize(),      // ne_change_passes.go: per-KG pass tables (≤ 512) + national memo age
+			"ne_glyph_sub":     NEGlyphSubStats(),     // ne_glyph_sub.go: INVEKOS H3 bins (LRU 8 MB) + .poly outline bins (LRU 24 MB), 24 h TTL
+			"ne_fidx":          NEFidxStats(),         // ne_glyph_fidx.go: filter index bins (LRU 48 MB + disk 2 GB)
+			"ne_stats":         NEStatsUnitStats(),    // api_ne_stats_unit.go: envelope + peer memo (LRU 16 MB, 10 min)
+			"tree_report":      TreeReportStats(),     // api_tree_report.go: relay to the observed-layer peer
+			"peer_http":        PeerHTTPStats(),       // peer_http.go: subsidy-peer UA / 429 retries / X-RateLimit-Tier check
+			"ne_mvt":           NEMVTStats(),          // ne_mvt.go: cell tiles LRU, ids LRU, build queue, archive jobs
+			"ne_mvt_gate":      NEMVTGateStats(),      // ne_mvt_gate.go: per-name tiles/km² budgets
+			"public_gate":      PublicGateStats(),     // public_gate.go: per-client requests/bytes/compute budgets, top talkers
+			"export_gate":      ExportGateStats(),     // export_gate.go: identities, budgets, top callers
+			"ne_glyph_dif":     NEGlyphDifStats(),     // ne_glyph_dif.go: lidar epoch per KG from the lidar peer (one table, 24 h)
 		}
 		if globalSearchIndex != nil {
 			s := globalSearchIndex.DB().Stats()

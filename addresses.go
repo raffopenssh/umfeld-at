@@ -403,47 +403,40 @@ type addrHit struct {
 	Lat       float64 `json:"lat"`
 	InView    bool    `json:"in_view"`
 	DistKm    float64 `json:"dist_km,omitempty"`
+	Approx    bool    `json:"approx,omitempty"` // a correction of what was typed (typo, dropped PLZ or word)
+	Full      bool    `json:"full,omitempty"`   // the text names the whole street
+	Src       string  `json:"src,omitempty"`    // "osm": a named OSM road no BEV street covers (ODbL)
 	rank      float64
 	exact     bool
 	skz       int64
 }
 
-// addrTokens splits q into FTS words, house-number candidates and a PLZ candidate.
-func addrTokens(q string) (words []string, hnr string, plz string) {
-	// split on anything the FTS tokenizer splits on, except inside a house
-	// number ("12/3", "12-14", "12a" stay one token)
+// addrTokens splits q into words and number tokens ("12", "12a", "12/3",
+// "4020"); after[i] says whether nums[i] follows a word.
+func addrTokens(q string) (words []string, nums []string, after []bool) {
+	// split on anything but letters and digits, except inside a house number
+	// ("12/3", "12-14", "12a" stay one token)
 	q = strings.Map(func(r rune) rune {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '/' || r == '-' {
 			return r
 		}
 		return ' '
 	}, q)
-	var parts []string
 	for _, t := range strings.Fields(q) {
 		if t[0] >= '0' && t[0] <= '9' {
-			parts = append(parts, t)
-			continue
-		}
-		parts = append(parts, strings.FieldsFunc(t, func(r rune) bool { return r == '/' || r == '-' })...)
-	}
-	for _, t := range parts {
-		if t == "" {
-			continue
-		}
-		if t[0] >= '0' && t[0] <= '9' {
-			if len(t) == 4 && isDigits(t) && plz == "" && hnr != "" {
-				plz = t
-			} else if hnr == "" {
-				hnr = t
-			} else if len(t) == 4 && isDigits(t) && plz == "" {
-				plz = t
+			if len(t) > 12 {
+				t = t[:12]
 			}
+			nums = append(nums, strings.Trim(t, "-/"))
+			after = append(after, len(words) > 0)
 			continue
 		}
-		if len(t) > 64 {
-			t = t[:64]
+		for _, w := range strings.FieldsFunc(t, func(r rune) bool { return r == '/' || r == '-' }) {
+			if len(w) > 64 {
+				w = w[:64]
+			}
+			words = append(words, w)
 		}
-		words = append(words, t)
 	}
 	return
 }
@@ -457,91 +450,131 @@ func isDigits(s string) bool {
 	return s != ""
 }
 
-// ftsTerm quotes a word for an FTS5 prefix match, dropping anything the
-// unicode61 tokenizer would split on.
-func ftsTerm(w string) string {
-	var b strings.Builder
-	for _, r := range w {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
+// addrReading — which number is the PLZ and which the house number. The PLZ
+// is the last 4-digit token that is a PLZ of the register; the house number
+// the first other number behind a word ("1. Mai-Straße 5" → 5), else the
+// first. A lone PLZ-shaped number behind a word may be a house number after
+// all: alt carries that second reading.
+func addrReading(ix *adxIndex, words, nums []string, after []bool) (plz, hnr, altHnr string, extra []string) {
+	pi, hi := -1, -1
+	for i := len(nums) - 1; i >= 0; i-- {
+		if _, ok := ix.plzGkz[nums[i]]; ok && len(nums[i]) == 4 {
+			pi = i
+			break
 		}
 	}
-	if b.Len() == 0 {
-		return ""
+	for i := range nums {
+		if i != pi && after[i] {
+			hi = i
+			break
+		}
 	}
-	return `"` + b.String() + `"*`
+	if hi < 0 {
+		for i := range nums {
+			if i != pi {
+				hi = i
+				break
+			}
+		}
+	}
+	if pi >= 0 {
+		plz = nums[pi]
+		if hi < 0 && after[pi] {
+			altHnr = plz
+		}
+	}
+	if hi >= 0 {
+		hnr = nums[hi]
+	}
+	// numbers that are neither may be part of the name ("1. Mai-Straße")
+	for i, n := range nums {
+		if i != pi && i != hi && isDigits(n) {
+			extra = append(extra, n)
+		}
+	}
+	return
 }
 
-// addressesSearch — the query behind /api/v1/addresses/search.
-func addressesSearch(db *sql.DB, q string, bbox *[4]float64, c *[2]float64, limit int) ([]addrHit, error) {
-	words, hnr, plz := addrTokens(q)
-	if len(words) == 0 && plz == "" && hnr == "" {
-		return nil, nil
+// hnrLess — natural order of house numbers: 9 < 10 < 10a < 11.
+func hnrLess(a, b string) bool {
+	na, nb := 0, 0
+	i, j := 0, 0
+	for ; i < len(a) && a[i] >= '0' && a[i] <= '9'; i++ {
+		na = na*10 + int(a[i]-'0')
 	}
-	// A lone 4-digit number with no words: PLZ first, house number second.
-	if len(words) == 0 && plz == "" && len(hnr) == 4 && isDigits(hnr) {
-		plz, hnr = hnr, ""
+	for ; j < len(b) && b[j] >= '0' && b[j] <= '9'; j++ {
+		nb = nb*10 + int(b[j]-'0')
 	}
+	if na != nb {
+		return na < nb
+	}
+	return a[i:] < b[j:]
+}
+
+// addressesSearch — the query behind /api/v1/addresses/search: streets from
+// the in-memory index (addresses_index.go: typo-tolerant, staged), house
+// numbers from adr for the best-ranked streets. approx = the answer is a
+// correction of what was typed.
+func addressesSearch(db *sql.DB, q string, bbox *[4]float64, c *[2]float64, limit int) (out []addrHit, approx bool, err error) {
+	ix := addressesIndex(db)
+	if ix == nil {
+		return nil, false, nil
+	}
+	words, nums, after := addrTokens(q)
+	plz, hnr, altHnr, extra := addrReading(ix, words, nums, after)
 	if len(words) == 0 && plz == "" {
-		return nil, nil // a bare house number finds nothing on its own
+		return nil, false, nil // a bare house number finds nothing on its own
 	}
-	var terms []string
-	for _, w := range words {
-		if t := ftsTerm(w); t != "" {
-			terms = append(terms, t)
+	cands, approx := ix.search(words, plz, bbox, c)
+	if len(extra) > 0 { // "1 mai strasse 5": the 1 belongs to the name
+		if c2, a2 := ix.search(append(append([]string{}, words...), extra...), plz, bbox, c); len(c2) > 0 && (!a2 || approx || len(cands) == 0) {
+			cands, approx = c2, a2
 		}
 	}
-	if plz != "" {
-		terms = append(terms, `plz:"`+plz+`"*`)
-	}
-	if len(terms) == 0 {
-		return nil, nil
-	}
-	match := strings.Join(terms, " AND ")
-	cand := 200
-	if hnr != "" {
-		cand = 120
-	}
-	rows, err := db.Query(`SELECT s.skz, s.name, s.gkz, s.gemeinde, s.ort, s.ortschaft, s.plz, s.lon, s.lat, s.n, bm25(str_fts, 10.0, 3.0, 2.0, 1.0, 3.0) AS r
-		FROM str_fts JOIN str s ON s.skz = str_fts.rowid WHERE str_fts MATCH ? ORDER BY r LIMIT ?`, match, cand)
-	if err != nil {
-		return nil, err
-	}
-	var streets []addrHit
-	skzs := make([]interface{}, 0, cand)
-	for rows.Next() {
-		var h addrHit
-		var skz int64
-		var gkz, gem, ort, osch, pl sql.NullString
-		if err := rows.Scan(&skz, &h.Street, &gkz, &gem, &ort, &osch, &pl, &h.Lon, &h.Lat, &h.N, &h.rank); err != nil {
-			rows.Close()
-			return nil, err
+	if altHnr != "" && (len(cands) == 0 || approx) { // "hauptstraße 1010": a house number after all
+		if c2, a2 := ix.search(words, "", bbox, c); len(c2) > 0 && !a2 {
+			cands, approx, plz, hnr = c2, a2, "", altHnr
 		}
-		h.Kind, h.Label, h.GKZ, h.Gemeinde, h.Ort, h.PLZ, h.Ortschaft = "street", h.Street, gkz.String, gem.String, ort.String, pl.String, osch.String
-		h.skz = skz
-		streets = append(streets, h)
-		skzs = append(skzs, skz)
 	}
-	rows.Close()
-	if len(streets) == 0 {
-		return []addrHit{}, nil
+	if len(cands) == 0 {
+		return []addrHit{}, false, nil
 	}
-	var out []addrHit
+	var kx float64
+	if c != nil {
+		kx = math.Cos(c[1] * math.Pi / 180)
+	}
+	hitOf := func(cd *adxCand, i int) addrHit {
+		d := &ix.docs[cd.doc]
+		h := addrHit{Kind: "street", Label: d.name, Street: d.name, GKZ: d.gkz, Gemeinde: d.gem, Ort: d.ort, PLZ: d.plz, Ortschaft: d.osch,
+			N: int(d.n), Lon: d.lon, Lat: d.lat, InView: cd.inView, Approx: approx, Full: cd.full && !approx, skz: d.skz, rank: float64(i)}
+		if d.osm {
+			h.Src = "osm"
+		}
+		return h
+	}
 	if hnr != "" {
+		const maxStreets = 120
 		bySkz := map[int64]*addrHit{}
+		skzs := make([]interface{}, 0, maxStreets)
+		streets := make([]addrHit, 0, maxStreets)
+		for i := range cands {
+			if ix.docs[cands[i].doc].osm {
+				continue
+			}
+			streets = append(streets, hitOf(&cands[i], i))
+			if len(streets) == maxStreets {
+				break
+			}
+		}
 		for i := range streets {
 			bySkz[streets[i].skz] = &streets[i]
-		}
-		// nearer streets first, so a capped scan still favours what is on screen
-		if c != nil {
-			kx := math.Cos(c[1] * math.Pi / 180)
-			sort.SliceStable(skzs, func(i, j int) bool {
-				a, b := bySkz[skzs[i].(int64)], bySkz[skzs[j].(int64)]
-				return math.Hypot((a.Lon-c[0])*kx, a.Lat-c[1]) < math.Hypot((b.Lon-c[0])*kx, b.Lat-c[1])
-			})
+			skzs = append(skzs, streets[i].skz)
 		}
 		ph := strings.TrimSuffix(strings.Repeat("?,", len(skzs)), ",")
 		scan := func(where string, extra interface{}, cap int, exact bool) error {
+			if len(skzs) == 0 {
+				return nil
+			}
 			args := append(append([]interface{}{}, skzs...), extra)
 			ar, err := db.Query(`SELECT skz, hnr, hof, plz, lon, lat FROM adr WHERE skz IN (`+ph+`) AND `+where+` LIMIT `+strconv.Itoa(cap), args...)
 			if err != nil {
@@ -571,29 +604,54 @@ func addressesSearch(db *sql.DB, q string, bbox *[4]float64, c *[2]float64, limi
 					h.Label += " · " + h.Hof
 				}
 				h.exact = exact
+				if bbox != nil {
+					h.InView = h.Lon >= bbox[0] && h.Lon <= bbox[2] && h.Lat >= bbox[1] && h.Lat <= bbox[3]
+				}
 				out = append(out, h)
 			}
-			return nil
+			return ar.Err()
 		}
 		if err := scan("hnr = ? COLLATE NOCASE", hnr, 300, true); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if len(out) < limit*3 {
 			like := strings.NewReplacer("%", "", "_", "").Replace(hnr) + "%"
 			if err := scan("hnr LIKE ?", like, 300, false); err != nil {
-				return nil, err
+				return nil, false, err
 			}
 		}
-	} else {
-		out = streets
+		sort.SliceStable(out, func(i, j int) bool {
+			a, b := &out[i], &out[j]
+			if a.InView != b.InView {
+				return a.InView
+			}
+			if a.exact != b.exact {
+				return a.exact
+			}
+			if plz != "" && (a.PLZ == plz) != (b.PLZ == plz) {
+				return a.PLZ == plz
+			}
+			if a.rank != b.rank {
+				return a.rank < b.rank
+			}
+			return hnrLess(a.Hnr, b.Hnr)
+		})
+	}
+	if len(out) == 0 { // no house number asked for, or the street has none like it: the streets
+		n := limit
+		if n > len(cands) {
+			n = len(cands)
+		}
+		for i := 0; i < n; i++ {
+			out = append(out, hitOf(&cands[i], i))
+		}
+	}
+	if len(out) > limit {
+		out = out[:limit]
 	}
 	for i := range out {
 		h := &out[i]
-		if bbox != nil {
-			h.InView = h.Lon >= bbox[0] && h.Lon <= bbox[2] && h.Lat >= bbox[1] && h.Lat <= bbox[3]
-		}
 		if c != nil {
-			kx := math.Cos(c[1] * math.Pi / 180)
 			h.DistKm = math.Round(math.Hypot((h.Lon-c[0])*kx, h.Lat-c[1])*111.32*10) / 10
 		}
 		sub := strings.TrimSpace(h.PLZ + " " + h.Ort)
@@ -603,30 +661,12 @@ func addressesSearch(db *sql.DB, q string, bbox *[4]float64, c *[2]float64, limi
 		if h.Kind == "street" && h.N > 0 {
 			sub += fmt.Sprintf(" · %d addresses", h.N)
 		}
+		if h.Src == "osm" {
+			sub = strings.TrimPrefix(sub+" · OpenStreetMap", " · ")
+		}
 		h.Sub = sub
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		a, b := &out[i], &out[j]
-		if a.InView != b.InView {
-			return a.InView
-		}
-		if a.exact != b.exact {
-			return a.exact
-		}
-		if c != nil && a.rank-b.rank > -3 && a.rank-b.rank < 3 { // near-equal text score: nearer first
-			if a.DistKm != b.DistKm {
-				return a.DistKm < b.DistKm
-			}
-		}
-		if a.rank != b.rank {
-			return a.rank < b.rank
-		}
-		return a.Label < b.Label
-	})
-	if len(out) > limit {
-		out = out[:limit]
-	}
-	return out, nil
+	return out, approx, nil
 }
 
 // handleV1AddressesSearch — GET /api/v1/addresses/search?q=&bbox=&c=&limit=
@@ -689,7 +729,7 @@ func handleV1AddressesSearch(w http.ResponseWriter, r *http.Request) {
 	resp["stichtag"] = addressesStichtag()
 	resp["attribution"] = addressesAttribution()
 	if len([]rune(q)) >= 2 {
-		hits, err := addressesSearch(db, q, bbox, c, limit)
+		hits, approx, err := addressesSearch(db, q, bbox, c, limit)
 		if err != nil {
 			log.Printf("📮 addresses: %q: %v", q, err)
 			apiError(w, "search failed", 500)
@@ -699,6 +739,15 @@ func handleV1AddressesSearch(w http.ResponseWriter, r *http.Request) {
 			hits = []addrHit{}
 		}
 		resp["results"] = hits
+		if approx {
+			resp["approx"] = true
+		}
+		for i := range hits {
+			if hits[i].Src == "osm" {
+				resp["attribution_osm"] = OSMAttribution + " (" + OSMLicenseSPDX + ") — rows with src:\"osm\""
+				break
+			}
+		}
 	}
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	writeJSON(w, 200, resp)

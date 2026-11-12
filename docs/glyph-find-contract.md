@@ -28,12 +28,31 @@ Endpoint (public tier, tokenless; add to `publicExactPaths` + `publicAllowListGo
 ```
 GET /api/v1/addresses/search?q=<text>&bbox=w,s,e,n&c=lon,lat&limit=8
 ```
-Query parsing: tokens; a token starting with a digit is a house-number candidate (`12`, `12a`, `12/3`);
-a 4-digit pure number is also tried as PLZ. Alphabetic tokens → FTS prefix terms (`"haupt"*`)
-across name/ort/gemeinde (AND). Flow: street candidates (≤ 200 by bm25) → if a house-number token is
-present, `adr` rows for those streets where `hnr = tok OR hnr LIKE tok||'%'` → kind `address`;
-else kind `street`. Ranking in Go: in_view (point inside bbox) first, then exact hnr match, then
-distance to `c` (km), then bm25. Default `limit` 8, max 20. q < 2 chars → empty results, 200.
+Matching lives in `addresses_index.go` (in-memory, one entry per street; `str_fts` is no longer
+read): every street answers to canonical keys — name tokens, a split-off street-type suffix, glued
+forms, place tokens (Gemeinde, Zustellort, Ortschaft). Canonical = lower case, diacritics off,
+ß→ss, ae/oe/ue→a/o/u, ph→f, th→t, ck→k, y→i, ai→ei, doubled letters single, `…strasse`→`…str`,
+`sankt`→`st`, `doktor`→`dr`, so the usual misspellings are exact matches ("handel-mazetti-promenade",
+"mariahilferstrasse", "getreidegase", "stefansplatz"). Every word is a prefix match (AND). Stages,
+first answer wins: 1 strict · 2 two adjacent words glued · 3 fuzzy (edit distance 1, 2 from 7
+letters; only the last word may be an unfinished prefix) · 4 PLZ dropped · 5 one word unanswered
+(the street must still be found by its name). Stages 3–5 set `approx` on the hits and the answer.
+Numbers: the last 4-digit token that is a PLZ of the register is the PLZ (it also admits every
+street of a Gemeinde that PLZ serves — "Hauptstraße 12, 4020 Linz" lives in 4040); the first other
+number behind a word is the house number (`adr` rows of the 120 best streets, exact then prefix;
+none like it → the street rows). Ranking: in_view first, then text penalty in buckets (first name
+token > later token; whole name covered = `full`), then distance to `c` scaled by the size of the
+Gemeinde — without `c` the bigger place first (the client sends no `c` when zoomed out to the
+country). **OSM fallback:** named roads from `data/osm_proximity.db` (no motorways, no service
+ways) that no register street of the same name lies within ~5 km of become street rows with
+`src:"osm"`, one per name and place, labelled with the place of the nearest register street and
+"· OpenStreetMap" in `sub` (ODbL; `attribution_osm` on the answer). Size line `addresses_index`
+on `$UMFELD_PRIVATE_PREFIX/api/v1/debug/inflight` (~40 MB, fixed). Default `limit` 8, max 20.
+q < 2 chars → empty results, 200. Tests: `addresses_index_test.go` (synthetic),
+`ADDR_Q=<file|text> go test -tags fts5 -run TestAddressesLive -v .` prints answers from the local store.
+Client (`ne_glyph.go` `remote`/`assemble`): 25 ms after a pause, 110 ms inside a burst; a text that
+spells a whole street (`full`, ≥ 8 letters or two words, not also exactly a KG / admin unit) puts the
+addresses on top; approx rows sit under "addresses · closest match".
 Response (compact JSON, `writeJSON`-style, `Cache-Control: public, max-age=300`, CORS `*`):
 ```json
 {"q":"hauptstr 12 inns","results":[
