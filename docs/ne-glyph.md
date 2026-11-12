@@ -110,6 +110,11 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   · trees" — from `/api/v1/ne/glyph/area?u=<unit>&f=<expr>` (the whole unit, = the export's row; figure `trees_n`;
   with `f=` the handler runs the light count `neStatsComputeOpt(…, light)` — cell-exact up to `neStatsReadoutBins`=400 bins from the bins at hand (`neFidxPeek`; missing bins = `pending`), run off the request by `neStatsReadout` (one job per unit+expr, two at a time): past 350 ms the answer is the sample's figures (`approx`, `pending`) and the page asks again every 1.2 s; `fltSelSync` (from `setHash`) refreshes the readout the moment the selection changes or goes, since a rare match is invisible to the sample; beyond that the 1-in-49 sample, ≈). The veil and the tile sums are untouched; without a
   selection, or without an answer, the tile sums stand. Debounced, cached per unit+expr, last answer stands.
+  **Both counts, always** (`fltViewS`): behind the selection's figures the view's own (`.vw`, one step fainter;
+  the tile sums the veil brings anyway, far out the overview's sums). Desktop: one line, the ellipsis eats the view
+  part first (`.gf-n.two`). Phone: two lines — selection above, view below, each cut on its own; `.w0` words
+  (*cells*, the unit area, the view total) are dropped there, ≤ 400 px also `.w1` (the unit total):
+  `327 selected · 10.0 ha · 356 trees` / `view 917 · 28 ha · 1.0 k trees` fits 320 px.
 - **Filter overview preview** (`ne_glyph_filt.go` `fv*`, state `fv {f lf d ld err h}`): `fvOn()` = filter active
   AND `fltFar()` (full res off or the view spans > 36 bins) · `fvSync()` (from `setVB`, `fltView`, `fltSet`)
   fetches `/ne/glyph/fnat?f=` once per expression, toggles svg class `v-fv`, debounces the readout on pan ·
