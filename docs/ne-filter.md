@@ -82,6 +82,16 @@ term. Typing `or …` / `and …` flips the switch; `o` / `a` on a focused chip 
 canonical form (terms sorted inside a group — tile and cache keys), `flt.disp` keeps the reader's order for
 the chips, the link (`;f=`) and the held filter; the `k>=` chip keeps a fixed *and* and stays last.
 
+(14) **edit in place** (2026-11-13): a tap on a chip no longer copies its text into the add-input at the
+end of the row (it read as "… and <a second condition>", and a 6 em input cut the value off on a phone).
+`fltEdit` moves the input row `.gf-add` INTO the chip list where the chip was (`.gf-add.ed`: the chip's pill,
+focus ring, tick `.gf-ok`); `fltChips` rebuilds the siblings around it so focus and the phone keyboard
+survive a Worker answer. The joiner inside the pill is the chip's own (applied with the edit); the
+add-input and its joiner do not exist meanwhile. The value part is preselected (`ht>=|20|`). Enter / tick /
+a press outside = apply when changed (`fltEdDone`), Esc = as it was, a tap on another chip = apply and
+edit that one. `fltInW`: the edit input is as wide as its text; the add-input's row item grows with what
+is typed and wraps to its own line.
+
 Original design (kept as the rationale):
 
 Status at design time: **design, nothing built.** Scope: one filter component on the landing glyph that veils every
