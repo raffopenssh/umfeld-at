@@ -102,7 +102,7 @@ Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO.</p>
 <p>Über <code>/api/v1/feedback</code> können Nutzer:innen und automatisierte Agenten freiwillig Rückmeldungen senden (Kategorie, Titel, Text,
 optional Name des sendenden Programms). Diese Einträge werden dauerhaft gespeichert und sind <strong>öffentlich abrufbar</strong>.
 Bitte tragen Sie dort keine personenbezogenen Daten ein. Rechtsgrundlage: Art. 6 Abs. 1 lit. a DSGVO (Einwilligung durch Absenden);
-Löschung auf Anfrage per E-Mail. Ausnahme: technische Diagnoseprotokolle der Karte, die nur mit dem Zusatz <code>?trace</code> (Ladeprotokoll) oder
+Löschung auf Anfrage per E-Mail. Ausnahme: technische Diagnoseprotokolle der Karte, die nur mit dem Zusatz <code>?trace</code> bzw. <code>?run</code> (Lade- und Bedienprotokoll: Berührungs- und Klickpositionen, Zustand der Karte, Geräteeigenschaften wie Bildschirmgröße und Grafikprozessor) oder
 <code>?deep</code> (Darstellungs-Diagnose: gewählte Schalter, Klickpositionen in der Karte, Zustand der Kartenelemente; gesendet erst
 mit „send“ oder beim Verlassen der Seite) in der Adresse entstehen (Betriebs-Diagnose, ohne IP; mit Browserkennung und der geöffneten Kartenansicht), sind nicht öffentlich abrufbar und werden nach 24 Stunden automatisch gelöscht. Ebenso
 technisch: das Antippen des Link-Symbols in der Karte („link copied“) meldet die geteilte Ansicht und ihre Kachelliste, damit der

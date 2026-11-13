@@ -81,10 +81,18 @@ func feedbackHandler(w http.ResponseWriter, r *http.Request) {
 	// Writes: body cap + per-IP budget (feedbackWriteAllow); reads are free.
 	if r.Method == http.MethodPost || r.Method == http.MethodPatch {
 		r.Body = http.MaxBytesReader(w, r.Body, feedbackMaxBody)
-		if ip := neClientIP(r); ip != "" && !feedbackWriteAllow(ip, time.Now()) {
+		// ?trace=1 — the glyph's field recorder (ne_glyph_trace.js): its own,
+		// larger budget, so a diagnostic run (a record per step) neither starves
+		// nor is starved by real feedback; such a record is stored as agent
+		// glyph-trace whatever the body says (purged after 24 h, private tier).
+		key, per := neClientIP(r), float64(feedbackPerHour)
+		if r.Method == http.MethodPost && r.URL.Query().Get("trace") == "1" {
+			key, per = "t:"+key, feedbackTracePerHour
+		}
+		if key != "" && key != "t:" && !feedbackWriteAllow(key, per, time.Now()) {
 			w.Header().Set("Retry-After", "3600")
 			w.Header().Set("Cache-Control", "no-store")
-			apiError(w, "rate limit: 20 feedback writes per hour per client", http.StatusTooManyRequests)
+			apiError(w, fmt.Sprintf("rate limit: %d feedback writes per hour per client", int(per)), http.StatusTooManyRequests)
 			return
 		}
 	}
@@ -124,11 +132,12 @@ func feedbackHandler(w http.ResponseWriter, r *http.Request) {
 // ─── write limits ────────────────────────────────────────────────────────────
 
 const (
-	feedbackMaxBody   = 64 << 10 // JSON body cap (POST / PATCH)
-	feedbackMaxTitle  = 200
-	feedbackMaxText   = 8000 // description, and any single string field
-	feedbackPerHour   = 20   // writes per client IP per hour
-	feedbackIPBuckets = 10000
+	feedbackMaxBody      = 64 << 10 // JSON body cap (POST / PATCH)
+	feedbackMaxTitle     = 200
+	feedbackMaxText      = 8000 // description, and any single string field
+	feedbackPerHour      = 20   // writes per client IP per hour
+	feedbackTracePerHour = 150  // ?trace=1 records per client IP per hour (≤ 64 KB each, gone after 24 h)
+	feedbackIPBuckets    = 10000
 )
 
 var (
@@ -138,7 +147,7 @@ var (
 
 // feedbackWriteAllow — token bucket per client IP: feedbackPerHour, burst the
 // same; idle buckets swept when the map grows (bounded, Invariant 10).
-func feedbackWriteAllow(ip string, now time.Time) bool {
+func feedbackWriteAllow(ip string, perHour float64, now time.Time) bool {
 	feedbackRateMu.Lock()
 	defer feedbackRateMu.Unlock()
 	b := feedbackRate[ip]
@@ -150,10 +159,10 @@ func feedbackWriteAllow(ip string, now time.Time) bool {
 				}
 			}
 		}
-		b = &neBucketT{tokens: feedbackPerHour, last: now}
+		b = &neBucketT{tokens: perHour, last: now}
 		feedbackRate[ip] = b
 	}
-	b.tokens = math.Min(feedbackPerHour, b.tokens+now.Sub(b.last).Hours()*feedbackPerHour)
+	b.tokens = math.Min(perHour, b.tokens+now.Sub(b.last).Hours()*perHour)
 	b.last = now
 	if b.tokens >= 1 {
 		b.tokens--
@@ -197,6 +206,9 @@ func feedbackCreate(w http.ResponseWriter, r *http.Request) {
 	req.Title = feedbackClip(req.Title, feedbackMaxTitle)
 	req.Description = feedbackClip(req.Description, feedbackMaxText)
 	req.Agent = feedbackClip(req.Agent, feedbackMaxTitle)
+	if r.URL.Query().Get("trace") == "1" {
+		req.Agent = "glyph-trace"
+	}
 	req.Endpoint = feedbackClip(req.Endpoint, feedbackMaxText)
 	if req.Category == "" {
 		req.Category = "other"

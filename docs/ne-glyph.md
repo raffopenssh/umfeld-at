@@ -423,6 +423,10 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   rule stays; harmless). Suspect now: `clip-path:inset()` on the tile pictures (2026-11-11 20:09/20:33, the evening
   before the first freeze): a clipped picture inside a composited layer = a mask surface as large as the picture
   on screen. `LITE` → `hiTile` sets no clip and the pictures do not fade in. Cost: the tone band along tile seams.
+  **Fifth round** (froze all the same, at the first `pointerdown` in full screen, before any commit): `NOLIVE`
+  (= `WV`, or `?nolive`; `?live` lifts) — a gesture is a run of plain viewBox commits, no CSS transform and no
+  promoted layer — and under `figure.pl` nothing inside the SVG animates or transitions. Rounds 2–5 are
+  unproven mitigations: see §Field diagnostics (*Freeze on Android WebView*) before adding a sixth.
 - **One raster per batch** (`hiCommit`/`hiFlush`, `hi.cq` + `hi.cq2`): a landed, decoded tile waits and the whole
   batch joins the SVG on one timer (400 ms while `lf.on`, 120 ms else); readout/legend/`fltCardFix` once per batch;
   `.hi.ld` turns the per-image fade off while heavy. Relief squares go through the same batch (`cq2`, not counted in
@@ -469,7 +473,98 @@ non-scaling strokes, scaled). Safari 26 left a strip of the map unpainted (page 
 wide) whenever `apMarks` rewrote them on a tap — found with the `?deep` switch *flag marks off*. `apMarks` now writes the picked
 ring `g.tp` only.
 
+## Field diagnostics — a device we cannot hold (`ne_glyph_diag.go`)
+
+**Read this first when someone reports a freeze, a flash or a dead tap on a phone.** The order that works:
+
+1. `scripts/glyph_trace.sh` — the digest of what the device already sent (below). Read the *dead sessions*
+   block at the end before any row: what all deaths share and the sessions that lived do not.
+2. Send a **run link** (`/?run=touch&r=<new>`): the page drives the test itself, the reporter only
+   supplies fingers; the digest prints the verdict. No guessing rounds.
+3. Reproduce on the desktop with **real touch input**: `node scripts/glyph_touch_probe.js` — what dies there
+   is Blink and can be debugged here; what dies only on the device is its GPU, its WebView or the host app.
+4. Only then change code — and only what a run step or the probe has shown to matter.
+
+| Piece | What | Where |
+|---|---|---|
+| **KX** switch registry | one switch = one moving part off. CSS switches are `figure.kx-<name>`, behaviour switches are read in place (`KX.on('cap')`). Set by `?kx=a,b`, by the `?deep` panel, by a run. New moving part → new switch: one row in `K` (+ a CSS rule or a `KX.on` at the site) | `ne_glyph_kx.js` |
+| `?trace` recorder | env row (flags, switches, brands, GPU name, viewport, root overflow), state snapshot with every heartbeat (`fs`, zoom, tiles left, pointers, last input and its age, run step), every input event (`pointerdown/up/cancel`, `move1`, `touchstart/end/cancel`, capture, `click`; `synth` = dispatched by script), `scroll xN`, `history xN` (URL writes — host apps react to them), stalls, frame gaps; three ways out (timed parts, watchdog Worker, carry-over) | `ne_glyph_trace.js` |
+| `?run=<scenario>` driver | implies `?trace`; steps through `KXRUN[scenario]`, see below | `ne_glyph_trace.js`, `ne_glyph_kx.js` |
+| `?deep` panel | the switches by hand + DOM/animation dumps for a paint artefact | `ne_glyph_deep.js` |
+| digest | sessions, deaths, runs, common factors | `scripts/glyph_trace.sh`, `scripts/glyph_trace.py` |
+| touch probe | CDP `Input.dispatchTouchEvent` on an emulated phone: hold · pan · pinch · tap, or `run` mode = drives a run end to end | `scripts/glyph_touch_probe.js` |
+
+Switches (`K`): paint — `wv tpa tp hov cur flt nss mk ap apop tr an wc ts pk pt dock red clip pe0 peq pe4 add noadd`;
+host — `hash` (URL never rewritten), `push` (no history entry on full screen), `lock` (page pinned with a
+fixed body instead of `overflow:hidden` on the root — host apps read that as "this page manages its own
+viewport"); input — `cap` (no pointer capture), `ta` (touch-action `pan-y` in full screen, as inline), `pd`
+(touch listeners never `preventDefault`), `hit` (map content takes no hit test). The older URL flags
+(`?lite ?add ?nofs ?fs ?nolive ?live`) are not switches; the env row reports them.
+
+### `?run=touch` — the page bisects itself
+
+`KXRUN.touch` = a preamble of fixed steps (`inline-far`, `inline-near`, `fs-far`, `fs-near` = the reported
+case with no switch, `fs-near-all` = every switch of `bis` on) and the list `bis` to bisect (host and input
+switches first). Per step the page: leaves full screen, sets the switches (`KX.run`), applies the view,
+enters CSS full screen if the step wants it, waits for the tiles (`run settled`), plays a **synthetic** drag +
+pinch (`sub=auto`: the page's gesture code and its paint, no input pipeline), restores the view and asks for
+**real fingers** in a banner (`sub=touch`; enough = 3 touches, one with two fingers, 2.5 s of contact, then
+1.5 s alive). The step ends `ok` and the next starts by itself — or the browser dies, the reporter reopens
+the same link, and the page books the open step as `died@auto|touch` (unless it had been sent to the
+background: then the outcome is unknown and the step repeats) and goes on. After the preamble
+`kxRunStep` (pure, `TestGlyphRunMachine`) bisects: a step with the first *n* switches on; `ok` → the culprit
+is among them, `died` → it is not; then a `confirm-<switch>` step with that switch alone. Verdicts:
+`culprit X (alone it cures)` · `culprit X (not alone …)` · `no repro: fs-near survived` · `not a switch:
+fs-near-all died with every switch on` (then the preamble tells whether full screen or the zoom matters, and
+`died@auto` vs `died@touch` whether it is paint or input). At most ~6 deaths for 17 switches. Every step end
+posts a `trace run` record (`context.run`: `log` = `[step, switches, outcome]…`, `verdict`), so the digest
+follows a run while it is going. A new `r=` value starts a new run; state lives in localStorage `neg-run`.
+A new class of bug = a new scenario in `KXRUN` (views, preamble, `bis` order) — the driver is generic.
+
+What to tell the reporter: *open the link, follow the bar at the top (hands off / drag and pinch); when the
+browser freezes, close it and open the same link again; stop when the bar says finished.*
+
+### Digest
+
+```
+scripts/glyph_trace.sh --hours 3            # all sessions of the last 3 h
+scripts/glyph_trace.sh --ua Android -v      # one device class, every row of the dead sessions
+```
+
+Per session: verdict (`DIED` = a carry-over arrived, `HANG` = the watchdog fired, `ok`), env, the state at
+death, the last input rows; `alive_s` well past `last_raf_s` = the main thread ran on without frames
+(compositor/GPU), both stopping together = renderer or host app. `#### runs` lists step logs and verdicts,
+`#### dead sessions` the facts all deaths share with the count of living sessions sharing them (`← only the
+dead` marks a discriminator). Sessions are keyed by `context.sid`; a `prev` record carries the dead
+session's `sid` and the reopening one's as `next_sid`.
+
+Recorder writes go to `/api/v1/feedback?trace=1`: a budget of their own (150/h per client against 20/h
+for feedback — a run must not be starved by, nor starve, real feedback), stored as agent `glyph-trace`,
+purged after 24 h. `?hangtest` blocks the main thread for 6 s, 8 s into the session: a `trace hang` record
+must arrive, otherwise the watchdog does not work on that device (`wd ready` in the rows = the Worker
+started).
+
+### Host apps (what an embedding browser does with our page)
+
+A browser built on a WebView (DuckDuckGo, in-app browsers; `wv=1` in the env row) is an app with its own
+touch handling, toolbar logic and content scripts — read its source before blaming the page
+(`duckduckgo/Android`, `duckduckgo/content-scope-scripts`). Known couplings: its WebView subclass
+drives the toolbar from every touch move (nested scrolling) whatever the page does with the event; a content
+script watches the root's `class`/`style` and size and reports "no visible scrollbar + `overflow:hidden|clip`
+on html/body" to the app, which then locks toolbar and pull-to-refresh (`lock` switch); every URL change
+(`replaceState` included) is a navigation event for the app (`hash`, `push` switches). The whole app
+hanging — not just the page — with no `trace hang` record points there or at the in-process GPU thread.
+
+### Freeze on Android WebView, 2026-11-12/13 — state
+
+Ten dead sessions on one phone (DuckDuckGo, 384×721 @2.8): every one in full screen at street level, dead
+within a second of a touch on the map, main thread and frames stopping together, never a `hang` record, the
+whole app needing a kill; the same view untouched lives; the touch probe cannot reproduce it. Four rounds of
+paint mitigations (lite rounds 2–4, CSS instead of native full screen, `nolive`) did not cure it — they stay
+until a run names the cause, then the unproven ones go. Open: the verdict of `?run=touch`.
+
 ## Phone load triage — `?trace` field recorder + emulated screencast
+
 
 A load that "flashes" on a phone we cannot hold: add `?trace` (hard reload with a fresh `?r=N` after every
 deploy — the page is cached) to the URL and use the page (up to six minutes are recorded). Every 120 ms the page samples
@@ -477,8 +572,7 @@ deploy — the page is cached) to the URL and use the page (up to six minutes ar
 | visible imgs | relief imgs | all imgs | vb w/h | hi.left | relief pending | fs | innerWxH | vv height | dpr
 | visibility | card head`, keeps the rows that changed and POSTs them with `dbg` and the error list to
 `/api/v1/feedback` (agent `glyph-trace`). The first record goes out after 45 s; after that a part (`trace +N`, `context.part`)
-follows every 30 s with the rows since the last one, for six minutes / 12 parts (the feedback store takes 20 writes
-an hour, 64 KB each) and when the tab is hidden — a freeze minutes into a session is on the server up to its last
+follows every 30 s with the rows since the last one, for six minutes / 12 parts (64 KB a record; the recorder's write budget is its own, §Field diagnostics) and when the tab is hidden — a freeze minutes into a session is on the server up to its last
 30 s; read ALL parts of a session, not only the newest record. `frame Nms z= imgs= [pinch] left=` rows = no
 animation frame for N ms while the tab was in front (script, raster or GPU). Trace records are triage material, not feedback: `feedbackPurgeLoop` (api_feedback.go) deletes
 them 24 h after arrival (at start, then hourly; Datenschutz 2.3). They are served on the private tier only
