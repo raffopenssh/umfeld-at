@@ -36,3 +36,6 @@ __pycache__/
 *.bak
 data/ne_geom/
 data/ne_tiles/
+/umfeld-at.new
+/umfeld-at.prev
+/umfeld-at.failed

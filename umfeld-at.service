@@ -1,10 +1,21 @@
 [Unit]
 Description=umfeld-at — NE cells and public overlays for Austria
-After=network-online.target
+After=network-online.target umfeld-at.socket
 Wants=network-online.target
+# The socket unit owns :8000 across restarts: connections queue in the kernel
+# while the process is replaced, none is refused (startup.go, docs/restart.md).
+Requires=umfeld-at.socket
 
 [Service]
-Type=simple
+# READY=1 is sent when the accept loop runs: `systemctl restart` returns when
+# the service answers, and fails when it does not (scripts/deploy.sh rolls back).
+Type=notify
+NotifyAccess=main
+TimeoutStartSec=120
+# SIGTERM drains in-flight requests for up to 10 s (startupDrain).
+TimeoutStopSec=20
+# Self-ping through the accept loop every 30 s; three misses = restart.
+WatchdogSec=90
 # scripts/install.sh fills User/Group, WorkingDirectory, ExecStart and
 # ReadWritePaths from the checkout it runs in.
 User=umfeld
@@ -12,7 +23,7 @@ Group=umfeld
 WorkingDirectory=/opt/umfeld-at
 ExecStart=/opt/umfeld-at/umfeld-at
 Restart=always
-RestartSec=5
+RestartSec=1
 
 Environment=PORT=8000
 Environment=CGO_ENABLED=1

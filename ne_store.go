@@ -25,6 +25,8 @@ package main
 import (
 	"bytes"
 	"compress/zlib"
+	"runtime"
+	"sync/atomic"
 
 	"container/list"
 	"crypto/sha256"
@@ -1157,38 +1159,76 @@ func (s *neStoreT) load() int {
 		}
 	}
 	ents, _ := os.ReadDir(neDir)
-	var loaded []*neKG
+	// Startup cost is header JSON + K-row inflate per KG (~4 s single-threaded
+	// for the country): independent per file, so fan out over the cores. The
+	// result keeps directory order — s.kgs indices stay deterministic — and
+	// the index DB is only written from this goroutine afterwards.
+	type job struct {
+		kg, name string
+		fi       os.FileInfo
+		k        *neKG
+		hj       []byte // non-nil: header read from the file, index row to upsert
+		err      error
+	}
+	var jobs []*job
 	seen := map[string]bool{}
 	for _, e := range ents {
 		name := e.Name()
 		if !strings.HasSuffix(name, ".nex") || !neKGRe.MatchString(strings.TrimSuffix(name, ".nex")) {
 			continue
 		}
-		kg := strings.TrimSuffix(name, ".nex")
 		fi, err := e.Info()
 		if err != nil {
 			continue
 		}
+		kg := strings.TrimSuffix(name, ".nex")
 		seen[kg] = true
-		path := filepath.Join(neDir, name)
-		var k *neKG
-		if c, ok := cached[kg]; ok && c.size == fi.Size() && c.mtime == fi.ModTime().UnixNano() {
-			k, _ = neKGFromHeader(path, fi.Size(), fi.ModTime(), c.hdr)
-		}
-		if k == nil {
-			k, err = neReadNexHeader(path)
-			if err != nil {
-				log.Printf("NE store: %s: %v", name, err)
-				continue
+		jobs = append(jobs, &job{kg: kg, name: name, fi: fi})
+	}
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for w := 0; w < max(1, runtime.GOMAXPROCS(0)); w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1)) - 1
+				if i >= len(jobs) {
+					return
+				}
+				j := jobs[i]
+				path := filepath.Join(neDir, j.name)
+				var k *neKG
+				if c, ok := cached[j.kg]; ok && c.size == j.fi.Size() && c.mtime == j.fi.ModTime().UnixNano() {
+					k, _ = neKGFromHeader(path, j.fi.Size(), j.fi.ModTime(), c.hdr)
+				}
+				if k == nil {
+					var err error
+					if k, err = neReadNexHeader(path); err != nil {
+						j.err = err
+						continue
+					}
+					j.hj, _ = neMarshalHeader(&k.Hdr)
+				}
+				if err := k.loadKRows(); err != nil {
+					j.err = err
+					continue
+				}
+				j.k = k
 			}
-			hj, _ := neMarshalHeader(&k.Hdr)
-			s.dbUpsert(k, hj)
-		}
-		if err := k.loadKRows(); err != nil {
-			log.Printf("NE store: %s: %v", name, err)
+		}()
+	}
+	wg.Wait()
+	var loaded []*neKG
+	for _, j := range jobs {
+		if j.err != nil {
+			log.Printf("NE store: %s: %v", j.name, j.err)
 			continue
 		}
-		loaded = append(loaded, k)
+		if j.hj != nil {
+			s.dbUpsert(j.k, j.hj)
+		}
+		loaded = append(loaded, j.k)
 	}
 	for kg := range cached {
 		if !seen[kg] {
@@ -1356,8 +1396,9 @@ func (s *neStoreT) convertPending() int {
 
 // NEStoreStart — startup: load the index, then convert inputs in the
 // background and keep watching for new ones (ne_all.sh output, POSTed obs).
-func NEStoreStart() {
-	n := neStore.load()
+// NEStoreStart — log the loaded store (n = neStore.load(), done by main in
+// parallel with the other loads) and start the converter + coverage loops.
+func NEStoreStart(n int) {
 	var nexBytes int64
 	neStore.mu.RLock()
 	for kg, i := range neStore.byKG {

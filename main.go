@@ -75,32 +75,35 @@ func main() {
 		}
 		return
 	}
-	// Initialize the KG register
-	if err := InitSearchIndex(); err != nil {
-		log.Printf("Warning: search index init failed: %v", err)
+	// Server mode. Take the listening socket before any init work: from
+	// here on connections queue in the kernel backlog instead of being
+	// refused, and are answered once startupServe runs (startup.go).
+	port := "8000"
+	if p := os.Getenv("PORT"); p != "" {
+		port = p
+	}
+	ln, inherited, err := startupListen(port)
+	if err != nil {
+		log.Fatalf("listen :%s: %v", port, err)
 	}
 
-	// Revisit-hint memo (api_ne_revisit.go): the first compute walks the
-	// derived change files + reports cold (~10 s); warm it off the request path.
-	neNatStart()           // national cell table behind the tiles' low zooms (ne_mvt_nat.go)
-	neTreeHRestore()       // tree mode survives a restart (marker in data/ne_fidx)
-	go neTreeHLoop()       // hourly probe: ask the observed-layer peer for apex height lists once it serves them prebuilt (ne_tree_h.go)
-	go neObsCompleteLoop() // observed layer vs declared view per KG (ne_obs_complete.go; /ne/revisit kind obs_missing)
-	go func() { neFidxPurgeEmpty(); neFidxWarmLoop() }()
-	go neFidxBlocksLoop()  // the observed-layer peer's block manifest: a rebuilt 0.1° block moves its 16 bins' state + refresh builds (ne_glyph_fidx_blocks.go)
-	go neWarmLoop()        // opened share links replayed 30 min after start (ne_glyph_warm.go)
-	go feedbackPurgeLoop() // glyph-trace records live 24 h (api_feedback.go) // filter index: prebuild the bins behind recent near tiles (ne_glyph_fidx.go)
-	go func() {
-		time.Sleep(20 * time.Second)
-		// change over time (the glyph's time strip, /ne/glyph/passes): the
-		// first build reads the report scan + ~150 KG change logs cold (~15 s
-		// when it races the tile burst of a fresh page) — warm it before a
-		// visitor asks; later rebuilds are stale-while-revalidate (~2 s).
-		StatsMemo("ne_passes", 5*time.Minute, false, nePassNational)
-		time.Sleep(25 * time.Second)
-		neDeclWarm() // declared-view states for the manifest (ne_change_declared.go)
-		StatsMemo(neRevisitMemoKey, neRevisitTTL, false, neRevisitCompute)
-	}()
+	// Initialize the KG register
+	startupStage("search index", func() {
+		if err := InitSearchIndex(); err != nil {
+			log.Printf("Warning: search index init failed: %v", err)
+		}
+	})
+
+	// The heavy loads are independent of each other — run them side by side;
+	// the registrations below then find them done (each is once-guarded or
+	// idempotent, so order no longer matters).
+	var neKGs int
+	startupParallel(map[string]func(){
+		"national sample + cell table": neNatStart,                        // ne_mvt_nat.go
+		"natura2000":                   loadNatura2000,                    // natura2000.go
+		"ne store":                     func() { neKGs = neStore.load() }, // ne_store.go (fans out per KG itself)
+	})
+	neTreeHRestore() // tree mode survives a restart (marker in data/ne_fidx)
 
 	// ── Register API routes ─────────────────────────────────────────
 	mux := http.NewServeMux()
@@ -120,14 +123,13 @@ func main() {
 
 	// NE routes go through apiMiddleware like everything else so every peer
 	// write (/contrib, /k) shows up in the 📨 request log with its peer= tag.
-	NEStoreStart()                                     // .nex store + converter (ne_store.go)
+	NEStoreStart(neKGs)                                // .nex store + converter (ne_store.go)
 	mux.Handle("/api/v1/ne", apiMiddleware(handleNE))  // NE cells: reads public (api_ne_public.go), writes srtm only (api_ne.go)
 	mux.Handle("/api/v1/ne/", apiMiddleware(handleNE)) // draft prefix above wins for /ne/draft/*
 	// OSM proximity metrics (roads / transit / rail / water / remoteness) for
 	// a point or an H3 cell, plus the OSM geometry overlay.
 	InitOSMProximity()
 	RegisterOSMProximityAPI(mux)
-	go AddressesIndexWarm() // addresses_index.go: street index for the find box (BEV streets + OSM-only road names)
 
 	// BEV DLM-Namen toponyms: own DB, in-memory trigram index.
 	EnsureToponyms()
@@ -153,15 +155,10 @@ func main() {
 		mux.HandleFunc("/", handlePublicRoot)
 	}
 
-	port := "8000"
-	if p := os.Getenv("PORT"); p != "" {
-		port = p
-	}
-
 	// pprof + /api/v1/debug/inflight (private tier only)
 	RegisterDebugAPI(mux)
 
-	log.Printf("\U0001f1e6\U0001f1f9 umfeld-at starting on :%s", port)
+	log.Printf("\U0001f1e6\U0001f1f9 umfeld-at serving on %s (socket inherited from systemd: %v)", ln.Addr(), inherited)
 
 	// Wrap with request logger + in-flight tracking, then transparent gzip.
 	//
@@ -185,7 +182,6 @@ func main() {
 	log.Printf("🔐 API tiers: public_only=%v private_tier=%v", publicOnly(), privateTierOpen())
 
 	srv := &http.Server{
-		Addr:              ":" + port,
 		Handler:           handler,
 		ReadHeaderTimeout: 15 * time.Second,
 		// WriteTimeout bounds a slow reader pinning a handler goroutine. Long
@@ -194,5 +190,34 @@ func main() {
 		WriteTimeout: 5 * time.Minute,
 		IdleTimeout:  120 * time.Second,
 	}
-	log.Fatal(srv.ListenAndServe())
+	if err := startupServe(srv, ln, startBackground); err != nil && err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
+}
+
+// startBackground — warmers and periodic loops. None of them is needed to
+// answer a request, so they start only once the server is ready: on a small
+// machine they would otherwise compete with init for the cores and stretch
+// every restart.
+func startBackground() {
+	go neTreeHLoop()                                     // hourly probe: ask the observed-layer peer for apex height lists once it serves them prebuilt (ne_tree_h.go)
+	go neObsCompleteLoop()                               // observed layer vs declared view per KG (ne_obs_complete.go; /ne/revisit kind obs_missing)
+	go func() { neFidxPurgeEmpty(); neFidxWarmLoop() }() // filter index: prebuild the bins behind recent near tiles (ne_glyph_fidx.go)
+	go neFidxBlocksLoop()                                // the observed-layer peer's block manifest: a rebuilt 0.1° block moves its 16 bins' state + refresh builds (ne_glyph_fidx_blocks.go)
+	go neWarmLoop()                                      // opened share links replayed 30 min after start (ne_glyph_warm.go)
+	go feedbackPurgeLoop()                               // glyph-trace records live 24 h (api_feedback.go)
+	go AddressesIndexWarm()                              // addresses_index.go: street index for the find box (BEV streets + OSM-only road names)
+	go func() {
+		time.Sleep(20 * time.Second)
+		// change over time (the glyph's time strip, /ne/glyph/passes): the
+		// first build reads the report scan + ~150 KG change logs cold (~15 s
+		// when it races the tile burst of a fresh page) — warm it before a
+		// visitor asks; later rebuilds are stale-while-revalidate (~2 s).
+		StatsMemo("ne_passes", 5*time.Minute, false, nePassNational)
+		time.Sleep(25 * time.Second)
+		neDeclWarm() // declared-view states for the manifest (ne_change_declared.go)
+		// Revisit-hint memo (api_ne_revisit.go): the first compute walks the
+		// derived change files + reports cold (~10 s); warm it off the request path.
+		StatsMemo(neRevisitMemoKey, neRevisitTTL, false, neRevisitCompute)
+	}()
 }

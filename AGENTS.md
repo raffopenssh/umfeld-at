@@ -51,11 +51,15 @@ The service does two things:
 ```
 CGO_ENABLED=1 go build -tags fts5 -o umfeld-at .    # -tags fts5 is mandatory
 go test -tags fts5 ./...                              # ~1–2 min
-sudo systemctl restart umfeld-at                      # ready in seconds
+scripts/deploy.sh                                     # build + restart, no refused connection, rollback
 journalctl -u umfeld-at -f
 ```
-Deploy = build in place + restart (`scripts/install.sh` for a fresh machine). Startup log must
-show `Search index ready: 7850 KGs`. Env: `/etc/umfeld-at.env` (0600; template in
+Deploy = `scripts/deploy.sh` (build beside → swap → restart → verify → roll back to
+`umfeld-at.prev`); `scripts/install.sh` for a fresh machine. A restart refuses no connection:
+`umfeld-at.socket` holds :8000, the service drains on SIGTERM and reports `READY=1`
+(`Type=notify`, watchdog) — `docs/restart.md`. Startup log must show
+`Search index ready: 7850 KGs` and `✅ ready in N s` (budget ≤ 5 s; `⏱ startup:` lines name slow
+stages). Env: `/etc/umfeld-at.env` (0600; template in
 `scripts/install.sh`): `UMFELD_PUBLIC_ONLY`, `UMFELD_PUBLIC_URL`, `UMFELD_PRIVATE_PREFIX`,
 `UMFELD_TOKEN` + `UMFELD_TOKEN_NAMES` (parallel lists), `CONTRIBUTOR_TOKEN` +
 `CONTRIBUTOR_TOKEN_NAMES`, `NE_WRITER`, `NE_WRITE_BUDGET_MB`, `NE_WRITE_BUDGET_MB_OVERRIDES`
@@ -137,6 +141,9 @@ Cross-cutting
     `Transport` without wrapping it. Ad-hoc `curl`/python probes must pass the same UA by hand
     (`curl -A 'umfeld-at/probe (+$UMFELD_PUBLIC_URL)' -H "X-Peer-Token: $UMFELD_PEER_SUB_TOKEN"`) — library defaults (`Python-urllib`,
     `python-requests`) get rate-limited and show up in the peer's logs.
+16. Restarts (`docs/restart.md`): the listener comes from `startupListen` only; nothing slow and no
+    network I/O before `startupServe` — request-critical loads go in `startupParallel`, warmers
+    and loops in `startBackground`; no on-disk start-up caches.
 
 ## Routing table — read before touching
 
@@ -165,6 +172,7 @@ Cross-cutting
 | Natura 2000 sites | `docs/natura2000.md` | `natura2000.go` |
 | Land prices (Gemeinde/Bezirk/Bundesland, predict from caller features) | `docs/land-prices.md` | `land_prices.go`, `land_prices_aggregate.go` |
 | RIS law refs per KG code | `docs/legal-ris.md` | `api_legal_refs.go` |
+| **Restart / deploy** (socket unit, drain, readiness, watchdog, start-up budget, rollback) | `docs/restart.md` | `startup.go`, `main.go`, `umfeld-at.service`, `umfeld-at.socket`, `scripts/deploy.sh` |
 | KG code padding | `docs/kg-codes.md` | `kg_code.go` |
 | Latency / payload rules | `docs/latency-contract.md`, `docs/payload-caching-contract.md` | `api.go`, `api_compress.go`, `debug_pprof.go` |
 
@@ -210,11 +218,11 @@ curl 'localhost:8000/debug/pprof/goroutine?debug=2'              wedge triage
 
 | Concern | Files |
 |---|---|
-| Server / routing / tiers | `main.go`, `api.go`, `api_compress.go`, `api_tiers.go`, `peers.go`, `kg_code.go`, `debug_pprof.go`, `egress_stats.go`, `rate_limiter.go`, `sqlite_driver.go`, `search_index.go` |
+| Server / routing / tiers | `main.go`, `startup.go`, `api.go`, `api_compress.go`, `api_tiers.go`, `peers.go`, `kg_code.go`, `debug_pprof.go`, `egress_stats.go`, `rate_limiter.go`, `sqlite_driver.go`, `search_index.go` |
 | NE | `ne_cells/`, `api_ne*.go`, `ne_store.go`, `ne_h3.go`, `ne_change*.go`, `ne_glyph*.go`, `ne_filter_expr.go`, `ne_mvt*.go`, `ne_pmtiles.go`, `peer_ne_ready.go`, `stats_memo.go`, `tests_py/`, `scripts/ne_cells_sync_check.sh`, `scripts/ne_diff_declared_vs_observed.py` |
 | Public overlays | `api_context.go`, `osm_proximity.go`, `osm_areas.go`, `osm_remote_grid.go`, `api_osm_*.go`, `toponyms.go`, `api_toponyms.go`, `addresses.go`, `mgi_transform.go`, `natura2000.go`, `land_prices*.go`, `api_legal_refs.go`, `kg_universe*.go`, `kg_bbox_index.go`, `api_search_municipalities.go`, `api_spatial_kgs.go`, `api_edm_lookup.go` |
 | Docs / meta | `api_docs_public*.go`, `api_license.go`, `api_cache_policy.go`, `api_feedback.go`, `api_legal_pages.go`, `export_gate.go` |
-| Ops | `umfeld-at.service`, `scripts/install.sh`, `scripts/parse_statistik_austria.py`, `scripts/ne_glyph_*.py` |
+| Ops | `umfeld-at.service`, `umfeld-at.socket`, `scripts/deploy.sh`, `scripts/install.sh`, `scripts/parse_statistik_austria.py`, `scripts/ne_glyph_*.py` |
 
 ## Git policy
 

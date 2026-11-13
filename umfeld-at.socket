@@ -1,0 +1,12 @@
+[Unit]
+Description=umfeld-at listening socket (held across service restarts)
+
+[Socket]
+ListenStream=8000
+BindIPv6Only=both
+# Connections that arrive while the service restarts wait here.
+Backlog=4096
+NoDelay=true
+
+[Install]
+WantedBy=sockets.target

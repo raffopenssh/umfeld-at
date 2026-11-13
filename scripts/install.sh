@@ -67,9 +67,15 @@ fi
 echo "[4/4] systemd unit"
 sed "s|^User=.*|User=$RUN_USER|;s|^Group=.*|Group=$RUN_GROUP|;s|^WorkingDirectory=.*|WorkingDirectory=$ROOT_DIR|;s|^ExecStart=.*|ExecStart=$ROOT_DIR/umfeld-at|;s|^ReadWritePaths=.*|ReadWritePaths=$ROOT_DIR/data|" \
   umfeld-at.service | sudo tee /etc/systemd/system/umfeld-at.service >/dev/null
+sudo cp umfeld-at.socket /etc/systemd/system/umfeld-at.socket
 sudo systemctl daemon-reload
-sudo systemctl enable umfeld-at
-sudo systemctl restart umfeld-at
+sudo systemctl enable umfeld-at.socket umfeld-at
+if ! systemctl is-active --quiet umfeld-at.socket; then
+  # one-time hand-over of :8000 from the process to the socket unit
+  sudo systemctl stop umfeld-at
+  sudo systemctl start umfeld-at.socket
+fi
+sudo systemctl restart umfeld-at   # later deploys: scripts/deploy.sh
 
 # Go build cache trim: this repo is one big main package, every edit leaves
 # ~40 MB of new cache objects that Go only evicts after 5 days. Daily timer
