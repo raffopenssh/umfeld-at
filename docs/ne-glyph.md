@@ -414,8 +414,9 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   a software 2D context (`willReadFrequently`) capped at 2 MP. If it holds, re-add one at a time behind `?add`.
   **Third round — the trace named it:** `prev` record ends `fullscreenchange` → 0.8 s → `pointerdown image`,
   `alive_s` = `last_raf_s` = that tap: the first touch on the map after the **Fullscreen API** in an Android
-  WebView browser kills the host app (trees were never involved). `WV` (Android and `; wv)` in the UA, or
-  `userAgentData` brands naming WebView, or no brands at all; `?nofs` forces it, `?fs` lifts it) → `fsEnter` skips
+  WebView browser kills the host app (trees were never involved). `WV` = Android, a Chromium UA, and `userAgentData` brands naming none of the stand-alone browsers (Google Chrome,
+  Edge, Brave, Opera, Samsung Internet, Vivaldi, YaBrowser) — the reader's browser reports `Chromium,DuckDuckGo`,
+  no `wv` anywhere; confirmed by the reload after the kill: same view, CSS full screen, trees on, no freeze; `?nofs` forces it, `?fs` lifts it) → `fsEnter` skips
   `requestFullscreen` and uses the CSS full screen (the iPhone path). Trace row 0: `paint lite= wv= brands=`.
 - **One raster per batch** (`hiCommit`/`hiFlush`, `hi.cq` + `hi.cq2`): a landed, decoded tile waits and the whole
   batch joins the SVG on one timer (400 ms while `lf.on`, 120 ms else); readout/legend/`fltCardFix` once per batch;
