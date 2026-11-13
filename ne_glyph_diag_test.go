@@ -53,7 +53,7 @@ var r=play(function(){return false});if(!/^no repro/.test(r.z.verdict)){fail++;c
 r=play(function(cur){return cur.fs===1&&cur.view==='near'});if(!(sc.inv?/^not cured/:/^not a switch/).test(r.z.verdict)){fail++;console.log('not a switch: '+r.z.verdict)}});
 sc=KXRUN.touch;
 /* inv: a step's list = the mitigations kept, the page gets the undo switch of every other one */
-var ms=KXRUN.mit,k=kxRunSet(ms,{on:['ulive','u4']}).join(',');if(k!=='ufs,u5,u2,u1'||kxRunSet(ms,{on:ms.bis}).length||kxRunSet(KXRUN.touch,{on:['cap']}).join()!=='cap'){fail++;console.log('kxRunSet: '+k)}
+var ms=KXRUN.mit,k=kxRunSet(ms,{on:[]}).join(',');if(k!=='ulive'||kxRunSet(ms,{on:ms.bis}).length||kxRunSet(KXRUN.touch,{on:['cap']}).join()!=='cap'){fail++;console.log('kxRunSet: '+k)}
 /* two switches needed together: the bisect names the later one, the confirm step says it is not alone */
 r=play(function(cur){return cur.fs===1&&cur.view==='near'&&!(cur.on.indexOf('cap')>=0&&cur.on.indexOf('pt')>=0)});if(!/^culprit pt \(not alone/.test(r.z.verdict)){fail++;console.log('pair: '+r.z.verdict)}
 var z=kxRunStep(sc,null),id=z.cur.id;z=kxRunStep(sc,z,'');if(z.cur.id!==id||z.log.length){fail++;console.log('unknown outcome must repeat the step')}

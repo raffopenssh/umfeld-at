@@ -399,34 +399,15 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   (`hiCull`), and `hiEvict` drops stale-`ds` variants first. Relief / photo squares: `mtFit` steps the Web-Mercator
   zoom coarser until the squares that touch the view fit `RL_TILES` (48) / `OT_TILES` (64) instead of cutting
   nearest-first.
-- **Paint lite** (`LITE` = `(hover:none)` or `?lite`, off with `?add`; `figure.pl`): on touch devices the tile
-  pictures are NOT added up (`mix-blend-mode:plus-lighter` + an isolated group per LOD, the Blink seam fix of
-  2026-11-12) and base/obs tiles are not supersampled (`hiSS` → 1, no `ss=2`). Reason: Android Chrome froze
-  whole (no `trace hang` from the watchdog, only a `trace prev` = renderer/GPU, not script) at street level in
-  the observed view — once on entering full screen, once the moment eight `ss=2` tiles (1750×2590 each) landed
-  during a pinch. Suspect, not proven: eight screen-sized blended surfaces. Cost: the pale seam hairline is
-  back on Android. The trace's first row says `paint lite=0|1`; `?add` on the phone is the A/B.
-  **Second round (2026-11-13, same day):** the freeze stayed — the reader's Android browser is WebView-based and
-  hung WHOLE (the app had to be killed; again no `trace hang`) when the trees came on at street level in native
-  full screen. Unproven suspects, all switched off under `figure.pl`: every `backdrop-filter` (the height scale
-  `.glyph-ts` appears with the trees and was the one glass pane left in full screen), CSS `filter` inside the SVG,
-  `will-change` on the crown canvas, the tree sheet's group opacity (now on its pictures), and the crown canvas is
-  a software 2D context (`willReadFrequently`) capped at 2 MP. If it holds, re-add one at a time behind `?add`.
-  **Third round — the trace named it:** `prev` record ends `fullscreenchange` → 0.8 s → `pointerdown image`,
-  `alive_s` = `last_raf_s` = that tap: the first touch on the map after the **Fullscreen API** in an Android
-  WebView browser kills the host app (trees were never involved). `WV` = Android, a Chromium UA, and `userAgentData` brands naming none of the stand-alone browsers (Google Chrome,
-  Edge, Brave, Opera, Samsung Internet, Vivaldi, YaBrowser) — the reader's browser reports `Chromium,DuckDuckGo`,
-  no `wv` anywhere; confirmed by the reload after the kill: same view, CSS full screen, trees on, no freeze; `?nofs` forces it, `?fs` lifts it) → `fsEnter` skips
-  `requestFullscreen` and uses the CSS full screen (the iPhone path). Trace row 0: `paint lite= wv= brands=`.
-  **Fourth round:** with `wv=1` (CSS full screen) it froze all the same — the kill comes with the pinch/drag
-  (at `pointerdown`, or at the commit after the live transform), so the Fullscreen API was not it either (the `WV`
-  rule stays; harmless). Suspect now: `clip-path:inset()` on the tile pictures (2026-11-11 20:09/20:33, the evening
-  before the first freeze): a clipped picture inside a composited layer = a mask surface as large as the picture
-  on screen. `LITE` → `hiTile` sets no clip and the pictures do not fade in. Cost: the tone band along tile seams.
-  **Fifth round** (froze all the same, at the first `pointerdown` in full screen, before any commit): `NOLIVE`
-  (= `WV`, or `?nolive`; `?live` lifts) — a gesture is a run of plain viewBox commits, no CSS transform and no
-  promoted layer — and under `figure.pl` nothing inside the SVG animates or transitions. Rounds 2–5 are
-  unproven mitigations: see §Field diagnostics (*Freeze on Android WebView*) before adding a sixth.
+- **No live transform in an Android WebView** (`NOLIVE` = `WV`, or `?nolive`; `?live` / switch `ulive` lifts): at
+  full resolution a gesture is a run of plain viewBox commits, no CSS transform and no promoted layer. This is
+  the proven cure of the WebView freeze of 2026-11-12/13 (`?run=mit&r=21`: *cure ulive (alone it cures)*,
+  §Field diagnostics). `WV` = Android, a Chromium UA, and `userAgentData` brands naming none of the stand-alone
+  browsers (Google Chrome, Edge, Brave, Opera, Samsung Internet, Vivaldi, YaBrowser); `?nofs` forces it, `?fs`
+  lifts it. Five guesses made on the way — "paint lite" rounds 1, 2, 4, 5 under `figure.pl` (tiles not added up
+  and not supersampled; no blur/filter/promoted crown canvas; tile pictures unclipped and unfaded; no animation
+  in the SVG) and CSS instead of native full screen in a WebView — were shown unnecessary by the same run and
+  are **removed**; do not bring them back for this freeze.
 - **One raster per batch** (`hiCommit`/`hiFlush`, `hi.cq` + `hi.cq2`): a landed, decoded tile waits and the whole
   batch joins the SVG on one timer (400 ms while `lf.on`, 120 ms else); readout/legend/`fltCardFix` once per batch;
   `.hi.ld` turns the per-image fade off while heavy. Relief squares go through the same batch (`cq2`, not counted in
@@ -495,12 +476,12 @@ ring `g.tp` only.
 | touch probe | CDP `Input.dispatchTouchEvent` on an emulated phone: hold · pan · pinch · tap, or `run` mode = drives a run end to end | `scripts/glyph_touch_probe.js` |
 
 Switches (`K`): paint — `wv tpa tp hov cur flt nss mk ap apop tr an wc ts pk pt dock red clip pe0 peq pe4 add noadd`;
-undo (mitigations back off, for `?run=mit`) — `ulive ufs u1 u2 u4 u5`;
+undo (the mitigation back off, for `?run=mit`) — `ulive`;
 host — `hash` (URL never rewritten), `push` (no history entry on full screen), `lock` (page pinned with a
 fixed body instead of `overflow:hidden` on the root — host apps read that as "this page manages its own
 viewport"); input — `cap` (no pointer capture), `ta` (touch-action `pan-y` in full screen, as inline), `pd`
 (touch listeners never `preventDefault`), `hit` (map content takes no hit test). The older URL flags
-(`?lite ?add ?nofs ?fs ?nolive ?live`) are not switches; the env row reports them.
+(`?nofs ?fs ?nolive ?live`) are not switches; the env row reports them.
 
 ### `?run=touch` — the page bisects itself
 
@@ -594,7 +575,17 @@ still be *in* native full screen); `view()` now appends `;screen` when it keeps 
 shared by every `?trace` tab: a second tab restored by the app claimed the first one's rows as a death (`DIED
 … reopened 0s later`, `vis=hidden`) — the key is per run now (`neg-trace:<scenario><r>`). (3) the bar now says
 that a freeze is an expected result and what to do; after a booked death it opens with *back after a freeze ✓*.
-Open: the verdict of r=21 (reopen the same link) or of a new `r=`.
+
+**Verdict of r=21 (08:44 UTC): `cure ulive (alone it cures)`** — `bisect-3`, `bisect-2`, `bisect-1` and
+`confirm-ulive` (only `NOLIVE` kept, native full screen, every lite round undone) all `ok`. The live CSS
+transform of the magnified SVG during a gesture is what kills that WebView. Kept: `NOLIVE`. Removed from the
+build: the WebView CSS-full-screen rule and lite rounds 1, 2, 4, 5 (`LITE`, `figure.pl`, `?lite`, `?add` as a URL
+flag — the `add` switch stays). `KXRUN.mit` keeps `ulive` alone as the regression run; a full-screen step of any
+run now uses the Fullscreen API where it exists (the bar asks for a tap), i.e. what a visitor gets. The bright
+lines along tile seams seen in `bisect-3` were that step's mix only (lite 4 kept = pictures unclipped, lite 1
+undone = pictures added up → the shared ring counted twice); no shipped build had it. One sample: the run has a
+single death; if the freeze returns, `?run=mit` first. Not tested: stand-alone Android browsers (not `WV`) still
+use the live transform — no freeze was ever reported there.
 
 ## Phone load triage — `?trace` field recorder + emulated screencast
 

@@ -17,7 +17,7 @@ try{GPU=localStorage.getItem('neg-gpu')||''}catch(e){}
 /* ── env: what the device and its browser are, once per record ── */
 var env=function(){var mm=function(q){try{return matchMedia(q).matches?1:0}catch(e){return-1}},vm=document.querySelector('meta[name=viewport]'),ov='';
  try{ov=getComputedStyle(document.documentElement).overflowY+'/'+getComputedStyle(document.body).overflowY}catch(e){}
- return{sid:SID,lite:LITE?1:0,wv:WV?1:0,nolive:NOLIVE?1:0,kx:KX.list(),brands:UAB,dpr:window.devicePixelRatio,scr:screen.width+'x'+screen.height,inner:innerWidth+'x'+innerHeight,
+ return{sid:SID,wv:WV?1:0,nolive:NOLIVE?1:0,kx:KX.list(),brands:UAB,dpr:window.devicePixelRatio,scr:screen.width+'x'+screen.height,inner:innerWidth+'x'+innerHeight,
   tp:navigator.maxTouchPoints||0,mem:navigator.deviceMemory||0,hc:navigator.hardwareConcurrency||0,hover:mm('(hover:hover)'),fine:mm('(pointer:fine)'),rm:mm('(prefers-reduced-motion:reduce)'),
   standalone:mm('(display-mode:standalone)'),vp:vm?vm.content:'',ovf:ov,gpu:GPU,q:location.search.slice(0,120)}};
 /* ── state: where the page is right now; saved with every heartbeat, so a dead session says where it died ── */
@@ -128,14 +128,14 @@ if(rm&&KXRUN[rm[1]]){RUN=(function(){
  var say=function(s,c){ban.textContent=s;ban.style.background=c||'#111'};
  var store=function(){try{localStorage.setItem(RK,JSON.stringify({rid:rid,z:z}))}catch(e){}};
  var report=function(kind){post('trace run '+kind+' '+rid,{part:'run',run:{rid:rid,kind:kind,inv:sc.inv?1:0,ph:z.ph,lo:z.lo,hi:z.hi,cur:z.cur?z.cur.id:'',sub:z.sub||'',res:z.res,log:z.log,verdict:z.verdict},dbg:dbgL.slice(-60),err:tel.err.slice(0,20),fetch:tel.n,env:env(),st:state()},fresh(),false)};
- /* view(c): the step's switches, view and full screen. A step that undoes the WebView full-screen mitigation (ufs) needs
+ /* view(c): the step's switches, view and full screen. A full-screen step runs in what a visitor gets: where the Fullscreen API exists it needs
     the Fullscreen API, and that needs a tap: the banner becomes the button (sub 'tap'). again = after the auto pass:
     a native full screen is kept (a second tap would be needed), the CSS one is left and re-entered as before. */
  var goHash=function(h){try{history.replaceState(null,'',location.pathname+location.search+h)}catch(e){}applyHash()};
  var view=function(c,again){var set=kxRunSet(sc,c),keep=again&&fsOn&&fsNative;if(fsOn&&!keep)fsLeave();
   if(!again){KX.run(set);if(sc.inv){if(typeof apCv!=='undefined'&&apCv){apCv.remove();apCv=null}goHash(sc.far)}}
   window.scrollTo(0,0);goHash(sc[c.view]+(keep?';screen':''));
-  if(c.fs&&!fsOn){if(KX.on('ufs')&&!again){z.sub='tap';store();trMark('run tap: waiting for the full-screen tap');ban.style.pointerEvents='auto';say('step '+(z.log.length+1)+' · TAP THIS BAR to go on','#8a4b00');
+  if(c.fs&&!fsOn){if((fig.requestFullscreen||fig.webkitRequestFullscreen)&&!again){z.sub='tap';store();trMark('run tap: waiting for the full-screen tap');ban.style.pointerEvents='auto';say('step '+(z.log.length+1)+' · TAP THIS BAR to go on','#8a4b00');
     ban.onclick=function(){ban.onclick=null;ban.style.pointerEvents='none';fsToggle();say('step '+(z.log.length+1)+' · loading …')}}
    else fsApply(true)}
   if(!c.fs&&fsOn)fsLeave()};
@@ -167,7 +167,7 @@ if(rm&&KXRUN[rm[1]]){RUN=(function(){
 
 iv=setInterval(samp2,120);samp();
 P('0 env '+JSON.stringify(env()));
-P('0 paint lite='+(LITE?1:0)+' wv='+(WV?1:0)+' nolive='+(NOLIVE?1:0)+' kx='+KX.list()+' brands='+UAB);
+P('0 paint wv='+(WV?1:0)+' nolive='+(NOLIVE?1:0)+' kx='+KX.list()+' brands='+UAB);
 if(!RUN)setTimeout(function(){send();sv=setInterval(send,30000)},45000);
 /* the GPU's name, once per device (a WebGL context is made and dropped; marked first, in case that itself is the trouble) */
 if(!GPU)setTimeout(function(){try{trMark('gpu probe');var c=document.createElement('canvas'),gl=c.getContext('webgl'),s='none';if(gl){var x=gl.getExtension('WEBGL_debug_renderer_info');s=String(x?gl.getParameter(x.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER)).slice(0,90);var l=gl.getExtension('WEBGL_lose_context');if(l)l.loseContext()}GPU=s;localStorage.setItem('neg-gpu',s);trMark('gpu '+s)}catch(e){GPU='err'}},RUN?400:3000);
