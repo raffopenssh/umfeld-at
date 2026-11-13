@@ -495,6 +495,7 @@ ring `g.tp` only.
 | touch probe | CDP `Input.dispatchTouchEvent` on an emulated phone: hold · pan · pinch · tap, or `run` mode = drives a run end to end | `scripts/glyph_touch_probe.js` |
 
 Switches (`K`): paint — `wv tpa tp hov cur flt nss mk ap apop tr an wc ts pk pt dock red clip pe0 peq pe4 add noadd`;
+undo (mitigations back off, for `?run=mit`) — `ulive ufs u1 u2 u4 u5`;
 host — `hash` (URL never rewritten), `push` (no history entry on full screen), `lock` (page pinned with a
 fixed body instead of `overflow:hidden` on the root — host apps read that as "this page manages its own
 viewport"); input — `cap` (no pointer capture), `ta` (touch-action `pan-y` in full screen, as inline), `pd`
@@ -516,7 +517,7 @@ background: then the outcome is unknown and the step repeats) and goes on. After
 is among them, `died` → it is not; then a `confirm-<switch>` step with that switch alone. Verdicts:
 `culprit X (alone it cures)` · `culprit X (not alone …)` · `no repro: fs-near survived` · `not a switch:
 fs-near-all died with every switch on` (then the preamble tells whether full screen or the zoom matters, and
-`died@auto` vs `died@touch` whether it is paint or input). At most ~6 deaths for 17 switches. Every step end
+`died@auto` vs `died@touch` whether it is paint or input). At most ~6 deaths for 17 switches. A scenario with `inv` (`mit`) bisects the other way round — see the state section below. Every step end
 posts a `trace run` record (`context.run`: `log` = `[step, switches, outcome]…`, `verdict`), so the digest
 follows a run while it is going. A new `r=` value starts a new run; state lives in localStorage `neg-run`.
 A new class of bug = a new scenario in `KXRUN` (views, preamble, `bis` order) — the driver is generic.
@@ -557,11 +558,31 @@ hanging — not just the page — with no `trace hang` record points there or at
 
 ### Freeze on Android WebView, 2026-11-12/13 — state
 
-Ten dead sessions on one phone (DuckDuckGo, 384×721 @2.8): every one in full screen at street level, dead
-within a second of a touch on the map, main thread and frames stopping together, never a `hang` record, the
-whole app needing a kill; the same view untouched lives; the touch probe cannot reproduce it. Four rounds of
-paint mitigations (lite rounds 2–4, CSS instead of native full screen, `nolive`) did not cure it — they stay
-until a run names the cause, then the unproven ones go. Open: the verdict of `?run=touch`.
+Ten dead sessions on one phone (DuckDuckGo, 384×721 @2.8, Mali-G52), the last at 07:00 UTC on the 13th:
+every one in full screen at street level, dead within a second of a touch on the map, main thread and frames
+stopping together, never a `hang` record, the whole app needing a kill; the same view untouched lives; the
+touch probe cannot reproduce it.
+
+`?run=touch&r=20` on that phone: **no repro** — all five preamble steps `ok`, no death, then two more minutes
+of use in full screen down to z≈10 (183 touches). What that rules out and what it does not:
+
+- the build as shipped (lite 1–5, CSS full screen, `nolive`) does not freeze: inline or full screen, far or
+  near, synthetic or real fingers. The host/input switches (`hash push lock cap ta pd hit`) and the paint
+  switches of `bis` were never needed — `fs-near` lived without any of them, so none of them is the cure.
+- it names **no** mitigation: all were on in every step. The last death (CSS full screen, lite ≤ 4) came
+  before `nolive` and lite round 5 were served, so "native full screen alone" and "lite 1–4 alone" are ruled
+  out as cures by the dead sessions themselves; `nolive`, round 5 or a combination remain. Nothing is removed
+  on this evidence.
+
+Hence **`?run=mit`** (`KXRUN.mit`, `inv`): the mitigations are switches now — `ulive` (live transform back),
+`ufs` (Fullscreen API in a WebView; the step asks for a tap on the bar, the API needs one), `u1 u2 u4 u5`
+(lite rounds undone; `figure.pl:not(.kx-uN)` + `KX.on` in `hiSS`/`apDraw`). A step's list = the mitigations
+**kept**; the page runs with the undo switch of every other one (`kxRunSet`). Preamble: `fs-near-kept` (as
+shipped), `fs-near-raw` (all undone = the build that froze). Verdicts: `no repro: fs-near-raw survived — no
+mitigation is needed` → remove them all (the freeze went with something else, e.g. a WebView update);
+`cure X (alone it cures)` → keep X, remove the rest; `cure X (not alone …)` → run again with X pinned
+(`?kx=` cannot pin a kept mitigation — reorder `bis`); `not cured: fs-near-kept died` → back to `?run=touch`.
+At most 1 + 3 + 1 deaths. Open: the verdict of `/?run=mit&r=<new>` on the phone.
 
 ## Phone load triage — `?trace` field recorder + emulated screencast
 

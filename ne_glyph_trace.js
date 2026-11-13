@@ -127,20 +127,28 @@ if(rm&&KXRUN[rm[1]]){RUN=(function(){
  document.body.appendChild(ban);
  var say=function(s,c){ban.textContent=s;ban.style.background=c||'#111'};
  var store=function(){try{localStorage.setItem(RK,JSON.stringify({rid:rid,z:z}))}catch(e){}};
- var report=function(kind){post('trace run '+kind+' '+rid,{part:'run',run:{rid:rid,kind:kind,ph:z.ph,lo:z.lo,hi:z.hi,cur:z.cur?z.cur.id:'',sub:z.sub||'',res:z.res,log:z.log,verdict:z.verdict},dbg:dbgL.slice(-60),err:tel.err.slice(0,20),fetch:tel.n,env:env(),st:state()},fresh(),false)};
- var view=function(c){if(fsOn)fsLeave();KX.run(c.on);window.scrollTo(0,0);
-  try{history.replaceState(null,'',location.pathname+location.search+sc[c.view])}catch(e){}applyHash();
-  if(c.fs&&!fsOn)fsApply(true);if(!c.fs&&fsOn)fsLeave()};
- var settled=function(c){return c.view==='near'?!!(hi&&hi.on&&hi.left===0):true};
+ var report=function(kind){post('trace run '+kind+' '+rid,{part:'run',run:{rid:rid,kind:kind,inv:sc.inv?1:0,ph:z.ph,lo:z.lo,hi:z.hi,cur:z.cur?z.cur.id:'',sub:z.sub||'',res:z.res,log:z.log,verdict:z.verdict},dbg:dbgL.slice(-60),err:tel.err.slice(0,20),fetch:tel.n,env:env(),st:state()},fresh(),false)};
+ /* view(c): the step's switches, view and full screen. A step that undoes the WebView full-screen mitigation (ufs) needs
+    the Fullscreen API, and that needs a tap: the banner becomes the button (sub 'tap'). again = after the auto pass:
+    a native full screen is kept (a second tap would be needed), the CSS one is left and re-entered as before. */
+ var goHash=function(h){try{history.replaceState(null,'',location.pathname+location.search+h)}catch(e){}applyHash()};
+ var view=function(c,again){var set=kxRunSet(sc,c),keep=again&&fsOn&&fsNative;if(fsOn&&!keep)fsLeave();
+  if(!again){KX.run(set);if(sc.inv){if(typeof apCv!=='undefined'&&apCv){apCv.remove();apCv=null}goHash(sc.far)}}
+  window.scrollTo(0,0);goHash(sc[c.view]);
+  if(c.fs&&!fsOn){if(KX.on('ufs')&&!again){z.sub='tap';store();trMark('run tap: waiting for the full-screen tap');ban.style.pointerEvents='auto';say('step '+(z.log.length+1)+' · TAP THIS BAR to go on','#8a4b00');
+    ban.onclick=function(){ban.onclick=null;ban.style.pointerEvents='none';fsToggle();say('step '+(z.log.length+1)+' · loading …')}}
+   else fsApply(true)}
+  if(!c.fs&&fsOn)fsLeave()};
+ var settled=function(c){if(c.fs&&!fsOn)return false;return c.view==='near'?!!(hi&&hi.on&&hi.left===0):true};
  var finish=function(){trMark('run done: '+z.verdict);var m=/^culprit (\w+)/.exec(z.verdict);KX.run(m?[m[1]]:[]);say('diagnostic finished — thank you. You can close this page.','#0a6b3d');report('done')};
  var touch=function(){z.sub='touch';store();g={downs:0,pinch:0,ms:0,t0:0,idle:0};trMark('run touch: waiting for fingers');
   say('step '+(z.log.length+1)+' · now drag the map AND pinch it a few times'+(TOUCH?'':' (mouse: drag 3 times)'))};
  var auto=function(c){z.sub='auto';store();trMark('run auto: synthetic drag + pinch');say('step '+(z.log.length+1)+' · automatic part, hands off …');
-  synth(function(){trMark('run auto done');view(c);setTimeout(touch,1500)})};
+  synth(function(){trMark('run auto done');view(c,true);setTimeout(touch,1500)})};
  var begin=function(){var c=z.cur;if(!c){finish();return}
   z.open=1;z.away=document.visibilityState==='hidden'?1:0;z.sub='setup';g=null;store();
-  trMark('run step '+c.id+' fs='+c.fs+' view='+c.view+' on='+(c.on.join(',')||'-'));say('step '+(z.log.length+1)+' · loading …');view(c);
-  var t0=Date.now(),w=setInterval(function(){if(settled(c)||Date.now()-t0>9000){clearInterval(w);trMark('run settled '+(Date.now()-t0)+'ms hi='+(hi&&hi.on?1:0));setTimeout(function(){auto(c)},600)}},300)};
+  trMark('run step '+c.id+' fs='+c.fs+' view='+c.view+(sc.inv?' kept=':' on=')+(c.on.join(',')||'-')+(sc.inv?' kx='+(kxRunSet(sc,c).join(',')||'-'):''));say('step '+(z.log.length+1)+' · loading …');view(c);
+  var t0=Date.now(),w=setInterval(function(){if(c.fs&&!fsOn){t0=Date.now();return}if(settled(c)||Date.now()-t0>9000){clearInterval(w);trMark('run settled '+(Date.now()-t0)+'ms hi='+(hi&&hi.on?1:0));setTimeout(function(){auto(c)},600)}},300)};
  var end=function(out){g=null;z.open=0;trMark('run step '+z.cur.id+' → '+out);z=kxRunStep(sc,z,out);z.sub='';store();report('step');say('step done ✓','#0a6b3d');setTimeout(begin,1200)};
  /* real gestures: trusted pointer events on the map; enough = 3 touches, one of them with two fingers, 2.5 s of contact */
  main.addEventListener('pointerdown',function(e){if(!g||!e.isTrusted)return;act[e.pointerId]=1;var k=Object.keys(act).length;g.downs++;if(k>=2)g.pinch=1;if(k===1)g.t0=Date.now();g.idle=0},true);

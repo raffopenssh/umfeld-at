@@ -43,14 +43,17 @@ func TestGlyphRunMachine(t *testing.T) {
 		t.Fatal("KXRUN not found in ne_glyph_kx.js")
 	}
 	harness := string(src)[i:] + `
-var sc=KXRUN.touch,N=sc.bis.length,fail=0;
 function play(dies){var z=kxRunStep(sc,null),steps=0,deaths=0;while(z.ph!=='done'&&steps<60){var d=dies(z.cur);if(d)deaths++;z=kxRunStep(sc,z,d?'died':'ok');steps++}return{z:z,steps:steps,deaths:deaths}}
+var fail=0,sc,N;['touch','mit'].forEach(function(SN){sc=KXRUN[SN];N=sc.bis.length;var W=sc.inv?'cure ':'culprit ';
 for(var c=0;c<N;c++){(function(c){var name=sc.bis[c];
  var r=play(function(cur){return cur.fs===1&&cur.view==='near'&&cur.on.indexOf(name)<0});
- if(r.z.verdict!=='culprit '+name+' (alone it cures)'){fail++;console.log('culprit '+name+': '+r.z.verdict)}
+ if(r.z.verdict!==W+name+' (alone it cures)'){fail++;console.log('culprit '+name+': '+r.z.verdict)}
  if(r.steps>sc.pre.length+6||r.deaths>6){fail++;console.log('culprit '+name+': '+r.steps+' steps, '+r.deaths+' deaths')}})(c)}
 var r=play(function(){return false});if(!/^no repro/.test(r.z.verdict)){fail++;console.log('no repro: '+r.z.verdict)}
-r=play(function(cur){return cur.fs===1&&cur.view==='near'});if(!/^not a switch/.test(r.z.verdict)){fail++;console.log('not a switch: '+r.z.verdict)}
+r=play(function(cur){return cur.fs===1&&cur.view==='near'});if(!(sc.inv?/^not cured/:/^not a switch/).test(r.z.verdict)){fail++;console.log('not a switch: '+r.z.verdict)}});
+sc=KXRUN.touch;
+/* inv: a step's list = the mitigations kept, the page gets the undo switch of every other one */
+var ms=KXRUN.mit,k=kxRunSet(ms,{on:['ulive','u4']}).join(',');if(k!=='ufs,u5,u2,u1'||kxRunSet(ms,{on:ms.bis}).length||kxRunSet(KXRUN.touch,{on:['cap']}).join()!=='cap'){fail++;console.log('kxRunSet: '+k)}
 /* two switches needed together: the bisect names the later one, the confirm step says it is not alone */
 r=play(function(cur){return cur.fs===1&&cur.view==='near'&&!(cur.on.indexOf('cap')>=0&&cur.on.indexOf('pt')>=0)});if(!/^culprit pt \(not alone/.test(r.z.verdict)){fail++;console.log('pair: '+r.z.verdict)}
 var z=kxRunStep(sc,null),id=z.cur.id;z=kxRunStep(sc,z,'');if(z.cur.id!==id||z.log.length){fail++;console.log('unknown outcome must repeat the step')}

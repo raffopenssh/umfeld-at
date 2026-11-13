@@ -92,7 +92,7 @@ if runs:
     for s in runs: byrid[s['run'].get('rid')] = s['run']
     for rid, r in byrid.items():
         print('run %s  phase=%s  %s' % (rid, r.get('ph'), r.get('verdict') or ('open: ' + str(r.get('cur')) + '/' + str(r.get('sub')))))
-        for st in r.get('log') or []: print('   %-22s %-8s on=%s' % (st[0], st[2], st[1] or '-'))
+        for st in r.get('log') or []: print('   %-22s %-8s %s=%s' % (st[0], st[2], 'kept' if r.get('inv') else 'on', st[1] or '-'))
 
 if dead:
     print('\n#### %d dead session(s) — what they share (and how many of the %d that lived share it)' % (len(dead), len(lived)))

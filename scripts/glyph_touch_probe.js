@@ -57,7 +57,8 @@ function wsConnect(u){return new Promise((res,rej)=>{const m=/^ws:\/\/([^:/]+):(
    let lastSay='';for(let i=0;i<400;i++){const s=String(await ev("(function(){var z=window.neGlyphTrace&&window.neGlyphTrace.run();return z?(z.ph+'|'+(z.cur?z.cur.id:'')+'|'+(z.sub||'')+'|'+z.verdict):'?'})()"));
     if(s!==lastSay){console.log(s);lastSay=s}
     if(/^done/.test(s))break;
-    if(/\|touch\|/.test(s)){const r=await box();await pan(r);await sleep(300);await pinch(r,30,110);await sleep(300);await pinch(r,110,40);await sleep(300);await pan(r);await sleep(2400)}else await sleep(500)}
+    if(/\|tap\|/.test(s)){await T('touchStart',[[190,12]]);await sleep(60);await T('touchEnd',[]);await sleep(800)}
+    else if(/\|touch\|/.test(s)){const r=await box();await pan(r);await sleep(300);await pinch(r,30,110);await sleep(300);await pinch(r,110,40);await sleep(300);await pan(r);await sleep(2400)}else await sleep(500)}
    console.log('log',await ev("JSON.stringify(window.neGlyphTrace.run().log)"));
    if(!/^done/.test(lastSay))bad++;
   }else{
