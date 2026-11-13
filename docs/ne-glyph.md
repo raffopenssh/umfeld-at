@@ -406,6 +406,12 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   the observed view — once on entering full screen, once the moment eight `ss=2` tiles (1750×2590 each) landed
   during a pinch. Suspect, not proven: eight screen-sized blended surfaces. Cost: the pale seam hairline is
   back on Android. The trace's first row says `paint lite=0|1`; `?add` on the phone is the A/B.
+  **Second round (2026-11-13, same day):** the freeze stayed — the reader's Android browser is WebView-based and
+  hung WHOLE (the app had to be killed; again no `trace hang`) when the trees came on at street level in native
+  full screen. Unproven suspects, all switched off under `figure.pl`: every `backdrop-filter` (the height scale
+  `.glyph-ts` appears with the trees and was the one glass pane left in full screen), CSS `filter` inside the SVG,
+  `will-change` on the crown canvas, the tree sheet's group opacity (now on its pictures), and the crown canvas is
+  a software 2D context (`willReadFrequently`) capped at 2 MP. If it holds, re-add one at a time behind `?add`.
 - **One raster per batch** (`hiCommit`/`hiFlush`, `hi.cq` + `hi.cq2`): a landed, decoded tile waits and the whole
   batch joins the SVG on one timer (400 ms while `lf.on`, 120 ms else); readout/legend/`fltCardFix` once per batch;
   `.hi.ld` turns the per-image fade off while heavy. Relief squares go through the same batch (`cq2`, not counted in
@@ -479,6 +485,12 @@ a **carry-over**: once a second the rows go to localStorage `neg-trace`, a hidde
 left at the next `?trace` load is the session that died, sent as `trace prev` (`part=prev`, `died_s_ago`). A hang
 record = script on the main thread; only a `prev` record = the whole renderer/GPU went. Rows also log
 `fullscreenchange`, `resize WxH vv=`, `popstate` and `fsFit xN/s` (more than 3 refits a second = a resize loop).
+
+The carry-over is written once a second **always** (it is the heartbeat: `alive_s` = the main thread's last tick,
+`last_raf_s` = the last animation frame, both on the `prev` record — alive running on while raf stands still =
+compositor/GPU hung; both stopping together = the whole renderer or the host app) and **at once** after every
+tap and every `trMark(s)` row (`trees on`, `trees draw start n= canvas=`, `trees canvas done`, `trees scale done`,
+`trees marks done`, `trees frame after draw` — the last row present names the step that never returned).
 
 The trace also carries `stall Nms` rows (the 120 ms sampler fired late = main thread busy), `longtask Nms`
 (PerformanceObserver), and every `pointerdown`/`click` with the element hit (`button.glyph-mn`, `svg` = the icon
