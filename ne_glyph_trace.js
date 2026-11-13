@@ -6,7 +6,7 @@
            reopened on the same link and carries on with the next step.
    Spliced into neGlyphScript; reads the page's state, changes it only through fsApply/fsLeave/applyHash/KX.run. */
 if(TRACE){(function(){
-var T0=Date.now(),SID=Math.random().toString(36).slice(2,8),FB='/api/v1/feedback?trace=1',LSK='neg-trace',
+var T0=Date.now(),SID=Math.random().toString(36).slice(2,8),FB='/api/v1/feedback?trace=1',LSK='neg-trace'+(function(){var m=/[?&]run=([a-z]+)/.exec(location.search),r=/[?&]r=([^&#]*)/.exec(location.search);return m?':'+m[1]+(r?r[1]:''):''})(),
  rows=[],wq=[],cnt=0,sentCnt=0,part=0,n=0,last='',rafT=0,wd=null,RUN=null,GPU='';
 var tNow=function(){return Math.round((Date.now()-T0)/10)/100};
 var P=function(x){rows.push(x);wq.push(x);cnt++;if(rows.length>500)rows.shift()};
@@ -121,7 +121,7 @@ var synth=function(done){var b=svg.getBoundingClientRect(),cx=b.left+b.width/2,c
 /* ── run driver ── */
 var rm=/[?&]run=([a-z]+)/.exec(location.search);
 if(rm&&KXRUN[rm[1]]){RUN=(function(){
- var sc=KXRUN[rm[1]],RK='neg-run',rid=rm[1]+':'+((/[?&]r=([^&#]*)/.exec(location.search)||[])[1]||''),z=null,g=null,act={},TOUCH=(navigator.maxTouchPoints||0)>0,
+ var sc=KXRUN[rm[1]],RK='neg-run',rid=rm[1]+':'+((/[?&]r=([^&#]*)/.exec(location.search)||[])[1]||''),z=null,g=null,back=0,act={},TOUCH=(navigator.maxTouchPoints||0)>0,
   ban=document.createElement('div');
  ban.style.cssText='position:fixed;top:0;left:0;right:0;z-index:200;font:13px/1.35 system-ui,sans-serif;background:#111;color:#fff;padding:calc(5px + env(safe-area-inset-top)) 10px 5px;text-align:center;pointer-events:none';
  document.body.appendChild(ban);
@@ -134,7 +134,7 @@ if(rm&&KXRUN[rm[1]]){RUN=(function(){
  var goHash=function(h){try{history.replaceState(null,'',location.pathname+location.search+h)}catch(e){}applyHash()};
  var view=function(c,again){var set=kxRunSet(sc,c),keep=again&&fsOn&&fsNative;if(fsOn&&!keep)fsLeave();
   if(!again){KX.run(set);if(sc.inv){if(typeof apCv!=='undefined'&&apCv){apCv.remove();apCv=null}goHash(sc.far)}}
-  window.scrollTo(0,0);goHash(sc[c.view]);
+  window.scrollTo(0,0);goHash(sc[c.view]+(keep?';screen':''));
   if(c.fs&&!fsOn){if(KX.on('ufs')&&!again){z.sub='tap';store();trMark('run tap: waiting for the full-screen tap');ban.style.pointerEvents='auto';say('step '+(z.log.length+1)+' · TAP THIS BAR to go on','#8a4b00');
     ban.onclick=function(){ban.onclick=null;ban.style.pointerEvents='none';fsToggle();say('step '+(z.log.length+1)+' · loading …')}}
    else fsApply(true)}
@@ -142,19 +142,19 @@ if(rm&&KXRUN[rm[1]]){RUN=(function(){
  var settled=function(c){if(c.fs&&!fsOn)return false;return c.view==='near'?!!(hi&&hi.on&&hi.left===0):true};
  var finish=function(){trMark('run done: '+z.verdict);var m=/^culprit (\w+)/.exec(z.verdict);KX.run(m?[m[1]]:[]);say('diagnostic finished — thank you. You can close this page.','#0a6b3d');report('done')};
  var touch=function(){z.sub='touch';store();g={downs:0,pinch:0,ms:0,t0:0,idle:0};trMark('run touch: waiting for fingers');
-  say('step '+(z.log.length+1)+' · now drag the map AND pinch it a few times'+(TOUCH?'':' (mouse: drag 3 times)'))};
+  say('step '+(z.log.length+1)+' · now drag the map AND pinch it a few times'+(TOUCH?' — a freeze is an expected result: close the browser, open this link again':' (mouse: drag 3 times)'))};
  var auto=function(c){z.sub='auto';store();trMark('run auto: synthetic drag + pinch');say('step '+(z.log.length+1)+' · automatic part, hands off …');
   synth(function(){trMark('run auto done');view(c,true);setTimeout(touch,1500)})};
  var begin=function(){var c=z.cur;if(!c){finish();return}
   z.open=1;z.away=document.visibilityState==='hidden'?1:0;z.sub='setup';g=null;store();
-  trMark('run step '+c.id+' fs='+c.fs+' view='+c.view+(sc.inv?' kept=':' on=')+(c.on.join(',')||'-')+(sc.inv?' kx='+(kxRunSet(sc,c).join(',')||'-'):''));say('step '+(z.log.length+1)+' · loading …');view(c);
+  trMark('run step '+c.id+' fs='+c.fs+' view='+c.view+(sc.inv?' kept=':' on=')+(c.on.join(',')||'-')+(sc.inv?' kx='+(kxRunSet(sc,c).join(',')||'-'):''));say((back?'back after a freeze ✓ noted · ':'')+'step '+(z.log.length+1)+' · loading …');back=0;view(c);
   var t0=Date.now(),w=setInterval(function(){if(c.fs&&!fsOn){t0=Date.now();return}if(settled(c)||Date.now()-t0>9000){clearInterval(w);trMark('run settled '+(Date.now()-t0)+'ms hi='+(hi&&hi.on?1:0));setTimeout(function(){auto(c)},600)}},300)};
  var end=function(out){g=null;z.open=0;trMark('run step '+z.cur.id+' → '+out);z=kxRunStep(sc,z,out);z.sub='';store();report('step');say('step done ✓','#0a6b3d');setTimeout(begin,1200)};
  /* real gestures: trusted pointer events on the map; enough = 3 touches, one of them with two fingers, 2.5 s of contact */
  main.addEventListener('pointerdown',function(e){if(!g||!e.isTrusted)return;act[e.pointerId]=1;var k=Object.keys(act).length;g.downs++;if(k>=2)g.pinch=1;if(k===1)g.t0=Date.now();g.idle=0},true);
  ['pointerup','pointercancel'].forEach(function(t){window.addEventListener(t,function(e){if(!e.isTrusted||!act[e.pointerId])return;delete act[e.pointerId];if(g&&!Object.keys(act).length){g.ms+=Date.now()-g.t0;g.idle=Date.now()}},true)});
  try{var j=JSON.parse(localStorage.getItem(RK)||'null');if(j&&j.rid===rid)z=j.z}catch(e){}
- if(z&&z.cur&&z.open){var out=z.away?'':'died';P('0 run resume: step '+z.cur.id+' sub='+(z.sub||'')+' was open → '+(out||'unknown (the page was in the background), repeating'));z.open=0;z=kxRunStep(sc,z,out);z.sub='';store();setTimeout(function(){report('resume')},1500)}
+ if(z&&z.cur&&z.open){var out=z.away?'':'died';P('0 run resume: step '+z.cur.id+' sub='+(z.sub||'')+' was open → '+(out||'unknown (the page was in the background), repeating'));z.open=0;back=out?1:0;z=kxRunStep(sc,z,out);z.sub='';store();setTimeout(function(){report('resume')},1500)}
  else if(!z){z=kxRunStep(sc,null);P('0 run start '+rid)}
  setTimeout(begin,2500);
  return{where:function(){return z.cur?z.cur.id+'/'+(z.sub||''):z.ph},

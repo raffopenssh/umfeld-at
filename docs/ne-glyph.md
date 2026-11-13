@@ -582,7 +582,19 @@ shipped), `fs-near-raw` (all undone = the build that froze). Verdicts: `no repro
 mitigation is needed` → remove them all (the freeze went with something else, e.g. a WebView update);
 `cure X (alone it cures)` → keep X, remove the rest; `cure X (not alone …)` → run again with X pinned
 (`?kx=` cannot pin a kept mitigation — reorder `bis`); `not cured: fs-near-kept died` → back to `?run=touch`.
-At most 1 + 3 + 1 deaths. Open: the verdict of `/?run=mit&r=<new>` on the phone.
+At most 1 + 3 + 1 deaths.
+
+`?run=mit&r=21` on the phone (08:17 UTC, 13th): `fs-near-kept` ok, **`fs-near-raw` died@touch** — the freeze is
+back the moment the mitigations are undone, so it is ours and at least one of the six is a cure; the reporter
+stopped there (a freeze read as "the test broke"), the bisect is open at `bisect-3`. Three run bugs it showed,
+fixed: (1) after the synthetic pass a kept native full screen was dropped — the step's hash has no `;screen`,
+`applyHash` toggled it off — so the fingers of that step met the **inline** map, fresh out of native full screen
+(`fullscreenchange el=0` 3 s before the death; the step's death therefore does not say whether the page must
+still be *in* native full screen); `view()` now appends `;screen` when it keeps it. (2) the carry-over key was
+shared by every `?trace` tab: a second tab restored by the app claimed the first one's rows as a death (`DIED
+… reopened 0s later`, `vis=hidden`) — the key is per run now (`neg-trace:<scenario><r>`). (3) the bar now says
+that a freeze is an expected result and what to do; after a booked death it opens with *back after a freeze ✓*.
+Open: the verdict of r=21 (reopen the same link) or of a new `r=`.
 
 ## Phone load triage — `?trace` field recorder + emulated screencast
 
@@ -607,7 +619,7 @@ curl -s -H "Authorization: Bearer $T" "localhost:8000$P/api/v1/feedback?agent=gl
 two more ways out: a **watchdog Worker** that gets every row as it is written plus a heartbeat — main thread
 silent ≥ 3 s with the tab in front → the Worker posts the record itself (title `trace hang`, `context.part=hang`,
 `silent_ms`, last row `HANG: …`; a later `main thread back after Nms` row if it recovered; ≤ 3 per session) — and
-a **carry-over**: once a second the rows go to localStorage `neg-trace`, a hidden tab clears it, and whatever is
+a **carry-over**: once a second the rows go to localStorage `neg-trace` (`neg-trace:<scenario><r>` in a run — tabs must not claim each other's), a hidden tab clears it, and whatever is
 left at the next `?trace` load is the session that died, sent as `trace prev` (`part=prev`, `died_s_ago`). A hang
 record = script on the main thread; only a `prev` record = the whole renderer/GPU went. Rows also log
 `fullscreenchange`, `resize WxH vv=`, `popstate` and `fsFit xN/s` (more than 3 refits a second = a resize loop).

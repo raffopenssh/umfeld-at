@@ -54,13 +54,13 @@ function wsConnect(u){return new Promise((res,rej)=>{const m=/^ws:\/\/([^:/]+):(
   const pan=async r=>{await T('touchStart',[[r.x,r.y]]);for(let i=1;i<=24;i++){await T('touchMove',[[r.x-i*3,r.y+i*3]]);await sleep(16)}await T('touchEnd',[])};
   const pinch=async(r,a,b)=>{await T('touchStart',[[r.x-a,r.y]]);await T('touchStart',[[r.x-a,r.y],[r.x+a,r.y]]);for(let i=1;i<=30;i++){const d=a+(b-a)*i/30;await T('touchMove',[[r.x-d,r.y],[r.x+d,r.y+i/2]]);await sleep(16)}await T('touchEnd',[])};
   if(mode==='run'){
-   let lastSay='';for(let i=0;i<400;i++){const s=String(await ev("(function(){var z=window.neGlyphTrace&&window.neGlyphTrace.run();return z?(z.ph+'|'+(z.cur?z.cur.id:'')+'|'+(z.sub||'')+'|'+z.verdict):'?'})()"));
+   let lastSay='';for(let i=0;i<(+process.env.PROBE_N||400);i++){const s=String(await ev("(function(){var z=window.neGlyphTrace&&window.neGlyphTrace.run();return z?(z.ph+'|'+(z.cur?z.cur.id:'')+'|'+(z.sub||'')+'|'+z.verdict):'?'})()"));
     if(s!==lastSay){console.log(s);lastSay=s}
     if(/^done/.test(s))break;
     if(/\|tap\|/.test(s)){await T('touchStart',[[190,12]]);await sleep(60);await T('touchEnd',[]);await sleep(800)}
     else if(/\|touch\|/.test(s)){const r=await box();await pan(r);await sleep(300);await pinch(r,30,110);await sleep(300);await pinch(r,110,40);await sleep(300);await pan(r);await sleep(2400)}else await sleep(500)}
    console.log('log',await ev("JSON.stringify(window.neGlyphTrace.run().log)"));
-   if(!/^done/.test(lastSay))bad++;
+   if(!/^done/.test(lastSay)){bad++;console.log('stuck: fs='+await ev("String(!!document.fullscreenElement)+' vis='+document.visibilityState+' focus='+document.hasFocus()"));await alive('raf');console.log('stuck — last rows:\n'+await ev("window.neGlyphTrace.rows.filter(function(x){return!/ \\| | c[+-] |move1/.test(x)}).slice(-25).join('\\n')"))}
   }else{
    await sleep(6000);console.log('state',await ev("JSON.stringify({fig:document.querySelector('figure.glyph').className,imgs:document.querySelectorAll('svg.glyph .hi image').length})"));
    const r=await box();
