@@ -464,6 +464,15 @@ them 24 h after arrival (at start, then hourly; Datenschutz 2.3). They are serve
 curl -s -H "Authorization: Bearer $T" "localhost:8000$P/api/v1/feedback?agent=glyph-trace" | python3 -c "import sys,json;fb=sorted(json.load(sys.stdin)['feedback'],key=lambda f:f['created_at']);c=fb[-1]['context'];print(fb[-1]['created_at'],c['ua']);print('\n'.join(c['rows']));print('\n'.join(c['dbg']));print(c['err'])"
 ```
 
+**A freeze before the first 45 s** (or one that never ends) cannot send through the timer, so the recorder has
+two more ways out: a **watchdog Worker** that gets every row as it is written plus a heartbeat — main thread
+silent ≥ 3 s with the tab in front → the Worker posts the record itself (title `trace hang`, `context.part=hang`,
+`silent_ms`, last row `HANG: …`; a later `main thread back after Nms` row if it recovered; ≤ 3 per session) — and
+a **carry-over**: once a second the rows go to localStorage `neg-trace`, a hidden tab clears it, and whatever is
+left at the next `?trace` load is the session that died, sent as `trace prev` (`part=prev`, `died_s_ago`). A hang
+record = script on the main thread; only a `prev` record = the whole renderer/GPU went. Rows also log
+`fullscreenchange`, `resize WxH vv=`, `popstate` and `fsFit xN/s` (more than 3 refits a second = a resize loop).
+
 The trace also carries `stall Nms` rows (the 120 ms sampler fired late = main thread busy), `longtask Nms`
 (PerformanceObserver), and every `pointerdown`/`click` with the element hit (`button.glyph-mn`, `svg` = the icon
 inside a button, `button.glyph-x`…), coordinates and the card's classes; `dbg` has `chevron: fold|unfold` when the
