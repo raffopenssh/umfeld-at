@@ -399,6 +399,13 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   (`hiCull`), and `hiEvict` drops stale-`ds` variants first. Relief / photo squares: `mtFit` steps the Web-Mercator
   zoom coarser until the squares that touch the view fit `RL_TILES` (48) / `OT_TILES` (64) instead of cutting
   nearest-first.
+- **Paint lite** (`LITE` = `(hover:none)` or `?lite`, off with `?add`; `figure.pl`): on touch devices the tile
+  pictures are NOT added up (`mix-blend-mode:plus-lighter` + an isolated group per LOD, the Blink seam fix of
+  2026-11-12) and base/obs tiles are not supersampled (`hiSS` → 1, no `ss=2`). Reason: Android Chrome froze
+  whole (no `trace hang` from the watchdog, only a `trace prev` = renderer/GPU, not script) at street level in
+  the observed view — once on entering full screen, once the moment eight `ss=2` tiles (1750×2590 each) landed
+  during a pinch. Suspect, not proven: eight screen-sized blended surfaces. Cost: the pale seam hairline is
+  back on Android. The trace's first row says `paint lite=0|1`; `?add` on the phone is the A/B.
 - **One raster per batch** (`hiCommit`/`hiFlush`, `hi.cq` + `hi.cq2`): a landed, decoded tile waits and the whole
   batch joins the SVG on one timer (400 ms while `lf.on`, 120 ms else); readout/legend/`fltCardFix` once per batch;
   `.hi.ld` turns the per-image fade off while heavy. Relief squares go through the same batch (`cq2`, not counted in
