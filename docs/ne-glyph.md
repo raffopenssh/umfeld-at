@@ -412,6 +412,11 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   `.glyph-ts` appears with the trees and was the one glass pane left in full screen), CSS `filter` inside the SVG,
   `will-change` on the crown canvas, the tree sheet's group opacity (now on its pictures), and the crown canvas is
   a software 2D context (`willReadFrequently`) capped at 2 MP. If it holds, re-add one at a time behind `?add`.
+  **Third round — the trace named it:** `prev` record ends `fullscreenchange` → 0.8 s → `pointerdown image`,
+  `alive_s` = `last_raf_s` = that tap: the first touch on the map after the **Fullscreen API** in an Android
+  WebView browser kills the host app (trees were never involved). `WV` (Android and `; wv)` in the UA, or
+  `userAgentData` brands naming WebView, or no brands at all; `?nofs` forces it, `?fs` lifts it) → `fsEnter` skips
+  `requestFullscreen` and uses the CSS full screen (the iPhone path). Trace row 0: `paint lite= wv= brands=`.
 - **One raster per batch** (`hiCommit`/`hiFlush`, `hi.cq` + `hi.cq2`): a landed, decoded tile waits and the whole
   batch joins the SVG on one timer (400 ms while `lf.on`, 120 ms else); readout/legend/`fltCardFix` once per batch;
   `.hi.ld` turns the per-image fade off while heavy. Relief squares go through the same batch (`cq2`, not counted in
