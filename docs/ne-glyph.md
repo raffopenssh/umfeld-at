@@ -418,6 +418,11 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   Edge, Brave, Opera, Samsung Internet, Vivaldi, YaBrowser) — the reader's browser reports `Chromium,DuckDuckGo`,
   no `wv` anywhere; confirmed by the reload after the kill: same view, CSS full screen, trees on, no freeze; `?nofs` forces it, `?fs` lifts it) → `fsEnter` skips
   `requestFullscreen` and uses the CSS full screen (the iPhone path). Trace row 0: `paint lite= wv= brands=`.
+  **Fourth round:** with `wv=1` (CSS full screen) it froze all the same — the kill comes with the pinch/drag
+  (at `pointerdown`, or at the commit after the live transform), so the Fullscreen API was not it either (the `WV`
+  rule stays; harmless). Suspect now: `clip-path:inset()` on the tile pictures (2026-11-11 20:09/20:33, the evening
+  before the first freeze): a clipped picture inside a composited layer = a mask surface as large as the picture
+  on screen. `LITE` → `hiTile` sets no clip and the pictures do not fade in. Cost: the tone band along tile seams.
 - **One raster per batch** (`hiCommit`/`hiFlush`, `hi.cq` + `hi.cq2`): a landed, decoded tile waits and the whole
   batch joins the SVG on one timer (400 ms while `lf.on`, 120 ms else); readout/legend/`fltCardFix` once per batch;
   `.hi.ld` turns the per-image fade off while heavy. Relief squares go through the same batch (`cq2`, not counted in
