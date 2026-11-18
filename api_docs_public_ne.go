@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -703,7 +704,25 @@ const (
 	neCoverageTTL        = 30 * time.Minute
 	neCoverageKeepEvery  = time.Minute
 	neCoverageMinRefresh = 5 * time.Minute
+	// Nobody looking (no landing page / glyph / docs read for
+	// neCoverageWatchWindow): a change waits up to neCoverageIdleRefresh.
+	// A peer's nightly report run otherwise re-walked the report files
+	// (~35 s of one core) every 5 min for hours with no reader (2026-11-18).
+	// The first reader after a quiet spell gets the stale value at once and
+	// the fresh one within neCoverageKeepEvery + one walk.
+	neCoverageIdleRefresh = time.Hour
+	neCoverageWatchWindow = 15 * time.Minute
 )
+
+var neCoverageReadAt atomic.Int64 // unix seconds of the last request-side read
+
+// neCoverageRefreshGap — how far apart the keeper's recomputes must be now.
+func neCoverageRefreshGap() time.Duration {
+	if time.Since(time.Unix(neCoverageReadAt.Load(), 0)) < neCoverageWatchWindow {
+		return neCoverageMinRefresh
+	}
+	return neCoverageIdleRefresh
+}
 
 // neObsDay — observed-layer (satellite / LiDAR, {OBS_NAME}) KGs whose
 // current layer was built on a UTC day, with their cells. Keyed by the
@@ -713,6 +732,9 @@ type neObsDay struct {
 }
 
 func neCoverageStats(force bool) map[string]interface{} {
+	if !force {
+		neCoverageReadAt.Store(time.Now().Unix()) // only requests read unforced; the keeper forces
+	}
 	return StatsMemo("ne_coverage", neCoverageTTL, force, func() map[string]interface{} {
 		t0 := time.Now()
 		defer func() {
@@ -810,7 +832,7 @@ func neCoverageKeepFresh() {
 			StatsMemoTouch("ne_coverage")
 			continue
 		}
-		if time.Since(lastFull) < neCoverageMinRefresh {
+		if time.Since(lastFull) < neCoverageRefreshGap() {
 			StatsMemoTouch("ne_coverage")
 			continue
 		}

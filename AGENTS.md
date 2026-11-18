@@ -173,6 +173,7 @@ Cross-cutting
 | Land prices (Gemeinde/Bezirk/Bundesland, predict from caller features) | `docs/land-prices.md` | `land_prices.go`, `land_prices_aggregate.go` |
 | RIS law refs per KG code | `docs/legal-ris.md` | `api_legal_refs.go` |
 | **Restart / deploy** (socket unit, drain, readiness, watchdog, start-up budget, rollback) | `docs/restart.md` | `startup.go`, `main.go`, `umfeld-at.service`, `umfeld-at.socket`, `scripts/deploy.sh` |
+| **Idle budget** (background loops, what each may cost when nothing changed, CPU-bump triage) | `docs/idle.md` | `ne_obs_complete.go`, `api_ne_reports.go` (`neScanReportFiles`), `api_docs_public_ne.go` (`neCoverageKeepFresh`), `ne_mvt_nat.go`, `kg_universe.go` |
 | KG code padding | `docs/kg-codes.md` | `kg_code.go` |
 | Latency / payload rules | `docs/latency-contract.md`, `docs/payload-caching-contract.md` | `api.go`, `api_compress.go`, `debug_pprof.go` |
 

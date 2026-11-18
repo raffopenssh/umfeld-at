@@ -370,11 +370,70 @@ func InitKGUniverse() {
 // 20 min keeps that counter honest at ~6 MB/h.
 const kgUniversePeerRecheck = 20 * time.Minute
 
+// kgUniversePeerFull — the last full list fetch (loop goroutine only).
+var kgUniversePeerFull struct {
+	pc *kgUniversePeerCheck
+	ne *peerNEState
+	at time.Time
+}
+
+// kgUniversePeerFullEvery — a full list fetch at least this often, whatever the probe says.
+const kgUniversePeerFullEvery = 6 * time.Hour
+
+// kgUniversePeerQuick — the 20 min recheck as a one-row probe (~1 kB instead
+// of the whole list, 0.8 MB gz / 4 MB of JSON to decode): the peer's
+// envelope carries universe_hash, total, kgs_ne_served and cells_generation.
+// While all four equal the last full fetch, that fetch's verdict and ne_ready
+// set stand and only the timestamps + manifest_generation move. nil = do the
+// full fetch (no previous one, it is older than kgUniversePeerFullEvery, the
+// probe failed, or anything moved).
+func kgUniversePeerQuick(ctx context.Context) *kgUniversePeerCheck {
+	last, ne := kgUniversePeerFull.pc, kgUniversePeerFull.ne
+	if last == nil || ne == nil || !last.Reachable || !ne.Reachable || time.Since(kgUniversePeerFull.at) > kgUniversePeerFullEvery {
+		return nil
+	}
+	req, _ := http.NewRequestWithContext(ctx, "GET", peers().ObsAPI+"/api/v1/kgs?processed_only=0&limit=1&offset=0", nil)
+	req.Header.Set("User-Agent", "umfeld-at/kg-universe-check")
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	if err != nil {
+		return nil
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	resp.Body.Close()
+	if err != nil || resp.StatusCode != 200 {
+		return nil
+	}
+	var doc struct {
+		Total        int    `json:"total"`
+		NEServed     int    `json:"kgs_ne_served"`
+		UniverseHash string `json:"universe_hash"`
+		CellsGen     string `json:"cells_generation"`
+		ManifestGen  string `json:"manifest_generation"`
+	}
+	if json.Unmarshal(body, &doc) != nil || doc.UniverseHash == "" || doc.CellsGen == "" {
+		return nil
+	}
+	if doc.UniverseHash != last.PeerHash || doc.Total != last.PeerKGCount || doc.NEServed != ne.ServedReported || doc.CellsGen != ne.CellsGen {
+		return nil
+	}
+	now := time.Now().UTC()
+	n := *ne
+	n.CheckedAt, n.ManifestGen = now, doc.ManifestGen
+	setPeerNEState(&n)
+	pc := *last
+	pc.CheckedAt = now.Format(time.RFC3339)
+	return &pc
+}
+
 func kgUniversePeerLoop(u *kgUniverse) {
 	time.Sleep(45 * time.Second)
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-		pc := CheckKGUniversePeer(ctx, u)
+		pc := kgUniversePeerQuick(ctx)
+		if pc == nil {
+			pc = CheckKGUniversePeer(ctx, u)
+			kgUniversePeerFull.pc, kgUniversePeerFull.ne, kgUniversePeerFull.at = pc, PeerNEState(), time.Now()
+		}
 		cancel()
 		kgUniverseMu.RLock()
 		prev := kgUniverseLive

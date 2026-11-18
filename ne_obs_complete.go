@@ -84,11 +84,11 @@ func neObsCompareKG(kg string) *neObsCompleteRow {
 	if e.Obs == nil {
 		return nil
 	}
-	v := neDeclViewOf(kg)
-	if v == nil {
-		return nil
-	}
-	ident := v.Identity + "/" + e.Obs.Digest + "/" + e.Obs.Coverage
+	// Memo check BEFORE the view: the identity is neDeclaredDigest (in-memory
+	// header digests + one stat of the chunk log), the view itself is a full
+	// decompress + merge of the KG. Building 7 850 views every pass to learn
+	// that nothing moved cost ~4 min at 1.7 cores, every 3 h (2026-11-18).
+	ident := neDeclaredDigest(k, true) + "/" + e.Obs.Digest + "/" + e.Obs.Coverage
 	neObsComplete.mu.Lock()
 	prev := neObsComplete.rows[kg]
 	if prev != nil && prev.identity == ident {
@@ -96,6 +96,11 @@ func neObsCompareKG(kg string) *neObsCompleteRow {
 		return prev
 	}
 	neObsComplete.mu.Unlock()
+	v := neDeclViewOf(kg)
+	if v == nil {
+		return nil
+	}
+	ident = v.Identity + "/" + e.Obs.Digest + "/" + e.Obs.Coverage
 	// counts_at: a recount inside this process is "now"; the FIRST count after a start is not a
 	// recount — it is dated by its inputs (obs post, chunk log), else every restart stamped all
 	// 7 850 KGs "now" and each ?since= delta of the next quarter hour carried the whole manifest

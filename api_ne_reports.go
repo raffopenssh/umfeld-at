@@ -933,7 +933,11 @@ func neReportKGStats() map[string]neKGReportStat {
 	return neReportsScanMemo.kgs
 }
 
-// neScanReportFiles walks data/ne_cells/*.reports.jsonl — memoised 10 min, or until the next append (≥ 5 s apart).
+// neScanReportFiles walks data/ne_cells/*.reports.jsonl (1 GB of JSON, ~40 s of
+// one core) — memoised until the next append (rescans ≥ 5 s apart) or the UTC
+// day turns (`daily` runs to today). No age expiry: this process is the only
+// writer of the files and every append sets dirty, so an untouched memo is
+// exact; the former 10 min expiry made each hourly peer poll a full walk.
 func neScanReportFiles() map[string]interface{} {
 	neReportsScanMemo.Lock()
 	defer neReportsScanMemo.Unlock()
@@ -942,7 +946,8 @@ func neScanReportFiles() map[string]interface{} {
 	// ops/landing read into a full walk).
 	if m := &neReportsScanMemo; m.data != nil && m.dir == neDir {
 		age := time.Since(m.at)
-		if age < 10*time.Minute && (!m.dirty || age < 5*time.Second) {
+		sameDay := m.at.UTC().Format("2006-01-02") == time.Now().UTC().Format("2006-01-02")
+		if (!m.dirty && sameDay) || age < 5*time.Second {
 			return m.data
 		}
 	}

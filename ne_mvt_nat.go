@@ -15,8 +15,8 @@
 // bins supply them. The TileJSON says so per field.
 //
 // Rebuild: at start when the file is missing, then whenever the store state
-// (neGlyphTileState over all KGs) differs from the table's AND the table is
-// older than neNatMinAge, checked hourly; one builder at a time; progress
+// (neGlyphTileState over all KGs) differs from the table's — or a peer's
+// national sample moved — AND the table is older than neNatMinAge, checked hourly; one builder at a time; progress
 // on /ne/mvt/status (`national`) and the inflight page (`ne_mvt.national`).
 package main
 
@@ -138,13 +138,26 @@ func neNatStart() {
 	})
 }
 
+// neNatPeersPending — a peer sample moved and no build has folded it in yet.
+var neNatPeersPending atomic.Bool
+
 func neNatMaybeBuild() {
 	cur := neNatGet()
 	// the peers' national samples: conditional GETs, a few bytes while their epochs stand
-	peersMoved := neSampPeersCheck()
-	if cur != nil && neSampGet() != nil && !peersMoved && (time.Since(cur.Built) < neNatMinAge || cur.State == neNatState()) {
-		return
+	if neSampPeersCheck() {
+		neNatPeersPending.Store(true)
 	}
+	if cur != nil && neSampGet() != nil {
+		// One 10-minute pass per neNatMinAge at most — for a moved store AND a
+		// moved peer sample (a peer epoch used to rebuild at once, an hour
+		// after the store-driven pass: two passes back to back, 2026-11-18).
+		// The fetched sample waits on disk; a restart in between forgets the
+		// flag and the next store-driven pass folds it in.
+		if time.Since(cur.Built) < neNatMinAge || (!neNatPeersPending.Load() && cur.State == neNatState()) {
+			return
+		}
+	}
+	neNatPeersPending.Store(false)
 	neNatBuild()
 }
 
