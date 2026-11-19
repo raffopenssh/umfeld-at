@@ -515,7 +515,7 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     lon/lat and read peek() — then /ne/glyph/cell?lon=&lat= gives lu[] and pic_obs for the same cell.
   8 Bar chart "Declared layer digested by peers" (figures /ne/stats change.by_day/qc_by_day + /ne coverage; sources
     per report /ne/manifest): one bar per day, fixed window, height = km² of res-10 chunks (~1.5 ha) peers re-digested
-    that day, stacked by pass band (1st sight, 2nd, 3rd+ …; hatch fills); flagged days = unusual.
+    that day, stacked by pass band (1st sight, 2nd, 3rd+ …; one ramp, pale = first sight, dark = deepest); flagged days = unusual.
   9 Bar tooltip (hover floats above the bar, docks below on touch/narrow; click/Enter pins, ←/→ walk days, Esc
     releases; <title> text without script): weekday · date · rank chip · DECLARED: km² · KGs · reports · digest shape
     (whole-KG ≈ 1× KG area vs viewport burst ≪) · pass mix as a mini stacked bar · comparable share · that day's change
@@ -930,8 +930,9 @@ func neFmtChange(chunks int) string {
 
 // neContribChartSVG — stacked daily bars, one segment per pass band
 // (1st · 2nd · 3rd–4th · 5th–9th · 10th+ observation of a chunk), deepest pass
-// at the bottom. Bands differ by tint and by an overlaid hatch pattern so they
-// stay apart in greyscale print and in dark mode. cw = column width (viewBox).
+// at the bottom. Bands are ONE sequential ramp (lilac → purple → indigo → navy, lightness
+// strictly falling, so it survives greyscale); no textures — at a year of
+// passes most of a bar is deep, and hatches there read as noise. cw = column width (viewBox).
 func neContribChartSVG(daily []neDayStat) string {
 	const W, H, top, bottom, left = 840.0, 176.0, 18.0, 50.0, 0.0
 	n := len(daily)
@@ -944,22 +945,13 @@ func neContribChartSVG(daily []neDayStat) string {
 	}
 	plotH := H - top - bottom
 	y := func(chunks int) float64 { return plotH * float64(chunks) / float64(maxC) }
-	// segment: solid tint + optional hatch overlay for the deeper bands
+	// segment: one solid step of the ramp
 	seg := func(b *strings.Builder, band int, x, yy, w, h float64) {
 		fmt.Fprintf(b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="seg p%d"/>`, x, yy, w, h, band)
-		if band >= 2 && h >= 2 { // a hatch under 2 units is invisible: save the bytes
-			fmt.Fprintf(b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="url(#ne-h%d)"/>`, x, yy, w, h, band)
-		}
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, `<svg class="contrib" viewBox="0 0 %.0f %.0f" role="img" aria-label="declared-layer area digested by peers per day, last %d days, by digest pass" xmlns="http://www.w3.org/2000/svg">`, W, H, n)
-	// hatch patterns: 3rd–4th diagonal, 5th–9th cross, 10th+ dots — strokes in
-	// the page background so they read as texture, not as a second colour.
-	b.WriteString(`<defs>` +
-		`<pattern id="ne-h2" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" class="hatch"/></pattern>` +
-		`<pattern id="ne-h3" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" class="hatch"/><line x1="0" y1="0" x2="5" y2="0" class="hatch"/></pattern>` +
-		`<pattern id="ne-h4" patternUnits="userSpaceOnUse" width="4" height="4"><circle cx="2" cy="2" r=".9" class="dot"/></pattern>` +
-		`</defs>`)
+	b.WriteString(`<defs></defs>`) // the script's clip path goes here
 	fmt.Fprintf(&b, `<line x1="0" y1="%.1f" x2="%.0f" y2="%.1f" class="axis"/>`, H-bottom, W, H-bottom)
 	// unit switch: the y label itself ("12 859 km² / day week month"), top
 	// left; pan arrows ‹ › at the plot's left / right edge, mid-height. Script-only (hidden otherwise): the server draws
@@ -1061,25 +1053,46 @@ func neContribChartSVG(daily []neDayStat) string {
 		}
 	}
 	b.WriteString(`</g>`)
-	// legend: one swatch per pass band, right-aligned under the x labels
+	// legend, right-aligned under the x labels: one swatch per pass band THAT
+	// CAN BE SEEN IN THE WINDOW (≥ 1 unit tall in some bar) (a band nobody reached yet, or one long gone from the
+	// visible days, is not listed); the flag key only when a day is flagged.
+	// Every item is drawn — absent ones carry .off — so the script re-lays
+	// the row out as the window pans / re-buckets (legend() in the script),
+	// and a hover / tap on an item isolates its band in the bars.
 	{
 		const sw, gap, ly = 11.0, 12.0, H - 11
-		// measure from the right: label ≈ 6.4 px per char at 11px mono
-		x := W - 4
+		var have [nePassBandN]bool
+		flagged := false
+		for i, d := range daily {
+			for band, c := range d.Passes {
+				have[band] = have[band] || y(c) >= 1 // a band under one unit of height is not visible: not listed
+			}
+			flagged = flagged || neChangeSignal(daily, i).Unusual
+		}
+		off := map[bool]string{true: " off"}
+		b.WriteString(`<g class="lg">`)
+		// measure from the right: label ≈ 6.9 px per char at 11px mono
+		x, n := W-4, 0
 		for band := nePassBandN - 1; band >= 0; band-- {
 			lbl := nePassBandLabel[band]
-			lw := float64(len([]rune(lbl)))*6.9 + 2
-			x -= lw
-			fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" class="lbl">%s</text>`, x, ly+9, lbl)
-			x -= sw + 4
-			seg(&b, band, x, ly, sw, sw)
-			fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="swatch"/>`, x, ly, sw, sw)
-			x -= gap
+			w := sw + 4 + float64(len([]rune(lbl)))*6.9 + 2
+			if have[band] {
+				x -= w
+				n++
+			}
+			fmt.Fprintf(&b, `<g class="lk%s" data-b="%d" data-w="%.1f" style="transform:translate(%.1fpx,%.1fpx)"><rect x="-5" y="-5" width="%.1f" height="%.1f" class="lh"/>`,
+				off[!have[band]], band, w, x, ly, w+10, sw+10)
+			seg(&b, band, 0, 0, sw, sw)
+			fmt.Fprintf(&b, `<rect width="%.1f" height="%.1f" class="swatch"/><text x="%.1f" y="9" class="lbl">%s</text></g>`, sw, sw, sw+4, lbl)
+			if have[band] {
+				x -= gap
+			}
 		}
-		fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" class="lbl" text-anchor="end">digest of a chunk:</text>`, x, ly+9)
-		// left: the flag legend
-		fmt.Fprintf(&b, `<rect x="2" y="%.1f" width="%.1f" height="2.5" class="cap"/><path d="M%.1f %.1fl3.5 -4.5h-7z" class="chev"/><text x="%.1f" y="%.1f" class="lbl">unusual land-use change — open the day</text>`,
-			ly+4, sw, 2+sw+9, ly+sw-1, 2+sw+18, ly+9)
+		fmt.Fprintf(&b, `<text y="%.1f" class="lbl lcap%s" text-anchor="end" style="transform:translate(%.1fpx,0)">digest of a chunk:</text>`, ly+9, off[n == 0], x)
+		// left: the flag key
+		fmt.Fprintf(&b, `<g class="lf%s"><rect x="2" y="%.1f" width="%.1f" height="2.5" class="cap"/><path d="M%.1f %.1fl3.5 -4.5h-7z" class="chev"/><text x="%.1f" y="%.1f" class="lbl">unusual land-use change — open the day</text></g>`,
+			off[!flagged], ly+4, sw, 2+sw+9, ly+sw-1, 2+sw+18, ly+9)
+		b.WriteString(`</g>`)
 	}
 	b.WriteString(`</svg>`)
 	return b.String()
@@ -1413,9 +1426,6 @@ func neContribDetailHTML(daily []neDayStat, cum []int, obsDaily map[string]neObs
 					continue
 				}
 				fmt.Fprintf(&b, `<svg style="width:%.1f%%" aria-hidden="true"><rect width="100%%" height="100%%" class="p%d"/>`, 100*float64(d.Passes[band])/float64(d.Chunks), band)
-				if band >= 2 {
-					fmt.Fprintf(&b, `<rect width="100%%" height="100%%" fill="url(#ne-h%d)"/>`, band)
-				}
 				b.WriteString(`</svg>`)
 			}
 			b.WriteString(`</div><div class="pl">`)
@@ -1429,9 +1439,6 @@ func neContribDetailHTML(daily []neDayStat, cum []int, obsDaily map[string]neObs
 				}
 				first = false
 				fmt.Fprintf(&b, `<span class="band" title="%s"><svg class="sw" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" class="p%d"/>`, neFmtKm2(d.Passes[band]), band)
-				if band >= 2 {
-					fmt.Fprintf(&b, `<rect width="10" height="10" fill="url(#ne-h%d)"/>`, band)
-				}
 				fmt.Fprintf(&b, `</svg>%s <span class="mut">%s</span></span>`, nePassBandLabel[band], neFmtPctShort(100*float64(d.Passes[band])/float64(d.Chunks)))
 			}
 			b.WriteString(`</div>`)
@@ -1852,7 +1859,7 @@ func neAbs(x int) int {
 //	  (again or Esc releases); clicking a week/month whose card is in view
 //	  opens its days (touch: second tap); the card's flagged days link down;
 //	· cards: the server's pre-rendered day cards where they exist, otherwise
-//	  synthesised from the blob (same classes, same hatches).
+//	  synthesised from the blob (same classes, same ramp).
 //
 // Without script the server's 28-day window and its <title> tooltips remain.
 const neContribScript = `<script>(function(){
@@ -1897,13 +1904,13 @@ function attrs(e,a){for(var k in a)e.setAttribute(k,a[k])}
 function unitWord(){return{d:'day',w:'week',m:'month'}[state.u]}
 function winN(){return state.u==='d'?28:state.u==='w'?26:24}
 function newGroup(b,x){var g=mk('g','day');g.setAttribute('tabindex','0');g.setAttribute('role','button');
- g.hit=mk('rect','hit',g);g.mark=mk('rect','mark',g);g.zero=mk('rect','zero',g);g.segs=[];g.hat=[];
- for(var i=NB-1;i>=0;i--){g.segs[i]=mk('rect','seg p'+i,g);if(i>=2){g.hat[i]=mk('rect','',g);g.hat[i].setAttribute('fill','url(#ne-h'+i+')')}}
+ g.hit=mk('rect','hit',g);g.mark=mk('rect','mark',g);g.zero=mk('rect','zero',g);g.segs=[];
+ for(var i=NB-1;i>=0;i--){g.segs[i]=mk('rect','seg p'+i,g)}
  g.cap=mk('rect','cap',g);g.chev=mk('path','chev',g);g.chev.setAttribute('d','M0 0l3.5 -4.5h-7z');
  // grow from the axis so a new column animates into place
  var yy=H-BOT;[g.hit].forEach(function(r){attrs(r,{x:x,y:TOP,width:cw,height:PLOT})});
  attrs(g.mark,{x:x,y:yy+1,width:bw,height:2.5});attrs(g.zero,{x:x,y:yy-1,width:bw,height:0});
- for(i=0;i<NB;i++){attrs(g.segs[i],{x:x,y:yy,width:bw,height:0});if(g.hat[i])attrs(g.hat[i],{x:x,y:yy,width:bw,height:0})}
+ for(i=0;i<NB;i++){attrs(g.segs[i],{x:x,y:yy,width:bw,height:0})}
  attrs(g.cap,{x:x,y:yy,width:bw,height:0});g.chev.style.transform='translate('+(x+cw/2)+'px,'+(yy+8)+'px)';
  g.addEventListener('mouseenter',function(){if(!drag.moved)show(g.key)});
  g.addEventListener('focus',function(){show(g.key)});
@@ -1917,13 +1924,27 @@ function newGroup(b,x){var g=mk('g','day');g.setAttribute('tabindex','0');g.setA
  return g}
 // setX — shift a column horizontally (its heights stay): the scroll of a leaving column
 function setX(g,x){var bx=x+(cw-bw)/2;attrs(g.hit,{x:x});attrs(g.mark,{x:bx});attrs(g.zero,{x:bx});
- for(var i=0;i<NB;i++){attrs(g.segs[i],{x:bx});if(g.hat[i])attrs(g.hat[i],{x:bx})}attrs(g.cap,{x:bx});g.chev.style.transform='translate('+(x+cw/2)+'px,'+(H-BOT+8)+'px)'}
+ for(var i=0;i<NB;i++){attrs(g.segs[i],{x:bx})}attrs(g.cap,{x:bx});g.chev.style.transform='translate('+(x+cw/2)+'px,'+(H-BOT+8)+'px)'}
 // leave — slide an element out by dx and drop it once the transition is over (a pan
 // back in time revives a column from gone instead of growing a new one)
 function leave(e,dx,key){if(e.leaveT)clearTimeout(e.leaveT);e.leaveT=setTimeout(function(){if(e.parentNode)e.parentNode.removeChild(e);if(key)delete gone[key]},SLIDE+40);
  if(key){gone[key]=e;setX(e,PAD+(e.idx-dx)*cw)}else e.style.transform='translate('+(-dx*cw)+'px,0)'}
 // render(k): k = columns panned (+ later, − earlier); columns and labels enter from
 // the side they come from and leave towards the other, like a strip scrolling under the plot
+// legend: only the pass bands present in the window, re-laid out from the right as it pans / re-buckets; the flag key only when a visible bin is flagged. Hover or focus an item = isolate its band in the bars; tap / Enter pins it (again, Escape or a band that left the window releases).
+var lgK=[].slice.call(svg.querySelectorAll('.lg .lk')),lgPin=-1;
+function lgIso(i){if(i<0)svg.removeAttribute('data-hb');else svg.setAttribute('data-hb',i);lgK.forEach(function(e){e.classList.toggle('pin',+e.dataset.b===lgPin)})}
+lgK.forEach(function(e){var i=+e.dataset.b;e.setAttribute('tabindex','0');e.setAttribute('role','button');
+ e.addEventListener('pointerenter',function(ev){if(ev.pointerType!=='touch')lgIso(i)});e.addEventListener('pointerleave',function(){lgIso(lgPin)});
+ e.addEventListener('focus',function(){lgIso(i)});e.addEventListener('blur',function(){lgIso(lgPin)});
+ e.addEventListener('pointerdown',function(ev){ev.stopPropagation()});
+ e.addEventListener('click',function(ev){ev.stopPropagation();lgPin=lgPin===i?-1:i;lgIso(lgPin)});
+ e.addEventListener('keydown',function(ev){if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();lgPin=lgPin===i?-1:i;lgIso(lgPin)}else if(ev.key==='Escape'){lgPin=-1;lgIso(-1)}})});
+function legend(have,anyF){var x=W-4,n=0,by={};lgK.forEach(function(e){by[e.dataset.b]=e});
+ for(var i=NB-1;i>=0;i--){var e=by[i];if(!e)continue;var on=!!have[i];e.classList.toggle('off',!on);e.setAttribute('aria-hidden',on?'false':'true');e.setAttribute('tabindex',on?'0':'-1');if(on){x-=+e.dataset.w;e.style.transform='translate('+x.toFixed(1)+'px,'+(H-11)+'px)';x-=12;n++}}
+ if(lgPin>=0&&!have[lgPin]){lgPin=-1;lgIso(-1)}
+ var c=svg.querySelector('.lg .lcap');if(c){c.style.transform='translate('+x.toFixed(1)+'px,0)';c.classList.toggle('off',!n)}
+ var f=svg.querySelector('.lg .lf');if(f)f.classList.toggle('off',!anyF)}
 function render(k){k=k||0;
  all=buckets(state.u);N=winN();
  if(state.end==null||state.end>all.length-1)state.end=all.length-1;if(state.end<N-1)state.end=N-1;
@@ -1941,12 +1962,13 @@ function render(k){k=k||0;
   attrs(g.hit,{x:x,width:cw});attrs(g.mark,{x:bx,width:bw});
   var yy=H-BOT,thin=b.c>0&&y(b.c)<1.5;attrs(g.zero,{x:bx,width:bw,height:b.c===0?1:0});
   var best=0;for(var k=1;k<NB;k++)if(b.p[k]>b.p[best])best=k;
-  for(k=NB-1;k>=0;k--){var h=thin?(k===best?1.5:0):y(b.p[k]);if(b.c===0)h=0;yy-=h;attrs(g.segs[k],{x:bx,y:yy,width:bw,height:h});if(g.hat[k])attrs(g.hat[k],{x:bx,y:yy,width:bw,height:h>=2?h:0})}
+  for(k=NB-1;k>=0;k--){var h=thin?(k===best?1.5:0):y(b.p[k]);if(b.c===0)h=0;yy-=h;attrs(g.segs[k],{x:bx,y:yy,width:bw,height:h})}
   var on=b.flag.length>0,capY=H-BOT-Math.max(y(b.c),1.5);attrs(g.cap,{x:bx,y:on?capY:H-BOT,width:bw,height:on?2.5:0});
   g.chev.style.transform='translate('+(x+cw/2)+'px,'+(H-BOT+8)+'px)';g.chev.style.opacity=on?1:0;
   if(b.c===maxC&&b.c>0){var t=mk('text','lbl val win sl'),cx=x+cw/2,right=cx>W-130;attrs(t,{x:right?Math.min(bx-4,W-136):cx,y:H-BOT-y(b.c)-4,'text-anchor':right?'end':'middle'});t.textContent=km2(b.c)}
   var xl=xlabel(b,i);if(xl){var ln=mk('line','tick win sl');attrs(ln,{x1:x+cw/2,y1:H-BOT,x2:x+cw/2,y2:H-BOT+4});var tx=mk('text','lbl win sl');attrs(tx,{x:x+cw/2,y:H-BOT+17,'text-anchor':i===N-1?'end':i===0?'start':'middle'});tx.textContent=xl}
  });
+ var have=[],anyF=false;vis.forEach(function(b){for(var i=0;i<NB;i++)if(b.p[i]&&y(b.p[i])>=1)have[i]=1;if(b.flag.length)anyF=true});legend(have,anyF);
  order=vis.map(function(b){return state.u+':'+b.key});
  // entering columns and labels start one pan away and slide into place
  if(k){var slin=[].filter.call(dyn.querySelectorAll('.win.sl'),function(e){return !e.leaveT});
@@ -1996,9 +2018,9 @@ function card(g){var b=g.bucket,u=state.u;if(u==='d'&&cards[b.key])return cards[
  h+='</div><div class="sec dec"><div class="lab"><i class="src"></i>declared <span class="mut">· survey land use · BEV tiles via bevdirect</span></div>';
  if(b.c===0)h+='<div class="kv mut">no digest</div>';
  else{h+='<div class="kv"><strong>'+km2(b.c)+'</strong> digested <span class="mut">· up to '+thin(b.k)+' KG a day · '+thin(b.r)+' report'+(b.r===1?'':'s')+'</span></div><div class="pb">';
-  for(var i=0;i<NB;i++)if(b.p[i])h+='<svg style="width:'+(100*b.p[i]/b.c).toFixed(1)+'%" aria-hidden="true"><rect width="100%" height="100%" class="p'+i+'"/>'+(i>=2?'<rect width="100%" height="100%" fill="url(#ne-h'+i+')"/>':'')+'</svg>';
+  for(var i=0;i<NB;i++)if(b.p[i])h+='<svg style="width:'+(100*b.p[i]/b.c).toFixed(1)+'%" aria-hidden="true"><rect width="100%" height="100%" class="p'+i+'"/>'+'</svg>';
   h+='</div><div class="pl">';var f=true;
-  for(i=0;i<NB;i++)if(b.p[i]){h+=(f?'':'<span class="mut"> · </span>')+'<span class="band" title="'+km2(b.p[i])+'"><svg class="sw" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" class="p'+i+'"/>'+(i>=2?'<rect width="10" height="10" fill="url(#ne-h'+i+')"/>':'')+'</svg>'+esc(BANDS[i])+' <span class="mut">'+pct(100*b.p[i]/b.c)+'</span></span>';f=false}
+  for(i=0;i<NB;i++)if(b.p[i]){h+=(f?'':'<span class="mut"> · </span>')+'<span class="band" title="'+km2(b.p[i])+'"><svg class="sw" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" class="p'+i+'"/>'+'</svg>'+esc(BANDS[i])+' <span class="mut">'+pct(100*b.p[i]/b.c)+'</span></span>';f=false}
   h+='</div>';var re=b.c-b.p[0];
   h+=re>0?'<div class="cmp">seen before <strong>'+km2(re)+'</strong> <span class="mut">('+Math.round(100*re/b.c)+' %) → comparable for change</span></div>':'<div class="cmp mut">all first sight — nothing comparable yet</div>';
   if(b.moved>0){h+='<div class="dc '+(b.conf?'conf':'cand')+'"><div class="dt"><strong>land use changed</strong> on '+area(b.moved);

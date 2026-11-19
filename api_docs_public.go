@@ -341,8 +341,8 @@ ETag/If-None-Match (a 304 costs nothing) and cache what you fetched (/api/v1/cac
 // monoDocsCSS — the plain-text look shared with {OBS_NAME}'s landing page
 // (same palette, same rules) so the two sibling services read as one family.
 // Used by the landing page and the HTML rendering of /api/v1/license.
-const monoDocsCSS = `:root{--bg:#fbfbf8;--fg:#1f2328;--mut:#6b7280;--rule:#d9d9d2;--acc:#0b5fa5;--code:#f1f1ec;--cov:#4e2a63;--new:#d9a21b;--newt:#8a5f00;--obs:#178a7a;--chg:#c2410c}
-@media(prefers-color-scheme:dark){:root{--bg:#111312;--fg:#d7d9d4;--mut:#8a918c;--rule:#2c302d;--acc:#7ab4ea;--code:#1b1e1c;--cov:#d9a8d0;--new:#fff176;--newt:#e6d35a;--obs:#5ccfb8;--chg:#f0813a}}
+const monoDocsCSS = `:root{--bg:#fbfbf8;--fg:#1f2328;--mut:#6b7280;--rule:#d9d9d2;--acc:#0b5fa5;--code:#f1f1ec;--cov:#4e2a63;--cov2:#7b4f93;--cov3:#3d2f7d;--cov4:#111a38;--new:#d9a21b;--newt:#8a5f00;--obs:#178a7a;--chg:#c2410c}
+@media(prefers-color-scheme:dark){:root{--bg:#111312;--fg:#d7d9d4;--mut:#8a918c;--rule:#2c302d;--acc:#7ab4ea;--code:#1b1e1c;--cov:#d9a8d0;--cov2:#ad84c6;--cov3:#b9c0ff;--cov4:#f4f6ff;--new:#fff176;--newt:#e6d35a;--obs:#5ccfb8;--chg:#f0813a}}
 *{box-sizing:border-box}
 body{font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;background:var(--bg);color:var(--fg);
   max-width:84ch;margin:3rem auto;padding:0 1.25rem;-webkit-font-smoothing:antialiased}
@@ -368,9 +368,8 @@ strong{font-weight:700}
 .muted{color:var(--mut);font-size:.9em;margin-top:2.5rem;padding-top:.8rem;border-top:1px solid var(--rule)}
 figure.contrib{margin:.8rem 0 1.2rem}
 svg.contrib{display:block;width:100%;height:auto;overflow:visible}
-figure.contrib .p0{fill:var(--cov);opacity:.26}figure.contrib .p1{fill:var(--cov);opacity:.52}figure.contrib .p2{fill:var(--cov);opacity:.78}
-figure.contrib .p3{fill:var(--cov)}figure.contrib .p4{fill:var(--fg);opacity:.85}
-figure.contrib .hatch{stroke:var(--bg);stroke-width:1;opacity:.6}figure.contrib .dot{fill:var(--bg);opacity:.7}
+figure.contrib .p0{fill:var(--cov);opacity:.26}figure.contrib .p1{fill:var(--cov);opacity:.52}figure.contrib .p2{fill:var(--cov2)}
+figure.contrib .p3{fill:var(--cov3)}figure.contrib .p4{fill:var(--cov4)}
 svg.contrib g.day rect.seg{stroke:var(--bg);stroke-width:.7;vector-effect:non-scaling-stroke;paint-order:stroke}
 svg.contrib .ctl{display:none}svg.contrib.js .ctl{display:block}svg.contrib.js .dyn .ylab{display:none}svg.contrib .ctl tspan{outline:none;user-select:none;-webkit-user-select:none}
 svg.contrib .ctl .u{cursor:pointer;opacity:.45;transition:opacity .15s}svg.contrib .ctl .u:hover,svg.contrib .ctl .u:focus-visible{opacity:.8}svg.contrib .ctl .u.on{opacity:1;text-decoration:underline dotted;text-underline-offset:3px}
@@ -383,6 +382,10 @@ svg.contrib.js g.day .hit,svg.contrib.js g.day .mark{transition:x .32s cubic-bez
 svg.contrib.js .dyn .win.sl{transition:transform .32s cubic-bezier(.2,.7,.2,1)}
 svg.contrib .ctl .nav .nd{transition:fill .15s,stroke-opacity .15s,transform .12s}svg.contrib .ctl .nav:active .nd{transform:scale(.88)}
 .contrib-tip .dd.syn a.open{color:var(--chg);text-decoration:none;border-bottom:1px dotted var(--chg);pointer-events:auto}.contrib-tip .dd.syn .dc .st a.open{font-weight:700}
+svg.contrib .lg .lk,svg.contrib .lg .lcap,svg.contrib .lg .lf{transition:transform .32s cubic-bezier(.2,.7,.2,1),opacity .2s}svg.contrib .lg .off{opacity:0;pointer-events:none}
+svg.contrib .lg .lh{fill:transparent}svg.contrib.js .lg .lk{cursor:pointer;outline:none}svg.contrib .lg .lk .lbl{transition:fill .15s}svg.contrib .lg .lk:hover .lbl,svg.contrib .lg .lk:focus-visible .lbl,svg.contrib .lg .lk.pin .lbl{fill:var(--fg)}svg.contrib .lg .lk.pin .lbl{text-decoration:underline dotted;text-underline-offset:3px}
+svg.contrib[data-hb] .lg .lk:not(.off){opacity:.4}svg.contrib[data-hb="0"] .lg .lk[data-b="0"],svg.contrib[data-hb="1"] .lg .lk[data-b="1"],svg.contrib[data-hb="2"] .lg .lk[data-b="2"],svg.contrib[data-hb="3"] .lg .lk[data-b="3"],svg.contrib[data-hb="4"] .lg .lk[data-b="4"]{opacity:1}
+svg.contrib[data-hb="0"] .dyn rect.seg:not(.p0),svg.contrib[data-hb="1"] .dyn rect.seg:not(.p1),svg.contrib[data-hb="2"] .dyn rect.seg:not(.p2),svg.contrib[data-hb="3"] .dyn rect.seg:not(.p3),svg.contrib[data-hb="4"] .dyn rect.seg:not(.p4){opacity:.08}
 svg.contrib .swatch{fill:none;stroke:var(--rule);stroke-width:1;vector-effect:non-scaling-stroke}
 svg.contrib .zero{fill:var(--rule)}svg.contrib .hit{fill:transparent}
 svg.contrib g.day{outline:none}svg.contrib.js g.day{cursor:pointer}
