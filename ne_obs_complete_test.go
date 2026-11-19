@@ -200,12 +200,16 @@ func TestNEObsCoverageSwept(t *testing.T) {
 // ?since= delta: obs.counts_at rides on the entry and bumps updated_at
 // (srtm 2026-11-06: 2 289 parents stuck on a stale blank_n).
 func TestNEManifestDeltaListsRecount(t *testing.T) {
+	// relative to now: delta() refuses cursors older than neManifestDeltaRetention
+	// (the fixed 2026-11-06 dates turned this test red once they aged out)
+	base := time.Now().UTC().Truncate(time.Hour).Add(-4 * time.Hour)
+	ts := func(min int) string { return base.Add(time.Duration(min) * time.Minute).Format(time.RFC3339) }
 	neObsComplete.mu.Lock()
 	saved := neObsComplete.rows
-	neObsComplete.rows = map[string]*neObsCompleteRow{"11116": {KG: "11116", BlankN: 0, computedAt: time.Date(2026, 11, 6, 12, 51, 0, 0, time.UTC)}}
+	neObsComplete.rows = map[string]*neObsCompleteRow{"11116": {KG: "11116", BlankN: 0, computedAt: base.Add(171 * time.Minute)}}
 	neObsComplete.mu.Unlock()
 	defer func() { neObsComplete.mu.Lock(); neObsComplete.rows = saved; neObsComplete.mu.Unlock() }()
-	e := &neKGEntry{Obs: &neLayerInfo{BuiltAt: "2026-11-06T09:56:00Z"}, UpdatedAt: "2026-11-06T09:56:00Z"}
+	e := &neKGEntry{Obs: &neLayerInfo{BuiltAt: ts(0)}, UpdatedAt: ts(0)}
 	if bn, nn, at, ok := neObsCompleteCounts("11116"); ok {
 		e.Obs.BlankN, e.Obs.NodataN = &bn, &nn
 		e.Obs.CountsAt = at.UTC().Format(time.RFC3339)
@@ -215,12 +219,12 @@ func TestNEManifestDeltaListsRecount(t *testing.T) {
 	} else {
 		t.Fatal("row not found")
 	}
-	if e.Obs.CountsAt != "2026-11-06T12:51:00Z" || e.UpdatedAt != "2026-11-06T12:51:00Z" {
+	if e.Obs.CountsAt != ts(171) || e.UpdatedAt != ts(171) {
 		t.Fatalf("counts_at %q updated_at %q", e.Obs.CountsAt, e.UpdatedAt)
 	}
-	m := &neManifestCache{entries: map[string]*neKGEntry{"11116": e}, generatedAt: "2026-11-06T13:00:00Z", kgs: []string{"11116"}}
-	body, _, ok := m.delta(time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC))
-	if !ok || !strings.Contains(string(body), `"11116"`) || !strings.Contains(string(body), `"counts_at":"2026-11-06T12:51:00Z"`) {
+	m := &neManifestCache{entries: map[string]*neKGEntry{"11116": e}, generatedAt: ts(180), kgs: []string{"11116"}}
+	body, _, ok := m.delta(base.Add(120 * time.Minute))
+	if !ok || !strings.Contains(string(body), `"11116"`) || !strings.Contains(string(body), `"counts_at":"`+ts(171)+`"`) {
 		t.Fatalf("delta ok=%v body=%s", ok, body)
 	}
 }
