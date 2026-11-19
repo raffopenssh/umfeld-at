@@ -525,7 +525,7 @@ func TestNEContribChart(t *testing.T) {
 		t.Fatalf("tooltip lacks source mix")
 	}
 	svg := neContribChartSVG(rows[:13])
-	for _, want := range []string{`class="seg p0"`, `class="seg p1"`, `class="seg p2"`, `class="seg p4"`, "2026-09-06 · ", "1st 0.0 km²", "10th+", "<defs>", `class="lk" data-b="4"`, `<g class="dyn">`, `class="ctl"`, `data-u="w"`} {
+	for _, want := range []string{`class="seg p0"`, `class="seg p1"`, `class="seg p2"`, `class="seg p4"`, "2026-09-06 · ", "1st 0.0 km²", "10th+", "<defs>", `url(#ne-p4)`, `class="lk" data-b="4"`, `<g class="dyn">`, `class="ctl"`, `data-u="w"`} {
 		if !strings.Contains(svg, want) {
 			t.Fatalf("svg lacks %q: %s", want, svg)
 		}

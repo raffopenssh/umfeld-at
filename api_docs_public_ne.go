@@ -515,7 +515,7 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     lon/lat and read peek() — then /ne/glyph/cell?lon=&lat= gives lu[] and pic_obs for the same cell.
   8 Bar chart "Declared layer digested by peers" (figures /ne/stats change.by_day/qc_by_day + /ne coverage; sources
     per report /ne/manifest): one bar per day, fixed window, height = km² of res-10 chunks (~1.5 ha) peers re-digested
-    that day, stacked by pass band (1st sight, 2nd, 3rd+ …; one ramp, pale = first sight, dark = deepest); flagged days = unusual.
+    that day, stacked by pass band (1st sight, 2nd, 3rd+ …; one ramp, pale = first sight, dark = deepest, the two deepest faintly hatched); flagged days = unusual.
   9 Bar tooltip (hover floats above the bar, docks below on touch/narrow; click/Enter pins, ←/→ walk days, Esc
     releases; <title> text without script): weekday · date · rank chip · DECLARED: km² · KGs · reports · digest shape
     (whole-KG ≈ 1× KG area vs viewport burst ≪) · pass mix as a mini stacked bar · comparable share · that day's change
@@ -931,8 +931,9 @@ func neFmtChange(chunks int) string {
 // neContribChartSVG — stacked daily bars, one segment per pass band
 // (1st · 2nd · 3rd–4th · 5th–9th · 10th+ observation of a chunk), deepest pass
 // at the bottom. Bands are ONE sequential ramp (lilac → purple → indigo → navy, lightness
-// strictly falling, so it survives greyscale); no textures — at a year of
-// passes most of a bar is deep, and hatches there read as noise. cw = column width (viewBox).
+// strictly falling, so it survives greyscale and colour-vision deficiency).
+// The two deepest bands add a faint hairline texture; nothing bolder — at a
+// year of passes most of a bar is deep, and strong hatches there read as noise. cw = column width (viewBox).
 func neContribChartSVG(daily []neDayStat) string {
 	const W, H, top, bottom, left = 840.0, 176.0, 18.0, 50.0, 0.0
 	n := len(daily)
@@ -945,13 +946,18 @@ func neContribChartSVG(daily []neDayStat) string {
 	}
 	plotH := H - top - bottom
 	y := func(chunks int) float64 { return plotH * float64(chunks) / float64(maxC) }
-	// segment: one solid step of the ramp
+	// segment: one solid step of the ramp; the two deepest bands also carry a
+	// faint texture (5th–9th one diagonal, 10th+ crossed) — a second cue next
+	// to lightness, quiet enough that a bar of deep passes stays calm
 	seg := func(b *strings.Builder, band int, x, yy, w, h float64) {
 		fmt.Fprintf(b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="seg p%d"/>`, x, yy, w, h, band)
+		if band >= 3 && h >= 3 {
+			fmt.Fprintf(b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="hat b%d" fill="url(#ne-p%d)"/>`, x, yy, w, h, band, band)
+		}
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, `<svg class="contrib" viewBox="0 0 %.0f %.0f" role="img" aria-label="declared-layer area digested by peers per day, last %d days, by digest pass" xmlns="http://www.w3.org/2000/svg">`, W, H, n)
-	b.WriteString(`<defs></defs>`) // the script's clip path goes here
+	b.WriteString(`<defs><pattern id="ne-p3" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" class="hatch"/></pattern><pattern id="ne-p4" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" class="hatch"/><line x1="0" y1="0" x2="6" y2="0" class="hatch"/></pattern></defs>`) // + the script's clip path
 	fmt.Fprintf(&b, `<line x1="0" y1="%.1f" x2="%.0f" y2="%.1f" class="axis"/>`, H-bottom, W, H-bottom)
 	// unit switch: the y label itself ("12 859 km² / day week month"), top
 	// left; pan arrows ‹ › at the plot's left / right edge, mid-height. Script-only (hidden otherwise): the server draws
@@ -1426,6 +1432,9 @@ func neContribDetailHTML(daily []neDayStat, cum []int, obsDaily map[string]neObs
 					continue
 				}
 				fmt.Fprintf(&b, `<svg style="width:%.1f%%" aria-hidden="true"><rect width="100%%" height="100%%" class="p%d"/>`, 100*float64(d.Passes[band])/float64(d.Chunks), band)
+				if band >= 3 {
+					fmt.Fprintf(&b, `<rect width="100%%" height="100%%" fill="url(#ne-p%d)"/>`, band)
+				}
 				b.WriteString(`</svg>`)
 			}
 			b.WriteString(`</div><div class="pl">`)
@@ -1439,6 +1448,9 @@ func neContribDetailHTML(daily []neDayStat, cum []int, obsDaily map[string]neObs
 				}
 				first = false
 				fmt.Fprintf(&b, `<span class="band" title="%s"><svg class="sw" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" class="p%d"/>`, neFmtKm2(d.Passes[band]), band)
+				if band >= 3 {
+					fmt.Fprintf(&b, `<rect width="10" height="10" fill="url(#ne-p%d)"/>`, band)
+				}
 				fmt.Fprintf(&b, `</svg>%s <span class="mut">%s</span></span>`, nePassBandLabel[band], neFmtPctShort(100*float64(d.Passes[band])/float64(d.Chunks)))
 			}
 			b.WriteString(`</div>`)
@@ -1904,13 +1916,13 @@ function attrs(e,a){for(var k in a)e.setAttribute(k,a[k])}
 function unitWord(){return{d:'day',w:'week',m:'month'}[state.u]}
 function winN(){return state.u==='d'?28:state.u==='w'?26:24}
 function newGroup(b,x){var g=mk('g','day');g.setAttribute('tabindex','0');g.setAttribute('role','button');
- g.hit=mk('rect','hit',g);g.mark=mk('rect','mark',g);g.zero=mk('rect','zero',g);g.segs=[];
- for(var i=NB-1;i>=0;i--){g.segs[i]=mk('rect','seg p'+i,g)}
+ g.hit=mk('rect','hit',g);g.mark=mk('rect','mark',g);g.zero=mk('rect','zero',g);g.segs=[];g.hat=[];
+ for(var i=NB-1;i>=0;i--){g.segs[i]=mk('rect','seg p'+i,g);if(i>=3){g.hat[i]=mk('rect','hat b'+i,g);g.hat[i].setAttribute('fill','url(#ne-p'+i+')')}}
  g.cap=mk('rect','cap',g);g.chev=mk('path','chev',g);g.chev.setAttribute('d','M0 0l3.5 -4.5h-7z');
  // grow from the axis so a new column animates into place
  var yy=H-BOT;[g.hit].forEach(function(r){attrs(r,{x:x,y:TOP,width:cw,height:PLOT})});
  attrs(g.mark,{x:x,y:yy+1,width:bw,height:2.5});attrs(g.zero,{x:x,y:yy-1,width:bw,height:0});
- for(i=0;i<NB;i++){attrs(g.segs[i],{x:x,y:yy,width:bw,height:0})}
+ for(i=0;i<NB;i++){attrs(g.segs[i],{x:x,y:yy,width:bw,height:0});if(g.hat[i])attrs(g.hat[i],{x:x,y:yy,width:bw,height:0})}
  attrs(g.cap,{x:x,y:yy,width:bw,height:0});g.chev.style.transform='translate('+(x+cw/2)+'px,'+(yy+8)+'px)';
  g.addEventListener('mouseenter',function(){if(!drag.moved)show(g.key)});
  g.addEventListener('focus',function(){show(g.key)});
@@ -1924,7 +1936,7 @@ function newGroup(b,x){var g=mk('g','day');g.setAttribute('tabindex','0');g.setA
  return g}
 // setX — shift a column horizontally (its heights stay): the scroll of a leaving column
 function setX(g,x){var bx=x+(cw-bw)/2;attrs(g.hit,{x:x});attrs(g.mark,{x:bx});attrs(g.zero,{x:bx});
- for(var i=0;i<NB;i++){attrs(g.segs[i],{x:bx})}attrs(g.cap,{x:bx});g.chev.style.transform='translate('+(x+cw/2)+'px,'+(H-BOT+8)+'px)'}
+ for(var i=0;i<NB;i++){attrs(g.segs[i],{x:bx});if(g.hat[i])attrs(g.hat[i],{x:bx})}attrs(g.cap,{x:bx});g.chev.style.transform='translate('+(x+cw/2)+'px,'+(H-BOT+8)+'px)'}
 // leave — slide an element out by dx and drop it once the transition is over (a pan
 // back in time revives a column from gone instead of growing a new one)
 function leave(e,dx,key){if(e.leaveT)clearTimeout(e.leaveT);e.leaveT=setTimeout(function(){if(e.parentNode)e.parentNode.removeChild(e);if(key)delete gone[key]},SLIDE+40);
@@ -1962,7 +1974,7 @@ function render(k){k=k||0;
   attrs(g.hit,{x:x,width:cw});attrs(g.mark,{x:bx,width:bw});
   var yy=H-BOT,thin=b.c>0&&y(b.c)<1.5;attrs(g.zero,{x:bx,width:bw,height:b.c===0?1:0});
   var best=0;for(var k=1;k<NB;k++)if(b.p[k]>b.p[best])best=k;
-  for(k=NB-1;k>=0;k--){var h=thin?(k===best?1.5:0):y(b.p[k]);if(b.c===0)h=0;yy-=h;attrs(g.segs[k],{x:bx,y:yy,width:bw,height:h})}
+  for(k=NB-1;k>=0;k--){var h=thin?(k===best?1.5:0):y(b.p[k]);if(b.c===0)h=0;yy-=h;attrs(g.segs[k],{x:bx,y:yy,width:bw,height:h});if(g.hat[k])attrs(g.hat[k],{x:bx,y:yy,width:bw,height:h>=3?h:0})}
   var on=b.flag.length>0,capY=H-BOT-Math.max(y(b.c),1.5);attrs(g.cap,{x:bx,y:on?capY:H-BOT,width:bw,height:on?2.5:0});
   g.chev.style.transform='translate('+(x+cw/2)+'px,'+(H-BOT+8)+'px)';g.chev.style.opacity=on?1:0;
   if(b.c===maxC&&b.c>0){var t=mk('text','lbl val win sl'),cx=x+cw/2,right=cx>W-130;attrs(t,{x:right?Math.min(bx-4,W-136):cx,y:H-BOT-y(b.c)-4,'text-anchor':right?'end':'middle'});t.textContent=km2(b.c)}
@@ -2018,9 +2030,9 @@ function card(g){var b=g.bucket,u=state.u;if(u==='d'&&cards[b.key])return cards[
  h+='</div><div class="sec dec"><div class="lab"><i class="src"></i>declared <span class="mut">· survey land use · BEV tiles via bevdirect</span></div>';
  if(b.c===0)h+='<div class="kv mut">no digest</div>';
  else{h+='<div class="kv"><strong>'+km2(b.c)+'</strong> digested <span class="mut">· up to '+thin(b.k)+' KG a day · '+thin(b.r)+' report'+(b.r===1?'':'s')+'</span></div><div class="pb">';
-  for(var i=0;i<NB;i++)if(b.p[i])h+='<svg style="width:'+(100*b.p[i]/b.c).toFixed(1)+'%" aria-hidden="true"><rect width="100%" height="100%" class="p'+i+'"/>'+'</svg>';
+  for(var i=0;i<NB;i++)if(b.p[i])h+='<svg style="width:'+(100*b.p[i]/b.c).toFixed(1)+'%" aria-hidden="true"><rect width="100%" height="100%" class="p'+i+'"/>'+(i>=3?'<rect width="100%" height="100%" fill="url(#ne-p'+i+')"/>':'')+'</svg>';
   h+='</div><div class="pl">';var f=true;
-  for(i=0;i<NB;i++)if(b.p[i]){h+=(f?'':'<span class="mut"> · </span>')+'<span class="band" title="'+km2(b.p[i])+'"><svg class="sw" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" class="p'+i+'"/>'+'</svg>'+esc(BANDS[i])+' <span class="mut">'+pct(100*b.p[i]/b.c)+'</span></span>';f=false}
+  for(i=0;i<NB;i++)if(b.p[i]){h+=(f?'':'<span class="mut"> · </span>')+'<span class="band" title="'+km2(b.p[i])+'"><svg class="sw" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" class="p'+i+'"/>'+(i>=3?'<rect width="10" height="10" fill="url(#ne-p'+i+')"/>':'')+'</svg>'+esc(BANDS[i])+' <span class="mut">'+pct(100*b.p[i]/b.c)+'</span></span>';f=false}
   h+='</div>';var re=b.c-b.p[0];
   h+=re>0?'<div class="cmp">seen before <strong>'+km2(re)+'</strong> <span class="mut">('+Math.round(100*re/b.c)+' %) → comparable for change</span></div>':'<div class="cmp mut">all first sight — nothing comparable yet</div>';
   if(b.moved>0){h+='<div class="dc '+(b.conf?'conf':'cand')+'"><div class="dt"><strong>land use changed</strong> on '+area(b.moved);

@@ -369,6 +369,7 @@ strong{font-weight:700}
 figure.contrib{margin:.8rem 0 1.2rem}
 svg.contrib{display:block;width:100%;height:auto;overflow:visible}
 figure.contrib .p0{fill:var(--cov);opacity:.26}figure.contrib .p1{fill:var(--cov);opacity:.52}figure.contrib .p2{fill:var(--cov2)}
+figure.contrib .hatch{stroke:var(--bg);stroke-width:.7;opacity:.3}svg.contrib .hat{pointer-events:none}svg.contrib[data-hb] .dyn .hat{opacity:0}svg.contrib[data-hb="3"] .dyn .hat.b3,svg.contrib[data-hb="4"] .dyn .hat.b4{opacity:1}
 figure.contrib .p3{fill:var(--cov3)}figure.contrib .p4{fill:var(--cov4)}
 svg.contrib g.day rect.seg{stroke:var(--bg);stroke-width:.7;vector-effect:non-scaling-stroke;paint-order:stroke}
 svg.contrib .ctl{display:none}svg.contrib.js .ctl{display:block}svg.contrib.js .dyn .ylab{display:none}svg.contrib .ctl tspan{outline:none;user-select:none;-webkit-user-select:none}
