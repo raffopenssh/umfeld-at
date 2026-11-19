@@ -967,6 +967,7 @@ func neScanReportFiles() map[string]interface{} {
 	kgStats := make(map[string]neKGReportStat, len(files))
 	for _, fn := range files {
 		kg := strings.TrimSuffix(filepath.Base(fn), ".reports.jsonl")
+		daily.closeAll() // the previous KG: its per-chunk pass state is transient
 		for _, s := range neMarkLossy(neReadReports(kg)) {
 			totalLines++
 			daily.add(kg, s)
@@ -1036,6 +1037,7 @@ func neScanReportFiles() map[string]interface{} {
 			}
 		}
 	}
+	daily.closeAll()
 	rows := make([]map[string]interface{}, 0, len(by))
 	for k, a := range by {
 		tok, obs, _ := strings.Cut(k, "|")
@@ -1059,6 +1061,7 @@ func neScanReportFiles() map[string]interface{} {
 		for n := 1; n <= neEverDepthMax; n++ {
 			ks.Chunks += d[n]
 		}
+		ks.RefBBox = daily.kgRefBBox[kg]
 		kgStats[kg] = ks
 	}
 	neReportsScanMemo.at, neReportsScanMemo.dir, neReportsScanMemo.dirty = time.Now(), neDir, false
@@ -1153,9 +1156,11 @@ type neDailyAgg struct {
 	days   []neDayStat                      // index = days since first
 	dayKGs map[uint16]map[string]bool
 	hex    map[string]uint64 // fallback for non-hex chunk keys (tests)
-	// kgDepth[kg][n] = chunks at exactly n passes (capped at neEverDepthMax),
-	// kept incrementally — chunk → KG never changes (one KG file per chunk).
-	kgDepth map[string]*[neEverDepthMax + 1]int
+	// kgDepth[kg][n] = chunks of the KG's current set at exactly n passes
+	// (capped at neEverDepthMax), written by closeKG from kgPass.
+	kgDepth   map[string]*[neEverDepthMax + 1]int
+	kgRefBBox map[string]string    // neBBoxKey of the report that last replaced the KG's set
+	kgPass    map[string]*neKGPass // open KGs only
 }
 
 type neChunkObs struct {
@@ -1178,6 +1183,7 @@ func (a *neDailyAgg) dayIndex(day string) (uint16, bool) {
 	}
 	if a.chunks == nil {
 		a.chunks, a.dayKGs, a.hex, a.kgDepth = map[string]map[uint64]neChunkObs{}, map[uint16]map[string]bool{}, map[string]uint64{}, map[string]*[neEverDepthMax + 1]int{}
+		a.kgRefBBox, a.kgPass = map[string]string{}, map[string]*neKGPass{}
 		a.first = t
 	}
 	if t.Before(a.first) {
@@ -1196,6 +1202,14 @@ func (a *neDailyAgg) dayIndex(day string) (uint16, bool) {
 				cm[k] = o
 			}
 		}
+		for _, kp := range a.kgPass {
+			for _, kc := range kp.class {
+				for k, o := range kc.obs {
+					o.last += uint16(shift)
+					kc.obs[k] = o
+				}
+			}
+		}
 		nk := map[uint16]map[string]bool{}
 		for d, m := range a.dayKGs {
 			nk[d+uint16(shift)] = m
@@ -1210,6 +1224,38 @@ func (a *neDailyAgg) dayIndex(day string) (uint16, bool) {
 		a.days = append(a.days, neDayStat{Day: a.first.AddDate(0, 0, len(a.days)).Format("2006-01-02")})
 	}
 	return uint16(idx), true
+}
+
+// neKGPass — per-KG pass state of the walk (docs/ne-change.md §5b "pass
+// rule"), alive only while the KG's file is read (closeKG frees it):
+//   - obs: (class → chunk → distinct observation days) counted for THIS KG —
+//     an edge chunk two KGs share is a different chunk row set in each, so the
+//     national per-chunk map cannot carry it (it produced negative buckets);
+//   - the KG's current chunk set per class: a non-lossy report holding at
+//     least half of the set REPLACES it (a full build: chunks it no longer
+//     has — legacy bboxes, pre-v0.3.6 edge cells, selftests — are retired, no
+//     covering report can ever lift them), a smaller one (viewport slice)
+//     adds to it. Membership = gen stamp, no second map;
+//   - keys of every chunk-bearing report by received_at and by digest, so a
+//     report stored stripped (`unchanged:true`, header-only included) counts
+//     as one observation day for every chunk of the report it refers to.
+type neKGPass struct {
+	class    map[string]*neKGPassClass
+	byAt     map[string][]uint64 // received_at → chunk keys the report stands for
+	byDigest map[string][]uint64 // class|digest → keys of the last chunk-bearing report
+	cur      string              // class of the newest credited report
+}
+
+type neKGPassClass struct {
+	obs     map[uint64]neKGChunkObs
+	gen     uint32
+	size    int       // chunks stamped with gen
+	refBBox []float64 // bbox of the report that last replaced the set
+}
+
+type neKGChunkObs struct {
+	last, n uint16
+	gen     uint32
 }
 
 func (a *neDailyAgg) add(kg string, s neStoredReport) {
@@ -1238,25 +1284,80 @@ func (a *neDailyAgg) add(kg string, s neStoredReport) {
 		}
 	}
 	class := neBevEquivalent(s.Report.Source)
+	kp := a.kgPass[kg]
+	if kp == nil {
+		kp = &neKGPass{class: map[string]*neKGPassClass{}, byAt: map[string][]uint64{}, byDigest: map[string][]uint64{}}
+		a.kgPass[kg] = kp
+	}
+	// the chunks this report stands for: its own, or — stored stripped as
+	// unchanged — those of the chunk-bearing report it was equal to
+	var keys []uint64
+	dk := class + "|" + s.Report.Digest
+	switch {
+	case len(s.Report.Chunks) > 0:
+		keys = make([]uint64, 0, len(s.Report.Chunks))
+		for c := range s.Report.Chunks {
+			k, ok := neChunkKey(c)
+			if !ok {
+				k, ok = a.hex[c]
+				if !ok {
+					k = uint64(len(a.hex)) | 1<<63
+					a.hex[c] = k
+				}
+			}
+			keys = append(keys, k)
+		}
+		kp.byDigest[dk] = keys
+	case s.Unchanged:
+		if at, _ := s.Result["unchanged_since"].(string); at != "" {
+			keys = kp.byAt[at]
+		}
+		if keys == nil && s.Report.Digest != "" {
+			keys = kp.byDigest[dk]
+		}
+	}
+	if len(keys) == 0 {
+		return
+	}
+	kp.byAt[s.ReceivedAt] = keys
+	kp.cur = class
 	chunks := a.chunks[class]
 	if chunks == nil {
 		chunks = map[uint64]neChunkObs{}
 		a.chunks[class] = chunks
 	}
-	depth := a.kgDepth[kg]
-	if depth == nil {
-		depth = new([neEverDepthMax + 1]int)
-		a.kgDepth[kg] = depth
+	kc := kp.class[class]
+	if kc == nil {
+		kc = &neKGPassClass{obs: map[uint64]neKGChunkObs{}, gen: 1}
+		kp.class[class] = kc
 	}
-	for c := range s.Report.Chunks {
-		k, ok := neChunkKey(c)
-		if !ok {
-			k, ok = a.hex[c]
-			if !ok {
-				k = uint64(len(a.hex)) | 1<<63
-				a.hex[c] = k
-			}
+	// a truncated build never replaces the set; anything else holding at
+	// least half of it is a full build of the KG
+	sus, _ := s.Result["change_suspect"].(string)
+	replace := sus != "coverage_lossy" && sus != "tiles_incomplete" && 2*len(keys) >= kc.size
+	if replace {
+		kc.gen++
+		kc.size = 0
+		kc.refBBox = s.Report.BBox
+	}
+	for _, k := range keys {
+		// per KG: the pass depth the revisit queue is built from
+		ko, seen := kc.obs[k]
+		switch {
+		case !seen:
+			ko.last, ko.n = d, 1
+		case ko.last == d:
+		case d > ko.last:
+			ko.last, ko.n = d, ko.n+1
+		default:
+			ko.n++
 		}
+		if ko.gen != kc.gen {
+			ko.gen = kc.gen
+			kc.size++
+		}
+		kc.obs[k] = ko
+		// national: distinct land per day (chart, glyph)
 		o, seen := chunks[k]
 		switch {
 		case !seen:
@@ -1269,10 +1370,6 @@ func (a *neDailyAgg) add(kg string, s neStoredReport) {
 			o.n++ // out-of-order older line: still a distinct day
 		}
 		chunks[k] = o
-		if o.n > 1 {
-			depth[min(int(o.n)-1, neEverDepthMax)]--
-		}
-		depth[min(int(o.n), neEverDepthMax)]++
 		st.Chunks++
 		st.Passes[nePassBand(int(o.n))]++
 		if o.n >= 2 && o.n <= 5 {
@@ -1281,6 +1378,38 @@ func (a *neDailyAgg) add(kg string, s neStoredReport) {
 		if o.n > 1 {
 			st.Reobserved++
 		}
+	}
+}
+
+// closeKG — fold the KG's pass state into kgDepth / kgRefBBox and free it.
+// Depth counts only the current chunk set of the class the KG was last
+// reported in (a new assembly class restarts the depth, like the chart).
+func (a *neDailyAgg) closeKG(kg string) {
+	kp := a.kgPass[kg]
+	if kp == nil {
+		return
+	}
+	delete(a.kgPass, kg)
+	kc := kp.class[kp.cur]
+	if kc == nil {
+		return
+	}
+	depth := new([neEverDepthMax + 1]int)
+	for _, o := range kc.obs {
+		if o.gen == kc.gen {
+			depth[min(int(o.n), neEverDepthMax)]++
+		}
+	}
+	a.kgDepth[kg] = depth
+	if k := neBBoxKey(kc.refBBox); k != "" {
+		a.kgRefBBox[kg] = k
+	}
+}
+
+// closeAll — closeKG for every KG still open (tests feed KGs interleaved).
+func (a *neDailyAgg) closeAll() {
+	for kg := range a.kgPass {
+		a.closeKG(kg)
 	}
 }
 

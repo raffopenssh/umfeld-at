@@ -93,7 +93,7 @@ func neRevisitFixture(t *testing.T) (dir string, cleanup func()) {
 	w("51119", rep("51119", "2026-10-01T00:00:00Z", "peer-vm-1", 3), rep("51119", "2026-10-21T00:00:00Z", "map-peer", 3))
 	w("01006", rep("01006", "2026-10-01T00:00:00Z", "peer-vm-1", 0))
 	w("01007", rep("01007", "2026-10-02T00:00:00Z", "map-peer", 5))
-	w("01008", rep("01008", "2026-10-03T00:00:00Z", "peer-vm-1", 4))
+	w("01008", rep("01008", "2026-10-03T00:00:00Z", "peer-vm-1", 4), rep("01008", time.Now().UTC().Add(-time.Hour).Format(time.RFC3339), "map-peer", 4))
 	// 01009: no log, one digest-only report by map-peer an hour ago (no_log, hidden for observer=map-peer)
 	w("01009", rep("01009", time.Now().UTC().Add(-time.Hour).Format(time.RFC3339), "map-peer", 0))
 	return dir, func() {
@@ -281,5 +281,86 @@ func TestNERevisitTiers(t *testing.T) {
 	}
 	if isPublicPath("/api/v1/ne/revisit") || !contributorPathAllowed("/api/v1/ne/revisit") {
 		t.Fatal("revisit: private + contributor only")
+	}
+}
+
+// TestNEPassDepthRule — docs/ne-change.md §5b "pass rule": an unchanged
+// re-post on a later day is one observation day for every chunk of the report
+// it equals; depth is per KG (a chunk two KGs share never goes negative) and
+// over the KG's current chunk set only (a full build retires what it no
+// longer holds, a viewport slice adds).
+func TestNEPassDepthRule(t *testing.T) {
+	rep := func(at, kg, digest string, unchangedSince string, chunks ...string) neStoredReport {
+		s := neStoredReport{ReceivedAt: at, Report: neReport{KG: kg, Source: "bevdirect@v0.3.6", Digest: digest, BBox: []float64{10, 47, 10.1, 47.1}}, Result: map[string]interface{}{}}
+		if len(chunks) > 0 {
+			s.Report.Chunks = map[string]string{}
+			for _, c := range chunks {
+				s.Report.Chunks[c] = "d-" + c
+			}
+		}
+		if unchangedSince != "" {
+			s.Unchanged = true
+			s.Result["unchanged"], s.Result["unchanged_since"] = true, unchangedSince
+		}
+		return s
+	}
+	depth := func(a *neDailyAgg, kg string) [neEverDepthMax + 1]int {
+		a.closeAll()
+		if d := a.kgDepth[kg]; d != nil {
+			return *d
+		}
+		return [neEverDepthMax + 1]int{}
+	}
+	// 1. baseline + unchanged re-post on a later day ⇒ Depth[2] == chunks
+	a := &neDailyAgg{}
+	a.add("58031", rep("2026-11-05T02:31:04Z", "58031", "e3", "", "a1", "a2", "a3"))
+	a.add("58031", rep("2026-11-13T21:13:00Z", "58031", "e3", "2026-11-05T02:31:04Z"))
+	if d := depth(a, "58031"); d[2] != 3 || d[1] != 0 {
+		t.Fatalf("unchanged re-post not credited: %v", d)
+	}
+	if _, twice := a.ever(); twice != 3 {
+		t.Fatalf("national twice = %d, want 3", twice)
+	}
+	// chain: unchanged → unchanged (header-only refers to the stub), same-day stub is no pass,
+	// a stub without unchanged_since resolves by digest
+	a = &neDailyAgg{}
+	a.add("58031", rep("2026-11-05T02:31:04Z", "58031", "e3", "", "a1", "a2"))
+	a.add("58031", rep("2026-11-05T09:00:00Z", "58031", "e3", "2026-11-05T02:31:04Z"))
+	a.add("58031", rep("2026-11-13T21:13:00Z", "58031", "e3", "2026-11-05T09:00:00Z"))
+	a.add("58031", rep("2026-11-14T21:13:00Z", "58031", "e3", "")) // not unchanged, no chunks: nothing
+	st := rep("2026-11-15T21:13:00Z", "58031", "e3", "x")
+	st.Result["unchanged_since"] = "never-stored"
+	a.add("58031", st)
+	if d := depth(a, "58031"); d[3] != 2 || d[1]+d[2] != 0 {
+		t.Fatalf("chain: %v", d)
+	}
+	// 2. current set: legacy chunks retire on a full build, a viewport slice adds, a lossy build never replaces
+	a = &neDailyAgg{}
+	a.add("63330", rep("2026-10-04T10:00:00Z", "63330", "l1", "", "old1", "old2", "c1", "c2", "c3", "c4"))
+	a.add("63330", rep("2026-10-19T10:00:00Z", "63330", "n1", "", "c1", "c2", "c3", "c4")) // full build: old1/old2 retired
+	a.add("63330", rep("2026-10-20T10:00:00Z", "63330", "v1", "", "c1"))                   // viewport slice: adds, replaces nothing
+	lossy := rep("2026-10-21T10:00:00Z", "63330", "x1", "", "c1", "c2", "c3")
+	lossy.Result["change_suspect"] = "coverage_lossy"
+	a.add("63330", lossy)
+	if d := depth(a, "63330"); d[2] != 1 || d[3] != 2 || d[4] != 1 || d[1] != 0 {
+		t.Fatalf("current set: %v", d)
+	}
+	// 3. a chunk two KGs share: counted in each, no negative bucket
+	a = &neDailyAgg{}
+	a.add("05109", rep("2026-10-06T10:00:00Z", "05109", "p", "", "s1", "p1"))
+	a.add("12126", rep("2026-10-07T10:00:00Z", "12126", "q", "", "s1", "q1"))
+	a.add("12126", rep("2026-10-08T10:00:00Z", "12126", "q", "2026-10-07T10:00:00Z"))
+	if d := depth(a, "05109"); d[1] != 2 {
+		t.Fatalf("05109: %v", d)
+	}
+	if d := depth(a, "12126"); d[2] != 2 || d[1] != 0 {
+		t.Fatalf("12126: %v", d)
+	}
+	for kg, d := range a.kgDepth {
+		for n, v := range d {
+			if v < 0 {
+				t.Fatalf("negative depth %s[%d] = %d", kg, n, v)
+			}
+		}
 	}
 }

@@ -90,8 +90,11 @@ type neKGReportStat struct {
 	// observation days (n = 1..neEverDepthMax, the last bucket open-ended);
 	// Chunks = their sum. The revisit `next_pass` list is derived from this —
 	// the same walk, no extra disk read.
-	Depth  [neEverDepthMax + 1]int
-	Chunks int
+	// Counted per KG over its CURRENT chunk set only (neKGPass: retired
+	// chunks of legacy layouts are out), stripped unchanged reports included.
+	Depth   [neEverDepthMax + 1]int
+	Chunks  int
+	RefBBox string // neBBoxKey of the full report that defines the current set ("" = LastBBox)
 }
 
 // neRevisitNextPass — one KG whose chunks have not all reached `pass` distinct
@@ -228,6 +231,22 @@ func neRevisitPendingOf(kg string) (*neRevisitPending, *neChangeSummary) {
 	return p, &sum
 }
 
+// neKGPassAtLeast — national pass depth from the per-KG current chunk sets
+// (the figures the next_pass queue is built from): out[k] = (KG, chunk) pairs
+// of logged KGs with ≥ k distinct observation days; out[1] = all of them.
+func neKGPassAtLeast(kgStats map[string]neKGReportStat, logged map[string]bool) (out [neEverDepthMax + 1]int) {
+	for kg, ks := range kgStats {
+		if !logged[kg] {
+			continue
+		}
+		for n, acc := neEverDepthMax, 0; n >= 1; n-- {
+			acc += ks.Depth[n]
+			out[n] += acc
+		}
+	}
+	return
+}
+
 // neRevisitCompute — the memo body: every KG with a chunk log, bounded lists.
 func neRevisitCompute() map[string]interface{} {
 	t0 := time.Now()
@@ -291,6 +310,7 @@ func neRevisitCompute() map[string]interface{} {
 	// next_pass: every logged KG whose chunks are not all at the same depth as
 	// the deepest national pass — from the reports walk's depth histogram
 	var nextPass []neRevisitNextPass
+	atLeast := neKGPassAtLeast(kgStats, logged)
 	for kg, ks := range kgStats {
 		if !logged[kg] || ks.Chunks == 0 {
 			continue
@@ -302,8 +322,17 @@ func neRevisitCompute() map[string]interface{} {
 		if lo >= neEverDepthMax { // every chunk at the open-ended top bucket: nothing to ask for
 			continue
 		}
-		nextPass = append(nextPass, neRevisitNextPass{KG: kg, Pass: lo + 1, Chunks: ks.Chunks, ChunksBelow: ks.Depth[lo],
-			LastAt: ks.LastAt, LastObserver: ks.LastObserver, BBox: ks.LastBBox, byObserver: ks.ByObserver})
+		bbox := ks.RefBBox // the box of the full build that defines the set: covering it reaches every chunk counted
+		if bbox == "" {
+			bbox = ks.LastBBox
+		}
+		row := neRevisitNextPass{KG: kg, Pass: lo + 1, Chunks: ks.Chunks, ChunksBelow: ks.Depth[lo], BBox: bbox, byObserver: ks.ByObserver}
+		for obs, at := range ks.ByObserver { // newest report of any kind: an unchanged re-post is a visit
+			if at > row.LastAt {
+				row.LastAt, row.LastObserver = at, obs
+			}
+		}
+		nextPass = append(nextPass, row)
 	}
 	sort.Slice(nextPass, func(i, j int) bool {
 		a, b := nextPass[i], nextPass[j]
@@ -326,12 +355,13 @@ func neRevisitCompute() map[string]interface{} {
 	if len(nextPass) > neRevisitMax {
 		nextPass = nextPass[:neRevisitMax]
 	}
-	// national chunks by depth (≥ k) from the same walk
-	ever, _ := neScanReportFiles()["chunks_ever"].(map[string]int)
-	byPass := map[string]int{"1": ever["once"]}
-	for k := 2; k <= neEverDepthMax; k++ {
-		if n := ever["pass_"+strconv.Itoa(k)+"_or_more"]; n > 0 {
-			byPass[strconv.Itoa(k)] = n
+	// national chunks by depth (≥ k): the SAME per-KG current sets the queue is
+	// built from, so chunks_by_pass[k] == chunks_by_pass[1] exactly when
+	// pass_target > k (an edge chunk two KGs hold counts in each)
+	byPass := map[string]int{}
+	for k := 1; k <= neEverDepthMax; k++ {
+		if atLeast[k] > 0 {
+			byPass[strconv.Itoa(k)] = atLeast[k]
 		}
 	}
 	boxes := map[string]string{}
@@ -459,7 +489,7 @@ func handleNERevisit(w http.ResponseWriter, r *http.Request) {
 		"observer":         observer,
 		"same_pass_window": neSamePassWindow.String(),
 		"note": "Hints only, oldest first. pending = KGs holding chunk versions sighted once (candidate: not baseline, not pipeline/jitter/coverage; lossy builds are never logged) — a second sighting of the same digest_ap by another observer, or by the same one after same_pass_window, confirms them. " +
-			"stale = KGs whose chunk log is not fully re-sighted (chunks_single > 0: chunks whose latest version was sighted once, nothing pending; most chunks_single first) — the second pass is missing or partial there; one report with chunk rows covering bbox by another observer, or by the same one after same_pass_window, confirms them. totals.chunks_single / chunks_confirmed is the same figure over every log. next_pass = the standing work queue for every later pass: KGs whose chunks have not all reached `pass` distinct observation days (pass = the KG's shallowest chunk + 1; chunks_below = chunks still under it), ordered pass asc (the nation finishes its 2nd pass before its 3rd), chunks_below desc, oldest visit first — take from the top with your daily budget, one report with chunk rows covering bbox lifts the whole KG by one pass; totals.pass_target = the lowest pass not complete nationally, totals.chunks_by_pass = chunks with ≥ k passes. Cheapest poll: ?kind=next_pass&observer=<me>&limit=<your daily KGs> with If-None-Match. no_log = KGs without any chunk log yet (declared picture still the index epoch; one report with chunk rows gives them a baseline — a digest-only earlier report is not a layout, chunk rows are requested at once). obs_on_index = KGs whose observed layer was validated against the index epoch's cell set: re-post NEO1 built on GET {kg}/declared (has_view) or NEC1+NEO1. obs_missing = KGs whose observed layer lacks cells of today's declared view (missing_n), holds rows the view no longer has (extra_n), or holds unswept rows that observe nothing (blank_n: obs_lu all 0, h_mean nodata (255), no flight year — elev_mean is not consulted; obs_complete.blank_rule states it — padding written for view cells the pipeline never ran on; they paint as unknown and count as unobserved) — the view moved since the NEO1 was validated (re-baseline, bevdirect edge fix, another observer's edge cells) or the rekey padded instead of observing: run the pipeline on every cell of GET {kg}/declared and re-post NEO1; most missing + extra + blank first, snapshot of a background pass every few hours (obs_complete.pass_at). Once a KG's sweep is closed, post it with the NEO1 header field view_rekey.coverage=\"swept\" (= every blank row in the body was run and has no ALS data: open water, seams): its blank rows then count as nodata_n (totals cells_obs_nodata / kgs_obs_nodata), never as blank_n, and the KG is listed only while missing_n or extra_n > 0 — an identical re-post is never asked for. coverage rides on each row and on manifest obs{coverage, view_rekey, blank_n, nodata_n}. Each row carries declared_etag = the ETag GET {kg}/declared answers for the view the row was computed on: send it as If-None-Match, a 304 means the view has not moved since this snapshot and your stored copy is current — no refetch, no HEAD. GET {kg}/report likewise answers an ETag and takes ?observer=&since=<your last received_at>&limit=N; nothing on these paths needs an unconditional hourly fetch. Order: pending, stale, next_pass, no_log, obs_on_index, obs_missing, then your normal order. ?observer=<me> hides what I reported within min_age_days; ?kind=no_log&all=1 is the whole list (ETag, 304). Nothing here changes baselines or the confirm rule; values are a snapshot ≤ 10 min old (?refresh=1 recomputes; ?kind=obs_missing&kg=<kg>&refresh=1 recomputes that KG's obs_missing row now → obs_kg{}, and manifest obs{blank_n, nodata_n} follow).",
+			"stale = KGs whose chunk log is not fully re-sighted (chunks_single > 0: chunks whose latest version was sighted once, nothing pending; most chunks_single first) — the second pass is missing or partial there; one report with chunk rows covering bbox by another observer, or by the same one after same_pass_window, confirms them. totals.chunks_single / chunks_confirmed is the same figure over every log. next_pass = the standing work queue for every later pass: KGs whose chunks have not all reached `pass` distinct observation days (pass = the KG's shallowest chunk + 1; chunks_below = chunks still under it), ordered pass asc (the nation finishes its 2nd pass before its 3rd), chunks_below desc, oldest visit first — take from the top with your daily budget, one report covering bbox on a new UTC day lifts the whole KG by one pass — whether it carries chunks or is answered unchanged:true (send the header-only report first: equal digest ⇒ unchanged, a few hundred bytes, credited for every chunk of the report it equals; 202 need:\"chunks\" ⇒ send the full one). chunks / chunks_below count the KG's current chunk set only (the last full build; chunks of older layouts no report can reach are retired). totals.pass_target = the lowest pass not complete nationally, totals.chunks_by_pass = chunks of those sets with ≥ k passes (per KG; [k] == [1] exactly when pass_target > k). Cheapest poll: ?kind=next_pass&observer=<me>&limit=<your daily KGs> with If-None-Match. no_log = KGs without any chunk log yet (declared picture still the index epoch; one report with chunk rows gives them a baseline — a digest-only earlier report is not a layout, chunk rows are requested at once). obs_on_index = KGs whose observed layer was validated against the index epoch's cell set: re-post NEO1 built on GET {kg}/declared (has_view) or NEC1+NEO1. obs_missing = KGs whose observed layer lacks cells of today's declared view (missing_n), holds rows the view no longer has (extra_n), or holds unswept rows that observe nothing (blank_n: obs_lu all 0, h_mean nodata (255), no flight year — elev_mean is not consulted; obs_complete.blank_rule states it — padding written for view cells the pipeline never ran on; they paint as unknown and count as unobserved) — the view moved since the NEO1 was validated (re-baseline, bevdirect edge fix, another observer's edge cells) or the rekey padded instead of observing: run the pipeline on every cell of GET {kg}/declared and re-post NEO1; most missing + extra + blank first, snapshot of a background pass every few hours (obs_complete.pass_at). Once a KG's sweep is closed, post it with the NEO1 header field view_rekey.coverage=\"swept\" (= every blank row in the body was run and has no ALS data: open water, seams): its blank rows then count as nodata_n (totals cells_obs_nodata / kgs_obs_nodata), never as blank_n, and the KG is listed only while missing_n or extra_n > 0 — an identical re-post is never asked for. coverage rides on each row and on manifest obs{coverage, view_rekey, blank_n, nodata_n}. Each row carries declared_etag = the ETag GET {kg}/declared answers for the view the row was computed on: send it as If-None-Match, a 304 means the view has not moved since this snapshot and your stored copy is current — no refetch, no HEAD. GET {kg}/report likewise answers an ETag and takes ?observer=&since=<your last received_at>&limit=N; nothing on these paths needs an unconditional hourly fetch. Order: pending, stale, next_pass, no_log, obs_on_index, obs_missing, then your normal order. ?observer=<me> hides what I reported within min_age_days; ?kind=no_log&all=1 is the whole list (ETag, 304). Nothing here changes baselines or the confirm rule; values are a snapshot ≤ 10 min old (?refresh=1 recomputes; ?kind=obs_missing&kg=<kg>&refresh=1 recomputes that KG's obs_missing row now → obs_kg{}, and manifest obs{blank_n, nodata_n} follow).",
 	}
 	if len(kinds) == 1 { // a filtered poll is a daily habit: the prose rides only on the full answer
 		delete(out, "note")

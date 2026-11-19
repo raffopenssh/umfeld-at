@@ -1113,11 +1113,28 @@ func neContribSummaryText(daily []neDayStat, ever map[string]int) string {
 	if once >= universe && universe > 0 {
 		// full coverage: the interesting figure is the first pass that is not
 		// complete yet — 2nd, then 3rd once the 2nd reached 100 %, and so on
-		k, n := 2, twice
-		for k < neEverDepthMax && n >= universe {
-			k, n = k+1, ever["pass_"+strconv.Itoa(k+1)+"_or_more"]
+		// — counted like the revisit queue (neKGPassAtLeast: per KG, current
+		// chunk sets only), so the caption reaches 100 % when pass_target moves
+		logged := map[string]bool{}
+		for _, kg := range neChangeKGs() {
+			logged[kg] = true
 		}
-		s += fmt.Sprintf(" · %s pass: %s (%s)", neOrdinal(k), share(n), neFmtKm2(n))
+		al := neKGPassAtLeast(neReportKGStats(), logged)
+		k := 2
+		for k < neEverDepthMax && al[1] > 0 && al[k] >= al[1] {
+			k++
+		}
+		if al[1] > 0 {
+			landK := twice // km² = distinct land (an edge chunk two KGs hold is one piece of land)
+			if k > 2 {
+				landK = ever["pass_"+strconv.Itoa(k)+"_or_more"]
+			}
+			pct := "100 %"
+			if al[k] < al[1] {
+				pct = fmt.Sprintf("%.2f %%", math.Floor(1e4*float64(al[k])/float64(al[1]))/100)
+			}
+			s += fmt.Sprintf(" · %s pass: %s (%s)", neOrdinal(k), pct, neFmtKm2(landK))
+		}
 	} else {
 		s += fmt.Sprintf(", %s on two or more days", neFmtKm2(twice))
 	}

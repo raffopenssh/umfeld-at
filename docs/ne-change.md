@@ -325,15 +325,41 @@ steers revisits — it does not touch the baseline, the confirm rule or any stor
 - `next_pass[] = {kg, pass, chunks, chunks_below, last_at, last_observer, bbox}` — the standing
   work queue for every later pass. The chunk log stops counting at the second sighting (bounded
   growth, `neChangeConfirm`), so passes ≥ 3 come from the reports walk: `neKGReportStat.Depth[n]`
-  = chunks of the KG at exactly `n` distinct observation days (kept incrementally in
-  `neDailyAgg.add`, same walk, no extra disk read). `pass` = the KG's shallowest chunk + 1 (the
-  visit that lifts every chunk by one), `chunks_below` = chunks still under it. Order: `pass` asc
-  (the nation finishes its 2nd pass before its 3rd), `chunks_below` desc, oldest `last_at` first —
-  a peer that takes a fixed daily slice from the top always does the most useful work.
-  `?observer=` hides KGs I visited within `min_age_days`. `totals.pass_target` = the lowest pass
-  not complete nationally, `totals.chunks_by_pass{k: chunks with ≥ k passes}`, `totals.kgs_next_pass`.
-  The landing caption shows the same figure (`neContribSummaryText`: once coverage is 100 %, the
-  first incomplete pass and its share).
+  = chunks of the KG at exactly `n` distinct observation days (`neDailyAgg.add` → `closeKG`, same
+  walk, no extra disk read). `pass` = the KG's shallowest chunk + 1 (the visit that lifts every
+  chunk by one), `chunks_below` = chunks still under it. Order: `pass` asc (the nation finishes its
+  2nd pass before its 3rd), `chunks_below` desc, oldest `last_at` first — a peer that takes a fixed
+  daily slice from the top always does the most useful work. `last_at`/`last_observer` = the newest
+  report of any kind. `?observer=` hides KGs I visited within `min_age_days`.
+  `totals.pass_target` = the lowest pass not complete nationally, `totals.chunks_by_pass{k: chunks
+  with ≥ k passes}`, `totals.kgs_next_pass`. The landing caption shows the same figure
+  (`neContribSummaryText`: once coverage is 100 %, the first incomplete pass and its share).
+
+  **Pass rule** (`neKGPass`, test `TestNEPassDepthRule`) — what one visit is worth:
+  1. *One report = one observation day for every chunk it stands for.* A chunk-bearing report
+     stands for its `chunks{}`. A report stored stripped — `unchanged:true`, whether the peer sent
+     the full step-1 body or the header-only step 0 — stands for every chunk of the report it was
+     equal to (`result.unchanged_since` → that report, chains of stubs followed; else the last
+     chunk-bearing report with the same digest). Same rule the log applies (`chunks_confirmed`).
+     Nothing is stored for it beyond the ~1 kB stub line: full history, no chunk table repeated.
+  2. *Distinct UTC days* per (KG, chunk): two reports on one day are one pass; the log's
+     `same_pass_window` (20 h, same observer) governs confirmation, not depth.
+  3. *Per KG.* An edge chunk two KGs hold has different rows in each, so it has a depth in each
+     (the former national per-chunk map credited the wrong KG: buckets went to −1 on 3 186 KGs).
+  4. *Current chunk set only.* A non-lossy report standing for at least half of the KG's set
+     **replaces** it (a full build — what it no longer holds is retired: old wider bboxes,
+     pre-v0.3.6 edge chunks, selftest ids, other assembly classes); a smaller one (viewport slice)
+     **adds** to it; `coverage_lossy`/`tiles_incomplete` never replace. Depth restarts with a new
+     assembly class (`neBevEquivalent`), like the chart. `bbox` = the box of the replacing report:
+     covering it reaches every counted chunk. Measured 2026-11-19 over the store: union of
+     everything ever reported 6 261 957 (KG, chunk) pairs, 12 482 below two days in 755 KGs →
+     current sets 6 249 468, **538 below two days in 90 KGs**; 4 155 090 at ≥ 3.
+  5. `totals.chunks_by_pass` sums the same per-KG sets (`neKGPassAtLeast`; an edge chunk counts
+     in each KG holding it), so `[k] == [1]` exactly when `pass_target > k`. The chart's daily
+     curves stay distinct land (`chunks_ever`), now with rule 1 applied.
+
+  Cheapest visit for a peer: POST the header-only report (no `chunks{}`; §3 step 0). `unchanged:true`
+  ⇒ done, the KG is one pass deeper; `202 need:"chunks"` ⇒ the digest moved, send the full step 1.
 - `no_log[] = {kg, has_obs, reports, last_report_at, last_observer, bbox}` — KGs without any chunk
   log: their declared picture is still the index epoch (§4b); one report with chunk rows covering
   `bbox` (the KG's universe bbox) gives them a baseline. KGs with an observed layer first. A
