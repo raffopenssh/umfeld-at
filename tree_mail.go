@@ -35,7 +35,6 @@
 package main
 
 import (
-	"regexp"
 	"bufio"
 	"bytes"
 	"context"
@@ -57,6 +56,7 @@ import (
 	"net/mail"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -71,8 +71,8 @@ const (
 	tmAttachments  = 3
 	tmQueueMax     = 100
 	tmQueueAge     = 6 * time.Hour
-	tmKeyDaily     = 500  // edits per key and UTC day unless the key says otherwise
-	tmAddrDaily    = 300  // edits per address and UTC day
+	tmKeyDaily     = 1500 // edits per key and UTC day unless the key says otherwise
+	tmAddrDaily    = 1500 // edits per address and UTC day
 	tmAllDaily     = 1500 // edits by mail per UTC day, all keys
 	tmRepliesDaily = 40   // mails we send one address per day
 	tmSubFailAddr  = 5    // wrong keys per address per day, then silence
@@ -80,6 +80,7 @@ const (
 	tmAddrsPerKey  = 5
 	tmKeyMinLen    = 8
 	tmReceiptLines = 30
+	tmShapeLogs    = 500 // subject-shape log lines per process
 	tmSource       = "umfeld-at/tree-mail"
 )
 
@@ -168,16 +169,17 @@ type tmStateFile struct {
 }
 
 var tm = struct {
-	mu      sync.Mutex
-	loaded  bool
-	st      tmStateFile
-	newMod  time.Time
-	tries   map[string]int
-	counts  map[string]int64 // what happened to mails, by word
-	last    time.Time
-	queued  int
-	running bool
-	gwErr   string // the gateway's last refusal, addresses scrubbed
+	mu        sync.Mutex
+	loaded    bool
+	st        tmStateFile
+	newMod    time.Time
+	tries     map[string]int
+	counts    map[string]int64 // what happened to mails, by word
+	last      time.Time
+	queued    int
+	running   bool
+	shapeLogs int    // subject-shape lines since start (≤ tmShapeLogs)
+	gwErr     string // the gateway's last refusal, addresses scrubbed
 }{tries: map[string]int{}, counts: map[string]int64{}}
 
 func tmCount(what string) {
@@ -551,6 +553,38 @@ func tmSend(to, subject, body, inReplyTo string) int {
 	return resp.StatusCode
 }
 
+// tmSubjectShape — why a mail from an unbound address was not a subscribe,
+// without its words: word count, reply/forward prefix, and the first word
+// only when it is one of ours (anything else could be a key or a name).
+func tmSubjectShape(subject string) string {
+	f := strings.Fields(strings.ToLower(subject))
+	prefix := "none"
+	if len(f) > 0 {
+		switch strings.TrimRight(f[0], ":") {
+		case "re", "aw", "antw", "sv":
+			prefix = "reply"
+		case "fwd", "fw", "wg", "wtr":
+			prefix = "forward"
+		}
+	}
+	rest := f
+	if prefix != "none" {
+		rest = f[1:]
+	}
+	first := "none"
+	if len(rest) > 0 {
+		first = "other"
+		switch w := strings.TrimRight(rest[0], ":,."); w {
+		case "subscribe", "unsubscribe", "stop", "help", "undo":
+			first = w
+			if w != rest[0] {
+				first += "+punctuation"
+			}
+		}
+	}
+	return fmt.Sprintf("shape: words=%d prefix=%s first=%s", len(f), prefix, first)
+}
+
 // tmHandle — see the header comment for the order of checks. true = retry later.
 func tmHandle(raw []byte) (retry bool) {
 	c := tmConf()
@@ -659,6 +693,13 @@ func tmHandle(raw []byte) (retry bool) {
 
 	if !bound {
 		tmCount("dropped_unknown_sender")
+		tm.mu.Lock()
+		tm.shapeLogs++
+		quiet := tm.shapeLogs > tmShapeLogs
+		tm.mu.Unlock()
+		if !quiet {
+			log.Printf("tree-mail: dropped, sender not subscribed; subject %s", tmSubjectShape(subject))
+		}
 		return false
 	}
 	var key *tmKey

@@ -523,3 +523,21 @@ func TestTreeMailFlow(t *testing.T) {
 		t.Fatalf("stats leak: %s", s)
 	}
 }
+
+func TestTmSubjectShape(t *testing.T) {
+	for in, want := range map[string]string{
+		"subscribe abcd-efgh":     "shape: words=2 prefix=none first=subscribe",
+		"Re: subscribe abcd-efgh": "shape: words=3 prefix=reply first=subscribe",
+		"Fwd: Subscribe: abcd":    "shape: words=3 prefix=forward first=subscribe+punctuation",
+		"abcd-efgh subscribe":     "shape: words=2 prefix=none first=other",
+		"":                        "shape: words=0 prefix=none first=none",
+		"AW:":                     "shape: words=1 prefix=reply first=none",
+	} {
+		if got := tmSubjectShape(in); got != want {
+			t.Errorf("%q: %s, want %s", in, got, want)
+		}
+		if strings.Contains(tmSubjectShape(in), "abcd") {
+			t.Errorf("%q: the shape leaks subject text", in)
+		}
+	}
+}

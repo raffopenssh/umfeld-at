@@ -44,6 +44,15 @@ correspondents at all: `ssh exe.dev share receive-email <vm> --reply-policy=all`
 (owner's call; nothing in the service can widen it). The mail is gone by then —
 the sender mails `subscribe <key>` again.
 
+**A mail was silently dropped** (`dropped_unknown_sender`) → the log line
+`dropped, sender not subscribed; subject shape: words=N prefix=none|reply|forward
+first=<command>|other|none` says why it was not a subscribe: a prefix, a first
+word that is not `subscribe`, or an empty subject. No subject text is logged.
+
+Daily edits: 1 500 per key (unless the key says otherwise), 1 500 per address,
+1 500 for the whole path (the peer's cap for our reporter key is shared with
+the map — raise the total only together with the peer).
+
 State: `data/tree_mail/state.json` (address hashes → key name, day counters);
 `data/tree_mail/queue/` is empty unless the gateway or the peer was busy.
 
