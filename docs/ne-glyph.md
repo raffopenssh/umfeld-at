@@ -454,6 +454,11 @@ non-scaling strokes, scaled). Safari 26 left a strip of the map unpainted (page 
 wide) whenever `apMarks` rewrote them on a tap — found with the `?deep` switch *flag marks off*. `apMarks` now writes the picked
 ring `g.tp` only.
 
+**Hover ring carries no CSS filter**: `.hov` had `filter: drop-shadow` on top of a non-scaling stroke and an opacity
+transition. Safari 26 (desktop, DPR 2, trees at z 2400) left short white horizontal bars, one crown wide, where the ring had been
+as the pointer went from tree to tree; they outlived the ring (still there with the `?deep` switch *hover ring off* set
+afterwards). The glow twin `.hov.g` gives the contrast; do not put a filter back on a path that moves.
+
 ## Field diagnostics — a device we cannot hold (`ne_glyph_diag.go`)
 
 **Read this first when someone reports a freeze, a flash or a dead tap on a phone.** The order that works:
