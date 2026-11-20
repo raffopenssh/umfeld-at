@@ -35,6 +35,7 @@
 package main
 
 import (
+	"regexp"
 	"bufio"
 	"bytes"
 	"context"
@@ -176,6 +177,7 @@ var tm = struct {
 	last    time.Time
 	queued  int
 	running bool
+	gwErr   string // the gateway's last refusal, addresses scrubbed
 }{tries: map[string]int{}, counts: map[string]int64{}}
 
 func tmCount(what string) {
@@ -251,6 +253,9 @@ func TreeMailStats() map[string]interface{} {
 	out["bound_addresses"], out["bound_per_key"] = len(tm.st.Bind), per
 	out["today"] = map[string]interface{}{"day": tm.st.Day, "edits": tm.st.AllRows, "edits_per_key": tm.st.KeyRows, "addresses": len(tm.st.AddrRows), "replies": len(tm.st.Replies), "wrong_keys": tm.st.SubFails}
 	out["mails"] = mails
+	if tm.gwErr != "" {
+		out["last_gateway_refusal"] = tm.gwErr
+	}
 	if !tm.last.IsZero() {
 		out["last"] = tm.last.UTC().Format(time.RFC3339)
 	}
@@ -517,6 +522,8 @@ var tmGatewayURL = "http://169.254.169.254/gateway/email/send"
 
 var tmHTTP = &http.Client{Timeout: 20 * time.Second}
 
+var tmAddrRe = regexp.MustCompile(`[^\s<>"']+@[^\s<>"']+`)
+
 // tmSend — a short plain-text reply in the sender's thread. 0 = no answer from the gateway.
 func tmSend(to, subject, body, inReplyTo string) int {
 	b, _ := json.Marshal(map[string]string{"to": to, "subject": subject, "body": body, "in_reply_to": inReplyTo, "references": inReplyTo})
@@ -527,7 +534,20 @@ func tmSend(to, subject, body, inReplyTo string) int {
 		return 0
 	}
 	defer resp.Body.Close()
-	io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	out, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// the gateway says why (reply policy, unverified sender, rate): the only
+		// place a deployment fault shows. Addresses never reach the log.
+		var e struct {
+			Error string `json:"error"`
+		}
+		json.Unmarshal(out, &e)
+		why := tmClean(tmAddrRe.ReplaceAllString(e.Error, "<addr>"), 200)
+		tm.mu.Lock()
+		tm.gwErr = strconv.Itoa(resp.StatusCode) + " " + why
+		tm.mu.Unlock()
+		log.Printf("tree-mail: the gateway refused a reply (%d): %s", resp.StatusCode, why)
+	}
 	return resp.StatusCode
 }
 

@@ -37,6 +37,13 @@ touching anybody else's, and the id says nothing about key, name or address.
 `dropped_unknown_sender`, `subscribe_wrong_key`, `dropped_unverified` (the
 gateway would not answer: From not DKIM-aligned — nothing was relayed),
 `dropped_automatic`, `other_address`, `edits_written|known|refused`.
+**A correct `subscribe` got no answer** → `dropped_unverified` went up and
+`last_gateway_refusal` (also `journalctl … | grep 'gateway refused'`) quotes the
+platform's reason. `reply policy is "known"` = the machine may not answer
+correspondents at all: `ssh exe.dev share receive-email <vm> --reply-policy=all`
+(owner's call; nothing in the service can widen it). The mail is gone by then —
+the sender mails `subscribe <key>` again.
+
 State: `data/tree_mail/state.json` (address hashes → key name, day counters);
 `data/tree_mail/queue/` is empty unless the gateway or the peer was busy.
 
