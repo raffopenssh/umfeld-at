@@ -133,6 +133,17 @@ kann der Server geteilte Ansichten nach einem Neustart vorab berechnen, sodass d
 gespeichert; das Öffnen einer nicht geteilten Ansicht hinterlässt nichts. Gespeichert werden nur Ansicht, Kachelliste, Geräteklasse
 („Desktop“/„Touch“), Anzahl der Kopien und Öffnungen und der Tag der letzten – keine IP-Adresse, kein Browser, keine Bildschirmgröße,
 keine Uhrzeit; Einträge ohne Kopie oder Öffnung seit 30 Tagen werden verworfen. Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO (Betrieb).</p>
+<p>Baummeldungen per E-Mail (nur nach eigener Anmeldung mit einem von uns vergebenen Schlüssel, Betreff <code>subscribe …</code>):
+Ihre Nachricht wird vom Hosting-Dienst (siehe 5) zugestellt und automatisch ausgelesen. Verarbeitet werden Absenderadresse, Betreff,
+Nachrichten-Kennung und die angehängte KML-/KMZ-/CSV-Datei. Geänderte Zeilen gehen als Baummeldung (Koordinaten, Art, Höhe,
+Durchmesser, Zustand, optional Notiz) an {OBS_NAME} – ohne Ihre Adresse, mit einer aus dem Schlüssel abgeleiteten Kennung
+(<code>reporter</code>), über die alle Meldungen desselben Schlüssels zusammengefasst und zurückgezogen werden können; dort sind sie
+dauerhaft gespeichert und öffentlich abrufbar. Die Nachricht samt Anhang wird gelöscht, sobald die Antwort (Empfangsbestätigung im
+selben Gesprächsfaden) versendet ist, in der Regel nach Sekunden, spätestens nach 6 Stunden. Dauerhaft gespeichert wird hier nur ein
+<strong>Schlüssel-Hash Ihrer Adresse</strong> (HMAC-SHA-256, nicht die Adresse selbst) mit dem Namen des Schlüssels und dem Tag der
+Anmeldung sowie Tageszähler (Anzahl Meldungen und Antworten). Mit dem Betreff <code>stop</code> wird auch dieser Eintrag gelöscht.
+Nachrichten unbekannter Absender werden ungelesen verworfen und nicht beantwortet. Rechtsgrundlage: Art. 6 Abs. 1 lit. a DSGVO
+(Einwilligung durch Anmeldung, jederzeit widerrufbar).</p>
 <p>Wenn Sie in der Karte einen Baum melden, benennen, vermessen oder einen fehlenden Baum ergänzen (Baumkarte; langes Drücken auf die
 Karte), erzeugt der Browser einmalig eine zufällige Kennung (<code>localStorage</code>-Schlüssel <code>neg-rep</code>) und sendet sie
 als <code>reporter</code> mit der Meldung. Die Meldung (Koordinaten des Baums, Art, Höhe, Durchmesser, Messzeitpunkt, optional eine Notiz)

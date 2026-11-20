@@ -237,6 +237,53 @@ follow the `next` link).
 
 `/api/v1/ne/pmtiles/jobs` lists your recent archives (status, progress, size).
 
+## Trees by email
+
+The way back from a field trip: export the trees of a view, walk them with a
+phone app, change what is wrong, mail the file. Each edit becomes a tree report
+at {OBS_NAME} — the same reports the map's tree card sends.
+
+1. **Subscribe once.** Ask for a key (`/api/v1/feedback`). From the address you
+   will send from, mail **{TREES_MAIL}** with the subject `subscribe <your key>`.
+   The answer explains the rest; it is the only mail that names the key.
+2. **Export.** In QGIS save *Trees as points (current view)* as KML (or CSV).
+   Locus Map and similar apps import the KML: each tree is a point named
+   `26 m spruce`, its `id` / `h` / `species` in the description.
+3. **Edit the name** of a tree — leave the description alone, it holds the id:
+
+   | Name | Report |
+   |---|---|
+   | `Fichte` · `Picea abies` · `Fi` | species (German, English, Latin, forestry code) |
+   | `25 m` | height you measured or estimate |
+   | `bhd 40 cm` | stem diameter |
+   | `gefällt 2025` · `windwurf` · `tot` · `gebrochen` · `käfer` · `weg` | what happened since the flight, date optional (`2025`, `8.2025`, `14.8.2025`) |
+   | `kein baum` | a mast or a pole, not a tree |
+   | `passt` | the ring is this tree |
+
+   Combine freely (`Fichte 25 m bhd 40 cm`). A new point of your own named
+   `Eiche 15 m` adds a tree the map misses (when a tree stands at that spot the
+   report goes to it). In a table (CSV, QGIS) the columns `species`, `height`,
+   `dbh`, `state`, `date`, `note` are read as well.
+4. **Mail the file** to {TREES_MAIL} as `.kmz`, `.kml` or `.csv` — the whole
+   folder, untouched points are ignored. A mail holds 1 MB: about 20 000 trees
+   as KMZ (Locus Map: *export → KML, compress to KMZ*), about 800 as plain KML/CSV.
+5. **Receipt.** One answer per mail: points, edits, unchanged, refused and why.
+   A second one only when {OBS_NAME} refuses a row (an unknown species comes
+   back with suggestions).
+
+Subjects: `undo` + the same file takes its edits back · `help` · `stop` ends the
+subscription. Only subscribed addresses are answered. Limits: 3 attachments per
+mail, 20 000 points per file, a daily number of edits per key.
+
+What a phone app does to the export (Locus Map): the fields move into an HTML
+table in the description (still read), the placemark ids and the folder are
+dropped, altitude and a timestamp are added, the CSV columns are `name, lat,
+lon, alt, acc, time, desc, attachments, custom_coords`. Points carry no symbol
+in the KML, so the app draws its default icon.
+
+Nothing of this is kept here: no file, no tree, no report — a mail is deleted
+when its receipt is out; of your address only a keyed hash stays, until `stop`.
+
 ## Notes
 
 - Coordinates WGS 84 (EPSG:4326 source, Web Mercator tiles). Hex geometry is the

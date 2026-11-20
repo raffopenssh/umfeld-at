@@ -1,0 +1,441 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document id="root_doc">
+<Schema name="trees_as_points_current_view" id="trees_as_points_current_view">
+	<SimpleField name="id" type="string"></SimpleField>
+	<SimpleField name="h" type="float"></SimpleField>
+	<SimpleField name="crown_d" type="float"></SimpleField>
+	<SimpleField name="species" type="string"></SimpleField>
+	<SimpleField name="vitality" type="string"></SimpleField>
+</Schema>
+<Folder><name>trees_as_points_current_view</name>
+  <Placemark id="trees_as_points_current_view.1">
+	<name>20 m</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16158405_48262430</SimpleData>
+		<SimpleData name="h">20</SimpleData>
+		<SimpleData name="crown_d">7.9</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.158405,48.26243</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.2">
+	<name>18 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16158249_48262484</SimpleData>
+		<SimpleData name="h">18.25</SimpleData>
+		<SimpleData name="crown_d">5.2</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.158249,48.262484</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.3">
+	<name>18 m</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16158532_48262477</SimpleData>
+		<SimpleData name="h">18</SimpleData>
+		<SimpleData name="crown_d">7.3</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.158532,48.262477</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.4">
+	<name>17 m</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16158374_48262396</SimpleData>
+		<SimpleData name="h">17.25</SimpleData>
+		<SimpleData name="crown_d">6.8</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.158374,48.262396</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.5">
+	<name>17 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16158180_48262470</SimpleData>
+		<SimpleData name="h">17</SimpleData>
+		<SimpleData name="crown_d">6.4</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.15818,48.26247</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.6">
+	<name>17 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159767_48262408</SimpleData>
+		<SimpleData name="h">17</SimpleData>
+		<SimpleData name="crown_d">7.3</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159767,48.262408</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.7">
+	<name>17 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16158151_48262453</SimpleData>
+		<SimpleData name="h">16.5</SimpleData>
+		<SimpleData name="crown_d">6.8</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.158151,48.262453</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.8">
+	<name>17 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159825_48262324</SimpleData>
+		<SimpleData name="h">16.5</SimpleData>
+		<SimpleData name="crown_d">6.8</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159825,48.262324</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.9">
+	<name>16 m</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16158753_48262294</SimpleData>
+		<SimpleData name="h">16.25</SimpleData>
+		<SimpleData name="crown_d">7.3</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.158753,48.262294</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.10">
+	<name>16 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16157869_48262469</SimpleData>
+		<SimpleData name="h">16</SimpleData>
+		<SimpleData name="crown_d">6.8</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.157869,48.262469</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.11">
+	<name>16 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159682_48262377</SimpleData>
+		<SimpleData name="h">16</SimpleData>
+		<SimpleData name="crown_d">7.3</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159682,48.262377</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.12">
+	<name>16 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16157964_48262365</SimpleData>
+		<SimpleData name="h">15.75</SimpleData>
+		<SimpleData name="crown_d">6.8</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.157964,48.262365</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.13">
+	<name>16 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159941_48262390</SimpleData>
+		<SimpleData name="h">15.75</SimpleData>
+		<SimpleData name="crown_d">6.8</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159941,48.26239</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.14">
+	<name>16 m pine</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16157444_48262312</SimpleData>
+		<SimpleData name="h">15.5</SimpleData>
+		<SimpleData name="crown_d">6.8</SimpleData>
+		<SimpleData name="species">pine</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.157444,48.262312</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.15">
+	<name>16 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16158019_48262479</SimpleData>
+		<SimpleData name="h">15.5</SimpleData>
+		<SimpleData name="crown_d">6.8</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.158019,48.262479</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.16">
+	<name>15 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16158601_48262266</SimpleData>
+		<SimpleData name="h">15.25</SimpleData>
+		<SimpleData name="crown_d">7.3</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.158601,48.262266</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.17">
+	<name>15 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16158733_48262240</SimpleData>
+		<SimpleData name="h">15.25</SimpleData>
+		<SimpleData name="crown_d">7.3</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.158733,48.26224</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.18">
+	<name>15 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159687_48262413</SimpleData>
+		<SimpleData name="h">15.25</SimpleData>
+		<SimpleData name="crown_d">6.4</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159687,48.262413</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.19">
+	<name>15 m pine</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16157413_48262278</SimpleData>
+		<SimpleData name="h">15</SimpleData>
+		<SimpleData name="crown_d">4.8</SimpleData>
+		<SimpleData name="species">pine</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.157413,48.262278</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.20">
+	<name>15 m</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16157432_48262430</SimpleData>
+		<SimpleData name="h">15</SimpleData>
+		<SimpleData name="crown_d">6.8</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.157432,48.26243</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.21">
+	<name>15 m pine</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159522_48262278</SimpleData>
+		<SimpleData name="h">15</SimpleData>
+		<SimpleData name="crown_d">6.8</SimpleData>
+		<SimpleData name="species">pine</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159522,48.262278</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.22">
+	<name>15 m pine</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159775_48262363</SimpleData>
+		<SimpleData name="h">15</SimpleData>
+		<SimpleData name="crown_d">4.5</SimpleData>
+		<SimpleData name="species">pine</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159775,48.262363</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.23">
+	<name>15 m</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159747_48262464</SimpleData>
+		<SimpleData name="h">15</SimpleData>
+		<SimpleData name="crown_d">6.8</SimpleData>
+		<SimpleData name="vitality">dead</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159747,48.262464</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.24">
+	<name>15 m</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159986_48262207</SimpleData>
+		<SimpleData name="h">15</SimpleData>
+		<SimpleData name="crown_d">7.3</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159986,48.262207</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.25">
+	<name>15 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159891_48262428</SimpleData>
+		<SimpleData name="h">15</SimpleData>
+		<SimpleData name="crown_d">5.6</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159891,48.262428</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.26">
+	<name>15 m</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159885_48262375</SimpleData>
+		<SimpleData name="h">15</SimpleData>
+		<SimpleData name="crown_d">6.4</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159885,48.262375</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.27">
+	<name>15 m pine</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16158966_48262489</SimpleData>
+		<SimpleData name="h">14.75</SimpleData>
+		<SimpleData name="crown_d">5.6</SimpleData>
+		<SimpleData name="species">pine</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.158966,48.262489</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.28">
+	<name>15 m</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159345_48262495</SimpleData>
+		<SimpleData name="h">14.75</SimpleData>
+		<SimpleData name="crown_d">6</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159345,48.262495</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.29">
+	<name>15 m</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16157183_48262273</SimpleData>
+		<SimpleData name="h">14.75</SimpleData>
+		<SimpleData name="crown_d">6</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.157183,48.262273</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.30">
+	<name>15 m</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16157597_48262457</SimpleData>
+		<SimpleData name="h">14.75</SimpleData>
+		<SimpleData name="crown_d">6.4</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.157597,48.262457</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.31">
+	<name>15 m pine</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16158560_48262376</SimpleData>
+		<SimpleData name="h">14.75</SimpleData>
+		<SimpleData name="crown_d">6.4</SimpleData>
+		<SimpleData name="species">pine</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.15856,48.262376</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.32">
+	<name>15 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159878_48262321</SimpleData>
+		<SimpleData name="h">14.75</SimpleData>
+		<SimpleData name="crown_d">5.6</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159878,48.262321</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.33">
+	<name>15 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159713_48262186</SimpleData>
+		<SimpleData name="h">14.75</SimpleData>
+		<SimpleData name="crown_d">6.8</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159713,48.262186</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.34">
+	<name>15 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16159828_48262459</SimpleData>
+		<SimpleData name="h">14.75</SimpleData>
+		<SimpleData name="crown_d">5.2</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.159828,48.262459</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.35">
+	<name>15 m pine</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16157680_48262254</SimpleData>
+		<SimpleData name="h">14.5</SimpleData>
+		<SimpleData name="crown_d">6.4</SimpleData>
+		<SimpleData name="species">pine</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.15768,48.262254</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.36">
+	<name>15 m</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16157661_48262427</SimpleData>
+		<SimpleData name="h">14.5</SimpleData>
+		<SimpleData name="crown_d">6.4</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.157661,48.262427</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.37">
+	<name>15 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16158075_48262494</SimpleData>
+		<SimpleData name="h">14.5</SimpleData>
+		<SimpleData name="crown_d">5.2</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">vital</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.158075,48.262494</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.38">
+	<name>15 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16157985_48262427</SimpleData>
+		<SimpleData name="h">14.5</SimpleData>
+		<SimpleData name="crown_d">6</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.157985,48.262427</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.39">
+	<name>15 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16158039_48262424</SimpleData>
+		<SimpleData name="h">14.5</SimpleData>
+		<SimpleData name="crown_d">6</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.158039,48.262424</coordinates></Point>
+  </Placemark>
+  <Placemark id="trees_as_points_current_view.40">
+	<name>15 m spruce</name>
+	<ExtendedData><SchemaData schemaUrl="#trees_as_points_current_view">
+		<SimpleData name="id">t16157947_48262447</SimpleData>
+		<SimpleData name="h">14.5</SimpleData>
+		<SimpleData name="crown_d">5.6</SimpleData>
+		<SimpleData name="species">spruce</SimpleData>
+		<SimpleData name="vitality">stressed</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>16.157947,48.262447</coordinates></Point>
+  </Placemark>
+  </Folder>
+</Document></kml>

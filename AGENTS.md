@@ -64,7 +64,7 @@ stages). Env: `/etc/umfeld-at.env` (0600; template in
 `UMFELD_TOKEN` + `UMFELD_TOKEN_NAMES` (parallel lists), `CONTRIBUTOR_TOKEN` +
 `CONTRIBUTOR_TOKEN_NAMES`, `NE_WRITER`, `NE_WRITE_BUDGET_MB`, `NE_WRITE_BUDGET_MB_OVERRIDES`
 (`name:MB,…`), `UMFELD_PEER_OBS_NAME/_API/_WEB`, `UMFELD_PEER_SUB_NAME/_API/_TOKEN`,
-`UMFELD_PEER_MAP_NAME`; the unit sets `PORT=8000`, `GOMEMLIMIT`. Long passes (`-ne-train-dict`,
+`UMFELD_PEER_MAP_NAME`, `TREE_MAIL_KEYS` (`key:name[:edits/day],…`); the unit sets `PORT=8000`, `GOMEMLIMIT`. Long passes (`-ne-train-dict`,
 `-osm-import`, `-toponyms-import`, `-kg-universe-build`) run as a separate process.
 Go build cache: this is ONE main package, so every edit adds ~40 MB of cache objects (build +
 test binary) that Go keeps 5 days → GBs under agent iteration. `go-cache-trim.timer` (daily,
@@ -158,6 +158,7 @@ Cross-cutting
 | **Glyph filter** (chips over cells at every zoom: LOD 0/1 cell-exact from `fidx` bins per 0.025°, farther out from the national 1-in-49 sample `data/ne_mvt/samp.bin` (mmap, §8: `fnat`, `/ne/filter?adm=`, stats units > 48 bins, `/filter/fields` histograms); `;f=` grammar = `/api/v1/ne/filter`, Worker veil, JS/Go parity test) | `docs/ne-filter.md` (status + design, §8 sample), `docs/ne-glyph.md` row *FILTER* | `ne_filter_expr.go`, `ne_glyph_fidx.go`, `ne_glyph_filt.go`, `ne_glyph_filter.js`, `api_ne_filter.go`, `ne_glyph_fnat.go`, `ne_mvt_samp.go`, `ne_dist_raster.go`, `ne_filter_test.go`, `ne_mvt_samp_test.go`, `testdata/ne_filter_harness.js` |
 | **Unit stats / export** (`/api/v1/ne/stats/unit?kg=|h3=|bbox=|adm=|pt=|share=&f=`, `stats-envelope/1`, observed + subsidy peers federated, flat/csv for sheets, the glyph's link ▾ menu) · **export gate** (enforced; `EXPORT_GATE_ENFORCE=0` = count only; `EXPORT_KEYS` tiers; never in public docs) | `docs/stats-envelope.md` (public, served at `/api/v1/docs/stats-envelope.md`), `docs/ne-glyph.md` row *EXPORT* | `api_ne_stats_unit.go`, `export_gate.go`, `ne_glyph_export.go`, `api_ne_stats_unit_test.go` |
 | **QGIS cell layer** (MVT `/api/v1/ne/mvt/{z}/{x}/{y}.pbf` + `mvt.json` + `mvt/status`, PMTiles `/ne/pmtiles?bbox=`, also under `/contrib` and the private prefix; res 7→9 from the national table `ne_mvt_nat.go` (data/ne_mvt/nat.bin, 62 MB RAM, ~4 min build, ≥ 6 h apart), res 10→12 from fidx bins; tile LRU, bin build queue, archive job worker; gate `NE_MVT_ACCESS` per name bbox + tiles/km² per day, counted until `NE_MVT_GATE_ENFORCE=1`; gates never in public docs) | `docs/qgis-layer.md` (public, `/api/v1/docs/qgis-layer.md`) | `ne_mvt.go`, `ne_mvt_nat.go`, `ne_mvt_enc.go`, `ne_mvt_gate.go`, `ne_mvt_jobs.go`, `ne_pmtiles.go`, `ne_mvt_qgs.go` (.qgs/.qml/zip bundle), `ne_mvt_ogc.go` (trees by extent: OGC API Features `mvt/ogc`, the project's *Trees as points (current view)* — QGIS reads it by the canvas, so an export is what is in view), `ne_mvt_layers.go` (companions relayed + gated: `mvt/relief`, `mvt/trees`, `trees.geojson`, `mvt/pic/…` = the app's own renderers; a project never points at a peer), `ne_mvt_test.go` |
+| **Trees by email** (mailbox loop: `subscribe <key>` binds an address hash, KML/KMZ/CSV edits → tree reports through the relay, receipts in-thread; `TREE_MAIL_KEYS`, keys never in public docs; stores address hashes + day counters only) | `docs/tree-mail.md` (ops, keys, triage), `docs/qgis-layer.md` §Trees by email (public) | `tree_mail.go`, `tree_mail_parse.go`, `tree_mail_test.go`, `testdata/tree_mail/`, `api_tree_report.go` (`treeReportDo`, `treeReportWait`) |
 | INVEKOS subsidy layer (subsidy-peer H3 + IVP1 outline contracts, `v=sub|subc` tiles, `/ne/glyph/sub`) | `docs/invekos-subsidy-layer.md` | `ne_glyph_sub.go`, `ne_glyph_subpoly.go` |
 | NE public read API (H3-keyed, tokenless, `.nex`, word ban, K bucketing) | `docs/ne-public-api.md` | `ne_store.go`, `ne_h3.go`, `api_ne_public.go`, `api_ne_vocab.go`, `api_docs_public_ne.go` |
 | Tiers, tokens, peers, `/api/v1/context`, public docs | `docs/api-tiers.md` | `api_tiers.go`, `peers.go`, `api_context.go`, `api_docs_public.go` |
@@ -206,7 +207,7 @@ curl 'localhost:8000/debug/pprof/goroutine?debug=2'              wedge triage
 - DBs (built locally, never committed): `data/search_index.db` (tables `kg plz_kg bundesland
   index_meta landuse_types kg_landuse fts_admin*` only; `schema/search_index.sql`),
   `data/osm_proximity.db` (lines/points/areas + rtrees), `data/toponyms.db`, `data/addresses.db`,
-  `data/feedback.db`, `data/ne_cells/` (the product), `data/ne_fidx/` (filter index cache,
+  `data/feedback.db`, `data/tree_mail/` (address hashes of mail subscribers, 0600 — keep), `data/ne_cells/` (the product), `data/ne_fidx/` (filter index cache,
   ≤ 2 GB, rebuildable — delete freely), `data/ne_tiles/` (rendered glyph tiles behind the
   RAM LRU, ≤ 4 GB / 400 k files, `NE_TILE_DISK_MB`, delete freely; `ne_glyph_tile_disk.go`), `data/osm_remote_grid.bin` (3 MB, rebuilt in a second),
   `data/ne_mvt/nat.bin`.

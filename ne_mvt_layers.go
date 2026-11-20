@@ -29,8 +29,8 @@ package main
 
 import (
 	"bytes"
-	"encoding/binary"
 	"compress/gzip"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"image"

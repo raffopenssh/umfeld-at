@@ -54,6 +54,8 @@ UMFELD_PEER_OBS_NAME=
 UMFELD_PEER_OBS_API=
 UMFELD_PEER_OBS_WEB=
 UMFELD_PEER_OBS_REPORTER_KEY=
+# trees by email (docs/tree-mail.md): key:name[:edits per day],… — empty = off
+TREE_MAIL_KEYS=
 UMFELD_PEER_SUB_NAME=
 UMFELD_PEER_SUB_API=
 UMFELD_PEER_SUB_TOKEN=
@@ -65,7 +67,7 @@ else
 fi
 
 echo "[4/4] systemd unit"
-sed "s|^User=.*|User=$RUN_USER|;s|^Group=.*|Group=$RUN_GROUP|;s|^WorkingDirectory=.*|WorkingDirectory=$ROOT_DIR|;s|^ExecStart=.*|ExecStart=$ROOT_DIR/umfeld-at|;s|^ReadWritePaths=.*|ReadWritePaths=$ROOT_DIR/data|" \
+sed "s|^User=.*|User=$RUN_USER|;s|^Group=.*|Group=$RUN_GROUP|;s|^WorkingDirectory=.*|WorkingDirectory=$ROOT_DIR|;s|^ExecStart=.*|ExecStart=$ROOT_DIR/umfeld-at|;s|^ReadWritePaths=/opt.*|ReadWritePaths=$ROOT_DIR/data|;s|^ReadWritePaths=-.*|ReadWritePaths=-$(getent passwd "$RUN_USER" | cut -d: -f6)/Maildir|" \
   umfeld-at.service | sudo tee /etc/systemd/system/umfeld-at.service >/dev/null
 sudo cp umfeld-at.socket /etc/systemd/system/umfeld-at.socket
 sudo systemctl daemon-reload

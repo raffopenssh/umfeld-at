@@ -205,6 +205,7 @@ func startBackground() {
 	go func() { neFidxPurgeEmpty(); neFidxWarmLoop() }() // filter index: prebuild the bins behind recent near tiles (ne_glyph_fidx.go)
 	go neFidxBlocksLoop()                                // the observed-layer peer's block manifest: a rebuilt 0.1° block moves its 16 bins' state + refresh builds (ne_glyph_fidx_blocks.go)
 	go neWarmLoop()                                      // opened share links replayed 30 min after start (ne_glyph_warm.go)
+	go treeMailLoop()                                    // trees by email: one stat of the mailbox per 20 s, off unless TREE_MAIL_KEYS is set (tree_mail.go)
 	go feedbackPurgeLoop()                               // glyph-trace records live 24 h (api_feedback.go)
 	go AddressesIndexWarm()                              // addresses_index.go: street index for the find box (BEV streets + OSM-only road names)
 	go func() {

@@ -90,6 +90,7 @@ func peerText(s string) string {
 		"{SUB_NAME}", p.SubName,
 		"{SUB_API}", p.SubAPI,
 		"{MAP_NAME}", p.MapName,
+		"{TREES_MAIL}", tmConf().addr,
 	).Replace(s)
 }
 

@@ -12,6 +12,7 @@ network. Measured 2026-11-18 (atop + a 5 min CPU profile on the private tier's
 | national table + sample (`neNatMaybeBuild`) | hourly check | conditional GETs | one ~10 min pass per 6 h at most, for a moved store and for a moved peer sample alike. |
 | KG universe / `ne_ready` recheck (`kgUniversePeerLoop`) | 20 min | ~1 kB | one-row probe of the peer envelope; the full list (0.8 MB gz) only when hash / total / served / cells generation moved, or every 6 h. |
 | fidx block manifest, peer samples | 10 min / 1 h | 304s | `If-None-Match`. |
+| trees by email (`treeMailLoop`, `tree_mail.go`) | 20 s | one `stat` | `Maildir/new` is listed only when its mtime moved or a mail waits in the queue; off entirely without `TREE_MAIL_KEYS`. |
 
 Adding a loop: it must be O(changed) when nothing changed, and its row belongs here.
 

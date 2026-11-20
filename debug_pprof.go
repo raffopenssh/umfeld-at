@@ -91,6 +91,7 @@ func RegisterDebugAPI(mux *http.ServeMux) {
 			"ne_fidx":          NEFidxStats(),         // ne_glyph_fidx.go: filter index bins (LRU 48 MB + disk 2 GB)
 			"ne_stats":         NEStatsUnitStats(),    // api_ne_stats_unit.go: envelope + peer memo (LRU 16 MB, 10 min)
 			"tree_report":      TreeReportStats(),     // api_tree_report.go: relay to the observed-layer peer
+			"tree_mail":        TreeMailStats(),       // tree_mail.go: mailbox loop — bound address hashes (≤ 5 per key), day counters, queue (≤ 100 mails)
 			"peer_http":        PeerHTTPStats(),       // peer_http.go: subsidy-peer UA / 429 retries / X-RateLimit-Tier check
 			"ne_mvt":           NEMVTStats(),          // ne_mvt.go: cell tiles LRU, ids LRU, build queue, archive jobs
 			"ne_mvt_gate":      NEMVTGateStats(),      // ne_mvt_gate.go: per-name tiles/km² budgets

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -190,27 +191,11 @@ func handleV1TreeReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "umfeld-at/tree-report (+"+publicURL()+")")
-	if k := treeReportKey(); k != "" {
-		req.Header.Set("X-Reporter-Key", k)
-	}
-	resp, err := http.DefaultClient.Do(req)
+	status, out, ra, err := treeReportDo(r.Context(), body, "tree-report")
 	if err != nil {
 		apiError(w, peers().ObsName+" did not answer", http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close()
-	out, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	treeReportBucket.mu.Lock()
-	treeReportBucket.sent++
-	treeReportBucket.status[resp.StatusCode]++
-	treeReportBucket.mu.Unlock()
-	status := resp.StatusCode
 	if status == http.StatusUnauthorized || (status == http.StatusForbidden && !bytes.Contains(out, []byte(`"not_yours"`))) {
 		// our key, not the reader's fault — and never a hint about it. A 403 with
 		// reason "not_yours" is the peer's answer to a withdraw by somebody who never
@@ -218,7 +203,7 @@ func handleV1TreeReport(w http.ResponseWriter, r *http.Request) {
 		apiError(w, "tree reports are not accepted right now", http.StatusBadGateway)
 		return
 	}
-	if ra := resp.Header.Get("Retry-After"); ra != "" {
+	if ra != "" {
 		w.Header().Set("Retry-After", ra)
 	}
 	if !json.Valid(out) {
@@ -228,4 +213,50 @@ func handleV1TreeReport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	w.Write(out)
+}
+
+// treeReportDo — one POST to the peer's write endpoint with the deployment's
+// reporter key; the caller holds a bucket token. Shared by the HTTP relay and
+// the mail path (tree_mail.go).
+func treeReportDo(ctx context.Context, body []byte, component string) (status int, out []byte, retryAfter string, err error) {
+	target := treeReportURL()
+	if target == "" {
+		return 0, nil, "", errors.New("tree reports are not configured")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "umfeld-at/"+component+" (+"+publicURL()+")")
+	if k := treeReportKey(); k != "" {
+		req.Header.Set("X-Reporter-Key", k)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, nil, "", err
+	}
+	defer resp.Body.Close()
+	out, _ = io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	treeReportBucket.mu.Lock()
+	treeReportBucket.sent++
+	treeReportBucket.status[resp.StatusCode]++
+	treeReportBucket.mu.Unlock()
+	return resp.StatusCode, out, resp.Header.Get("Retry-After"), nil
+}
+
+// treeReportWait — a bucket token, waiting as long as ctx allows (the mail
+// path is in no hurry; a reader's request waits treeReportWaitMax at most).
+func treeReportWait(ctx context.Context) error {
+	for {
+		d := treeReportTake()
+		if d == 0 {
+			return nil
+		}
+		select {
+		case <-time.After(d):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }

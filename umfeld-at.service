@@ -40,6 +40,8 @@ OOMPolicy=kill
 NoNewPrivileges=yes
 ProtectSystem=strict
 ReadWritePaths=/opt/umfeld-at/data
+# trees by email (tree_mail.go): new mail is moved out of the mailbox; "-" = fine if absent
+ReadWritePaths=-/home/umfeld/Maildir
 PrivateTmp=yes
 
 StandardOutput=journal
