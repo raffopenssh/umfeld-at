@@ -71,8 +71,7 @@ which the second receipt quotes. No LLM in the path.
 - **Notes** (`tmNote`): reader's text = `note` column/field + lines typed into the description beside
   the table (`tmRow.free`); unread fields (`tmRow.extra`, minus `tmIgnore`) ride along only on a row
   that reports something. `tmPersonal` drops e-mail / phone-like values (notes are public at the
-  peer); length ≤ the peer's `limits.note_chars` (`tmNoteLimit`, 280 when it names none, ceiling `treeNoteCeil` 4500). A note ALONE is sent only when the peer advertises `limits.note_chars` in
-  `trees/taxa/dict` (`treeNoteCap`, asked hourly; `debug/inflight` → `tree_report.peer_notes`) — the
-  tree card's `note…` chip is gated by the same field. Until then the peer ignores `note` silently
-  on a tree report and answers 400 to a note-only body.
+  peer); length ≤ the peer's `limits.note_chars` (`tmNoteLimit`, 280 when it names none, ceiling `treeNoteCeil` 4500). The peer stores notes since 2026-11-20 (its `#tree-note`): a note alone is a
+  report (`tmNoteAlone`). Length = `limits.note_chars` of `trees/taxa/dict` when advertised
+  (`treeNoteCap`, asked hourly; `debug/inflight` → `tree_report.peer_notes`), else 280; the peer cuts longer ones.
 - The help mail (`tmHelpText`) is three steps + one table; keep it glanceable on a phone.

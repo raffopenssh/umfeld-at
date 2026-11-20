@@ -280,8 +280,6 @@ at {OBS_NAME} — the same reports the map's tree card sends.
    that are not read (`Baumnummer`, `Pflege` …) travel in the note of every
    tree you edited, as `key: value · key: value`; on an untouched tree they
    are ignored, as are the fields a phone app adds (altitude, accuracy, time).
-   Until {OBS_NAME} stores notes, a note travels with a species, a height or a
-   state; a note alone is refused in the receipt.
 4. **Mail the file** to {TREES_MAIL} as `.kmz`, `.kml` or `.csv` — the whole
    folder, untouched points are ignored. A mail holds 1 MB: about 20 000 trees
    as KMZ (Locus Map: *export → KML, compress to KMZ*), about 800 as plain KML/CSV.

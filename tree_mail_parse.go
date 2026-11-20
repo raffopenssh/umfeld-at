@@ -741,9 +741,10 @@ type tmItem struct {
 	cut     bool    // note clipped
 }
 
-// tmNoteAlone — may a note be a report of its own? Only once the peer stores
-// notes (treeNoteCap); a var so tests decide.
-var tmNoteAlone = func() bool { return treeNoteCap() > 0 }
+// tmNoteAlone — may a note be a report of its own? Yes since the peer stores
+// notes (its #tree-note contract, 2026-11-20); a var so a deployment against
+// an older peer, and tests, can say no.
+var tmNoteAlone = func() bool { return true }
 
 // tmPos — where a row's tree stands: the id is the apex (a point dragged in
 // an app does not move the tree), else the point.
