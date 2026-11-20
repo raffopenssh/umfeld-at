@@ -1538,7 +1538,7 @@ function up(e){if(!ptrs[e.pointerId])return;var cancelled=e.type!=='pointerup';i
  if(!keys().length){navCommit();if(hp&&hp.v)hpSettle()}navBase(true);
  if(cancelled){tapT=0;tapP=null;if(wd&&wd.touch&&!wd.moved&&coop()&&e.type==='pointercancel')coopHint();return}if(wasPinch||keys().length||!wd||wd.moved)return;
  var now=performance.now(),p=at(e);
- if(hi.on&&hi.tree){var ah=apAt(e);if(ah){tapT=0;tapP=null;apPin(ah);if(e.pointerType==='mouse')main.focus({preventScroll:true});return}}
+ if(hi.on&&hi.tree){var ah=apAt(e);if(ah){tapT=0;tapP=null;if(trPickTap(ah))return;apPin(ah);if(e.pointerType==='mouse')main.focus({preventScroll:true});return}}
  if(tapP&&now-tapT<320&&Math.abs(tapP[0]-e.clientX)<24&&Math.abs(tapP[1]-e.clientY)<24){tapT=0;tapP=null;if(W/vb.w>ZMAX*0.7&&(hi.on||auto.opt||!proj))reset();else zoomAt(p[0],p[1],2.6,280);return}/* near the overview's deepest zoom a double-tap keeps going: zoomAt lands on ZMAX0 and hiAuto flows into full resolution, like the pinch — it only resets when the cap is final (full res on, overview opted, no projection) */
  tapT=now;tapP=[e.clientX,e.clientY];pinAt(p);if(e.pointerType==='mouse')main.focus({preventScroll:true})}
 /* Window capture also catches releases over controls/outside the map if a
@@ -2228,7 +2228,7 @@ function apAt(ev){var p=at(ev),zpx=(svg.getBoundingClientRect().width||W)/vb.w,s
 function apH(m){return m.toFixed(1).replace(/\.0$/,'')+'\u202fm'}
 var SP=['','spruce','fir','pine','larch','beech','oak','maple','ash','birch','alder','poplar','willow','fruit tree','conifer','broadleaf'],VT=['','vital','normal','stressed','declining','dead'];
 function apWhat(a){var w=[],sp=typeof a.species==='string'?a.species:SP[a.species]||'',vt=typeof a.vitality==='string'?a.vitality:VT[a.vitality]||'';/* /trees/bbox columns carry the words, the res-12 cell layer the codes */if(sp&&sp!=='unknown')w.push(sp);if(vt&&vt!=='normal'&&vt!=='unknown')w.push(vt);return w.join(' \u00b7 ')}
-function apPeek(a){var f=a.fl,w=apWhat(a);return'<b>tree '+apH(a.height_m)+'</b><span class="mut"> \u00b7 '+(w||TH_L[apBand(a.height_m)])+(a.crown_d_m?' \u00b7 crown '+apH(a.crown_d_m):a.crown_m2?' \u00b7 crown '+Math.round(a.crown_m2)+'\u202fm\u00b2':'')+'</span>'+(a.u&&a.u.taxon?'<div class="pl">'+esc(trName(a.u.taxon))+(a.u.dbh!=null?' \u00b7 dbh '+trNum(a.u.dbh)+'\u202fcm':'')+'</div>':'')+(f?'<div class="pl"><span class="c">\u2691</span> '+(f.n||1)+(f.n>1?' reports':' report')+' \u00b7 '+esc(CL[apTop(f)]||apTop(f))+'</div>':'')}
+function apPeek(a){var f=a.fl,w=apWhat(a);return'<b>tree '+apH(a.height_m)+'</b><span class="mut"> \u00b7 '+(w||TH_L[apBand(a.height_m)])+(a.crown_d_m?' \u00b7 crown '+apH(a.crown_d_m):a.crown_m2?' \u00b7 crown '+Math.round(a.crown_m2)+'\u202fm\u00b2':'')+'</span>'+(a.u&&a.u.taxon?'<div class="pl">'+esc(trName(a.u.taxon))+(a.u.dbh!=null?' \u00b7 dbh '+trNum(a.u.dbh)+'\u202fcm':'')+'</div>':'')+(f?'<div class="pl"><span class="c">\u2691</span> '+(f.n||1)+(f.n>1?' reports':' report')+' \u00b7 '+esc(trFlagWord(f))+'</div>':'')}
 /* the tree card: the apex as srtm serves it, then the flag line — one quiet button that unfolds in place into the claims, a note and send; nothing leaves the card */
 function apCard(a){return trCard(a)}/* ne_glyph_treerep.go: the apex as the peer serves it, the species / measured rows, then the flag line */
 function coordS(lon,lat){return lat.toFixed(5)+', '+lon.toFixed(5)}

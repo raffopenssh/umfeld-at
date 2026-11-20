@@ -1,7 +1,7 @@
 // api_tree_report.go — POST /api/v1/trees/report: the tree-report relay.
 //
 // The landing glyph lets a reader name a tree's species, measure it, add a
-// tree the LiDAR inventory misses, flag or withdraw. Those reports belong to
+// tree the LiDAR inventory misses, flag (not a tree, a second top of the tree beside it, a line of noise), comment or withdraw. Those reports belong to
 // the observed-layer peer (its POST /api/v1/flags, tree contract 2026-11-11);
 // this handler only forwards them with the deployment's reporter key
 // (UMFELD_PEER_OBS_REPORTER_KEY → X-Reporter-Key), so the key never reaches a
@@ -9,7 +9,7 @@
 // here: no tree, no report, no reporter id (docs/ne-glyph.md §Tree reports).
 //
 // Bounds: body ≤ 32 KB, ≤ 50 items, tree layer only, string fields ≤ 64 chars
-// (species ≤ 60 and note ≤ 280 are the peer's own limits), one global token
+// (species ≤ 60 is the peer's own limit; note ≤ its limits.note_chars, here ≤ 4500), one global token
 // bucket at the peer's pace (1 r/s, burst 10 — every reader shares our key's
 // address) on top of the public fair-use gate per client. The peer's status
 // and JSON body are handed back unchanged (201 written · 200 folded · 400
@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -79,6 +80,65 @@ func treeReportTake() time.Duration {
 	return time.Duration((1 - b.tokens) * float64(time.Second))
 }
 
+// treeNoteCap — does the peer store a note on a tree report? It says so in its
+// dictionary (limits.note_chars); asked at most once an hour, never on a
+// request path that waits (the mail loop and the stats line read it).
+var treeNoteState struct {
+	mu   sync.Mutex
+	at   time.Time
+	ok   int
+	busy bool
+}
+
+// treeNoteCeil — the longest note the relay lets through, whatever the peer says.
+const treeNoteCeil = 4500
+
+// treeNoteCap — the peer's note limit in characters; 0 = it stores no notes.
+func treeNoteCap() int {
+	s := &treeNoteState
+	s.mu.Lock()
+	ok, stale := s.ok, time.Since(s.at) > time.Hour && !s.busy
+	if stale {
+		s.busy = true
+	}
+	first := s.at.IsZero()
+	s.mu.Unlock()
+	if !stale {
+		return ok
+	}
+	ask := func() {
+		got := 0
+		if a := peers().ObsAPI; a != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+			defer cancel()
+			if req, err := http.NewRequestWithContext(ctx, http.MethodGet, a+"/api/v1/trees/taxa/dict", nil); err == nil {
+				if resp, err := http.DefaultClient.Do(req); err == nil {
+					var d struct {
+						Limits struct {
+							NoteChars int `json:"note_chars"`
+						} `json:"limits"`
+					}
+					if resp.StatusCode == 200 && json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&d) == nil {
+						got = max(d.Limits.NoteChars, 0)
+					}
+					resp.Body.Close()
+				}
+			}
+		}
+		s.mu.Lock()
+		s.ok, s.at, s.busy = got, time.Now(), false
+		s.mu.Unlock()
+	}
+	if first {
+		ask() // the first caller waits once (≤ 8 s, background callers only)
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.ok
+	}
+	go ask()
+	return ok
+}
+
 // TreeReportStats — one line for debug/inflight.
 func TreeReportStats() map[string]interface{} {
 	b := &treeReportBucket
@@ -88,7 +148,10 @@ func TreeReportStats() map[string]interface{} {
 	for k, v := range b.status {
 		st[strconv.Itoa(k)] = v
 	}
-	return map[string]interface{}{"keyed": treeReportKey() != "", "sent": b.sent, "denied_429": b.denied, "peer_status": st}
+	treeNoteState.mu.Lock()
+	notes := treeNoteState.ok
+	treeNoteState.mu.Unlock()
+	return map[string]interface{}{"keyed": treeReportKey() != "", "peer_notes": notes, "sent": b.sent, "denied_429": b.denied, "peer_status": st}
 }
 
 // treeReportClean — one report item: tree layer only, our source label, no
@@ -114,9 +177,9 @@ func treeReportClean(m map[string]interface{}) string {
 		}
 		max := 64
 		if k == "note" {
-			max = 280
+			max = treeNoteCeil // the peer's own limit decides below that
 		}
-		if len(s) > max {
+		if utf8.RuneCountInString(s) > max {
 			return k + " too long (≤ " + strconv.Itoa(max) + " chars)"
 		}
 	}

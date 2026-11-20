@@ -32,6 +32,15 @@ func tmTestFile(t *testing.T, name string) []byte {
 }
 
 func tmDiffAll(rows []tmRow) (items []tmItem, same int, refused map[string]int) {
+	its, sm, ref := tmDiffRows(rows, "mtest", time.Now())
+	r2 := map[string]int{}
+	for k, v := range ref {
+		r2[k] = len(v)
+	}
+	return its, sm, r2
+}
+
+func tmDiffAllOld(rows []tmRow) (items []tmItem, same int, refused map[string]int) {
 	refused = map[string]int{}
 	for _, r := range rows {
 		its, why := tmDiff(r, "mtest", time.Now())
@@ -216,8 +225,8 @@ func TestTreeMailHostile(t *testing.T) {
 			t.Errorf("%s took %v", c.name, d)
 		}
 	}
-	// a path in a zip entry name is only a name; a 5 kB text is kept as 4 kB; long names do not travel
-	rows, err := tmParseAttachment("a.kmz", tmZip(t, map[string][]byte{"../../../../tmp/evil.kml": kml(`<Placemark><name>` + strings.Repeat("y", 5000) + `</name><Point><coordinates>16.2,48.2</coordinates></Point></Placemark>`)}))
+	// a path in a zip entry name is only a name; a text longer than tmField is cut to it; long names do not travel
+	rows, err := tmParseAttachment("a.kmz", tmZip(t, map[string][]byte{"../../../../tmp/evil.kml": kml(`<Placemark><name>` + strings.Repeat("y", tmField+900) + `</name><Point><coordinates>16.2,48.2</coordinates></Point></Placemark>`)}))
 	if err != nil || len(rows) != 1 || len(rows[0].name) != tmField {
 		t.Fatalf("path entry: %v %d", err, len(rows))
 	}

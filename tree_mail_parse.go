@@ -42,7 +42,7 @@ const (
 	tmZipRatio   = 100 // a real export packs ~35:1
 	tmXMLDepth   = 16
 	tmXMLElems   = 600000
-	tmField      = 4096 // bytes kept of one text (a Locus description is ~700)
+	tmField      = 12288 // bytes kept of one text (a Locus description is ~700; a note may be long)
 	tmCSVCols    = 32
 	tmStr        = 64 // any string that leaves for the peer
 )
@@ -53,7 +53,9 @@ type tmRow struct {
 	name     string
 	lon, lat float64
 	hasPt    bool
-	attrs    map[string]string // id h species state dbh note date height (lower-case keys)
+	attrs    map[string]string // id h species state dbh note date height crown_d (lower-case keys)
+	extra    []string          // "key: value" of every field we do not read (tmExtra) — rides in the note
+	free     []string          // lines typed into a description beside the table — a note
 }
 
 // tmAttrKeys — the field names we read, with their German / app aliases.
@@ -61,6 +63,101 @@ var tmAttrKeys = map[string]string{
 	"id": "id", "h": "h", "species": "species", "art": "species", "baumart": "species",
 	"state": "state", "zustand": "state", "status": "state", "dbh": "dbh", "bhd": "dbh", "dbh_cm": "dbh",
 	"note": "note", "notiz": "note", "date": "date", "datum": "date", "height": "height", "hoehe": "height", "höhe": "height", "h_m": "height",
+	"comment": "note", "kommentar": "note", "bemerkung": "note", "anmerkung": "note", "remark": "note", "crown_d": "crown_d",
+}
+
+// tmNoteMax — a note's length in characters when the peer names no limit;
+// tmNoteLimit is what applies: the peer's limits.note_chars (treeNoteCap),
+// never more than treeNoteCeil. A var so tests decide.
+const tmNoteMax = 280
+
+var tmNoteLimit = func() int {
+	if n := treeNoteCap(); n > 0 {
+		return min(n, treeNoteCeil)
+	}
+	return tmNoteMax
+}
+
+// tmClipRunes — s cut to n characters.
+func tmClipRunes(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	return string([]rune(s)[:n])
+}
+
+// tmIgnore — fields an export or a phone app writes by itself: never a comment.
+var tmIgnore = map[string]bool{"name": true, "title": true, "lat": true, "latitude": true, "lon": true, "lng": true, "long": true, "longitude": true,
+	"x": true, "y": true, "z": true, "wkt": true, "geometry": true, "desc": true, "description": true, "beschreibung": true,
+	"vitality": true, "alt": true, "altitude": true, "ele": true, "elevation": true, "acc": true, "accuracy": true, "time": true, "timestamp": true,
+	"attachments": true, "custom_coords": true, "fid": true, "ogc_fid": true, "gid": true, "objectid": true, "icon": true, "symbol": true,
+	"visibility": true, "styleurl": true, "tessellate": true, "extrude": true, "altitudemode": true, "draworder": true, "snippet": true,
+	"begin": true, "end": true, "layer": true, "path": true}
+
+// tmExtra — a field we do not read, kept as "key: value" for the note.
+func (r *tmRow) tmExtra(k, v string) {
+	k, v = strings.TrimSpace(k), strings.Join(strings.Fields(html.UnescapeString(v)), " ")
+	if k == "" || v == "" || tmIgnore[strings.ToLower(k)] || len(r.extra) >= 32 {
+		return
+	}
+	r.extra = append(r.extra, tmClip(k, 24)+": "+tmClip(v, 600))
+}
+
+var (
+	tmMailRe  = regexp.MustCompile(`[^\s@]+@[^\s@]+\.[^\s@]+`)
+	tmPhoneRe = regexp.MustCompile(`\+?\d[\d /().-]{7,}\d`)
+)
+
+// tmPersonal — a value that looks like an e-mail address or a phone number
+// (≥ 9 digits in one run of digits and separators; a date has 8): notes are
+// public at the peer, so such a value is left out.
+func tmPersonal(v string) bool {
+	if tmMailRe.MatchString(v) {
+		return true
+	}
+	for _, m := range tmPhoneRe.FindAllString(v, 4) {
+		n := 0
+		for _, c := range m {
+			if c >= '0' && c <= '9' {
+				n++
+			}
+		}
+		if n >= 9 && !strings.Contains(m, ".") {
+			return true
+		}
+	}
+	return false
+}
+
+// tmNote — the note of a row: what the reader wrote (note field, lines typed
+// into the description), then — with=true — every field we do not read.
+// dropped = values left out as personal, cut = clipped at tmNoteMax.
+func tmNote(r tmRow, with bool) (note string, dropped int, cut bool) {
+	parts := []string{}
+	add := func(v string) {
+		if v = strings.Join(strings.Fields(v), " "); v == "" {
+			return
+		}
+		if tmPersonal(v) {
+			dropped++
+			return
+		}
+		parts = append(parts, v)
+	}
+	add(r.attrs["note"])
+	for _, f := range r.free {
+		add(f)
+	}
+	if with {
+		for _, x := range r.extra {
+			add(x)
+		}
+	}
+	note = strings.Join(parts, " · ")
+	if lim := tmNoteLimit(); utf8.RuneCountInString(note) > lim {
+		note, cut = tmClipRunes(note, lim-1)+"…", true
+	}
+	return
 }
 
 func tmClip(s string, n int) string {
@@ -148,25 +245,42 @@ var (
 
 // tmDescAttrs — fields out of a description: the HTML table Locus Map makes of
 // a KML's ExtendedData, or plain "key: value" lines.
-func tmDescAttrs(desc string, into map[string]string) {
+func tmDescAttrs(desc string, row *tmRow) {
 	if desc == "" {
 		return
 	}
-	set := func(k, v string) {
-		if c, ok := tmAttrKeys[strings.ToLower(k)]; ok {
-			if v = strings.TrimSpace(html.UnescapeString(v)); v != "" {
-				if _, have := into[c]; !have {
-					into[c] = tmClip(v, 200)
-				}
+	into := row.attrs
+	set := func(k, v string) bool {
+		c, ok := tmAttrKeys[strings.ToLower(k)]
+		if !ok {
+			return false
+		}
+		if v = strings.TrimSpace(html.UnescapeString(v)); v != "" {
+			if _, have := into[c]; !have {
+				into[c] = tmClip(v, 200)
 			}
 		}
+		return true
 	}
 	for _, m := range tmHTMLRow.FindAllStringSubmatch(desc, 32) {
-		set(m[1], m[2])
+		if !set(m[1], m[2]) {
+			row.tmExtra(m[1], m[2])
+		}
 	}
-	plain := tmTags.ReplaceAllString(strings.NewReplacer("<br>", "\n", "<br />", "\n", "<br/>", "\n", "</tr>", "\n", "</p>", "\n").Replace(desc), " ")
-	for _, m := range tmTextRow.FindAllStringSubmatch(plain, 32) {
-		set(m[1], m[2])
+	// what is left beside the table: "key: value" lines we read, and anything
+	// else the reader typed there — a note
+	rest := tmHTMLRow.ReplaceAllString(desc, " ")
+	plain := tmTags.ReplaceAllString(strings.NewReplacer("<br>", "\n", "<br />", "\n", "<br/>", "\n", "</tr>", "\n", "</p>", "\n", "</div>", "\n").Replace(rest), " ")
+	for _, ln := range strings.Split(plain, "\n") {
+		if ln = strings.Join(strings.Fields(html.UnescapeString(ln)), " "); ln == "" {
+			continue
+		}
+		if m := tmTextRow.FindStringSubmatch(ln); m != nil && (set(m[1], m[2]) || tmIgnore[strings.ToLower(m[1])]) {
+			continue
+		}
+		if len(row.free) < 40 {
+			row.free = append(row.free, tmClip(ln, tmField))
+		}
 	}
 }
 
@@ -257,8 +371,12 @@ func tmParseKML(data []byte) ([]tmRow, error) {
 					coords = v
 				}
 			case "SimpleData", "value":
-				if c, ok := tmAttrKeys[strings.ToLower(dname)]; ok && v != "" {
-					cur.attrs[c] = tmClip(v, 200)
+				if c, ok := tmAttrKeys[strings.ToLower(dname)]; ok {
+					if v != "" {
+						cur.attrs[c] = tmClip(v, 200)
+					}
+				} else {
+					cur.tmExtra(dname, v)
 				}
 			case "Placemark":
 				in = false
@@ -275,7 +393,7 @@ func tmParseKML(data []byte) ([]tmRow, error) {
 						cur.lon, cur.lat, cur.hasPt = lon, lat, true
 					}
 				}
-				tmDescAttrs(desc, cur.attrs)
+				tmDescAttrs(desc, &cur)
 				cur.n = len(rows) + 1
 				rows = append(rows, cur)
 			}
@@ -321,6 +439,7 @@ func tmParseCSV(data []byte) ([]tmRow, error) {
 	}
 	col := map[string]int{}
 	attrCol := map[int]string{}
+	extraCol := map[int]string{}
 	for i, h := range head {
 		h = strings.ToLower(strings.TrimSpace(h))
 		switch h {
@@ -337,6 +456,8 @@ func tmParseCSV(data []byte) ([]tmRow, error) {
 		default:
 			if c, ok := tmAttrKeys[h]; ok {
 				attrCol[i] = c
+			} else if h != "" && !tmIgnore[h] {
+				extraCol[i] = tmClip(strings.TrimSpace(head[i]), 24)
 			}
 			continue
 		}
@@ -389,6 +510,11 @@ func tmParseCSV(data []byte) ([]tmRow, error) {
 				}
 			}
 		}
+		for i := range rec {
+			if k, ok := extraCol[i]; ok {
+				row.tmExtra(k, rec[i])
+			}
+		}
 		lat, ok1 := num(get(rec, "lat"))
 		lon, ok2 := num(get(rec, "lon"))
 		if ok1 && ok2 {
@@ -398,7 +524,7 @@ func tmParseCSV(data []byte) ([]tmRow, error) {
 			row.lat, _ = strconv.ParseFloat(m[2], 64)
 			row.hasPt = true
 		}
-		tmDescAttrs(get(rec, "desc"), row.attrs)
+		tmDescAttrs(get(rec, "desc"), &row)
 		rows = append(rows, row)
 	}
 	return rows, nil
@@ -437,6 +563,7 @@ var tmStates = map[string]string{
 // tmPhrases — two/three-word sayings, folded, replaced by one token first.
 var tmPhrases = strings.NewReplacer(
 	"kein baum", "\x01spurious", "not a tree", "\x01spurious", "no tree", "\x01spurious", "nicht baum", "\x01spurious", "keinbaum", "\x01spurious",
+	"same tree", "\x01crown", "gleicher baum", "\x01crown", "selber baum", "\x01crown", "derselbe baum", "\x01crown", "ein baum", "\x01crown", "one tree", "\x01crown",
 	"looks right", "\x01looks_right", "still standing", "standing", "steht noch", "standing",
 )
 
@@ -455,7 +582,7 @@ type tmSaid struct {
 	species string
 	state   string
 	date    string
-	flag    string // spurious | looks_right
+	flag    string // spurious | looks_right | crown (same tree: a second top of the tree beside it)
 	bad     string // why the text cannot be used
 }
 
@@ -526,6 +653,8 @@ func tmReadName(name string, now time.Time) tmSaid {
 		case t == "":
 		case t == "\x01spurious" || t == "\x01looks_right":
 			out.flag = t[1:]
+		case t == "\x01crown" || t == "zwiesel" || t == "doppelt" || t == "doppelwipfel" || t == "duplicate":
+			out.flag = "crown"
 		case t == "ok" || t == "passt" || t == "stimmt":
 			out.flag = "looks_right"
 		case t == "bhd" || t == "dbh" || t == "ø" || t == "durchmesser":
@@ -605,6 +734,36 @@ type tmItem struct {
 	what string // "species Fichte · state logged 2025"
 	body map[string]interface{}
 	add  bool // no id: a tree report on the point first, an added tree if nothing is there
+
+	crown   bool    // "same tree": the tree it belongs to is found among the file's rows (tmCrowns)
+	h       float64 // the export's height of this row, 0 unknown
+	dropped int     // values left out of the note as personal
+	cut     bool    // note clipped
+}
+
+// tmNoteAlone — may a note be a report of its own? Only once the peer stores
+// notes (treeNoteCap); a var so tests decide.
+var tmNoteAlone = func() bool { return treeNoteCap() > 0 }
+
+// tmPos — where a row's tree stands: the id is the apex (a point dragged in
+// an app does not move the tree), else the point.
+func tmPos(r tmRow) (lon, lat float64, ok bool, bad string) {
+	lon, lat, ok = r.lon, r.lat, r.hasPt
+	if id := r.attrs["id"]; id != "" {
+		m := tmIDRe.FindStringSubmatch(id)
+		if m == nil {
+			return 0, 0, false, "id is not a tree id"
+		}
+		a, _ := strconv.ParseFloat(m[1], 64)
+		b, _ := strconv.ParseFloat(m[2], 64)
+		lon, lat, ok = a/1e6, b/1e6, true
+	}
+	return
+}
+
+func tmNum(s string) float64 {
+	v, _ := strconv.ParseFloat(strings.Replace(strings.TrimSpace(s), ",", ".", 1), 64)
+	return v
 }
 
 // tmClientID — the idempotency key of a tree added by mail: the same reporter
@@ -620,15 +779,9 @@ func tmClientID(reporter string, lon, lat float64) string {
 // why set = the row is refused.
 func tmDiff(r tmRow, reporter string, now time.Time) (items []tmItem, why string) {
 	id := r.attrs["id"]
-	lon, lat, has := r.lon, r.lat, r.hasPt
-	if id != "" {
-		m := tmIDRe.FindStringSubmatch(id)
-		if m == nil {
-			return nil, "id is not a tree id"
-		}
-		a, _ := strconv.ParseFloat(m[1], 64)
-		b, _ := strconv.ParseFloat(m[2], 64)
-		lon, lat, has = a/1e6, b/1e6, true // the id is the apex; a point dragged in an app does not move the tree
+	lon, lat, has, bad := tmPos(r)
+	if bad != "" {
+		return nil, bad
 	}
 	if !has {
 		return nil, "no position"
@@ -706,9 +859,8 @@ func tmDiff(r tmRow, reporter string, now time.Time) (items []tmItem, why string
 		}
 		date = d
 	}
-	note := r.attrs["note"]
-	if len(sp) > 60 || len(note) > tmStr {
-		return nil, "text too long (≤ 64 characters)"
+	if len(sp) > 60 {
+		return nil, "species name too long (≤ 60 characters)"
 	}
 	if date != "" && state == "" {
 		date = "" // a date belongs to a state
@@ -744,26 +896,38 @@ func tmDiff(r tmRow, reporter string, now time.Time) (items []tmItem, why string
 		}
 		what = append(what, w)
 	}
-	if len(b) > 0 {
+	// the note: what the reader wrote is a report of its own (a tree of the
+	// export, once the peer stores notes); the fields we do not read only ride
+	// along with something said
+	own, _, _ := tmNote(r, false)
+	if len(b) == 0 && own != "" && flag == "" && id != "" && !tmNoteAlone() {
+		return nil, "a note alone cannot be stored yet — it travels with a species, a height or a state"
+	}
+	if len(b) > 0 || (own != "" && id != "") {
+		note, dropped, cut := tmNote(r, true)
 		if note != "" {
 			b["note"] = note
+			what = append(what, "note “"+tmClip(note, 40)+"”")
 		}
-		b["claim"] = "tree"
-		items = append(items, tmItem{row: r.n, name: show, what: strings.Join(what, " · "), body: pos(b), add: id == ""})
+		if len(b) > 0 {
+			b["claim"] = "tree"
+			items = append(items, tmItem{row: r.n, name: show, what: strings.Join(what, " · "), body: pos(b), add: id == "", dropped: dropped, cut: cut})
+		}
 	}
 	if flag != "" {
+		w := map[string]string{"spurious": "not a tree", "looks_right": "looks right", "crown": "same tree"}[flag]
 		if id == "" {
-			return nil, "“" + strings.Replace(flag, "_", " ", 1) + "” needs a tree of the export (a point with its id)"
+			return nil, "“" + w + "” needs a tree of the export (a point with its id)"
 		}
-		f := pos(map[string]interface{}{"claim": flag})
+		claim := flag
+		if flag == "crown" {
+			claim = "spurious"
+		}
+		f := pos(map[string]interface{}{"claim": claim})
 		if hasH {
 			f["observed"] = map[string]interface{}{"h_m": baseH}
 		}
-		w := "not a tree"
-		if flag == "looks_right" {
-			w = "looks right"
-		}
-		items = append(items, tmItem{row: r.n, name: show, what: w, body: f})
+		items = append(items, tmItem{row: r.n, name: show, what: w, body: f, crown: flag == "crown", h: baseH})
 	}
 	if len(items) == 0 && id == "" {
 		return nil, "not a tree of the export and nothing to add (name a species or a height)"
@@ -780,4 +944,118 @@ func tmUndo(it tmItem) tmItem {
 		b["retract"] = true
 	}
 	return tmItem{row: it.row, name: it.name, what: "take back: " + it.what, body: b, add: it.add}
+}
+
+// ── same tree ──
+
+const (
+	tmCrownMax  = 25.0 // metres: the peer refuses a farther "of"
+	tmCrownNone = "same tree: no tree beside it in the file (send the whole folder)"
+)
+
+// tmReach — how far a tree's crown goes: half the export's crown_d, else a
+// fifth of its height, at least 2 m.
+func tmReach(r tmRow) float64 {
+	if d := tmNum(r.attrs["crown_d"]); d > 0 && d < 60 {
+		return math.Max(2, d/2)
+	}
+	return math.Max(2, tmNum(r.attrs["h"])*0.2)
+}
+
+// tmDiffRows — every row of a file through tmDiff, then the rows named "same
+// tree" bound to the tree they belong to: the tallest tree of the file whose
+// crown touches theirs and that is not named so itself. ONE rule, the map's
+// too: the taller top stays — when the reader named the taller one, the flag
+// goes to the lower and the receipt says so.
+func tmDiffRows(rows []tmRow, reporter string, now time.Time) (items []tmItem, same int, refused map[string][]int) {
+	refused = map[string][]int{}
+	marked := map[int]bool{}
+	for _, r := range rows {
+		its, why := tmDiff(r, reporter, now)
+		switch {
+		case why != "":
+			refused[why] = append(refused[why], r.n)
+		case len(its) == 0:
+			same++
+		default:
+			for _, it := range its {
+				if it.crown {
+					marked[r.n] = true
+				}
+			}
+			items = append(items, its...)
+		}
+	}
+	if len(marked) == 0 {
+		return
+	}
+	type pt struct {
+		lon, lat, h, reach float64
+		n                  int
+	}
+	const cell = 0.0004 // ≥ 30 m in both axes
+	key := func(lon, lat float64) [2]int32 {
+		return [2]int32{int32(math.Floor(lon / cell)), int32(math.Floor(lat / cell))}
+	}
+	grid := map[[2]int32][]pt{}
+	at := map[int]pt{}
+	for _, r := range rows {
+		lon, lat, ok, bad := tmPos(r)
+		if !ok || bad != "" || r.attrs["id"] == "" {
+			continue
+		}
+		p := pt{lon, lat, tmNum(r.attrs["h"]), tmReach(r), r.n}
+		at[r.n] = p
+		if !marked[r.n] {
+			grid[key(lon, lat)] = append(grid[key(lon, lat)], p)
+		}
+	}
+	flagged := map[[2]float64]bool{}
+	out := items[:0]
+	for _, it := range items {
+		if !it.crown {
+			out = append(out, it)
+			continue
+		}
+		m := at[it.row]
+		k, best, bd := key(m.lon, m.lat), pt{}, 0.0
+		cl := math.Cos(m.lat*math.Pi/180) * 111320
+		for dx := int32(-1); dx <= 1; dx++ {
+			for dy := int32(-1); dy <= 1; dy++ {
+				for _, c := range grid[[2]int32{k[0] + dx, k[1] + dy}] {
+					d := math.Hypot((c.lon-m.lon)*cl, (c.lat-m.lat)*111320)
+					if d > tmCrownMax || d > (m.reach+c.reach)*1.25+1 {
+						continue
+					}
+					if best.n == 0 || c.h > best.h || (c.h == best.h && d < bd) {
+						best, bd = c, d
+					}
+				}
+			}
+		}
+		if best.n == 0 {
+			refused[tmCrownNone] = append(refused[tmCrownNone], it.row)
+			continue
+		}
+		lo, hi := m, best // the flag sits on the lower top
+		it.what = fmt.Sprintf("same tree as the %s top %.0f m away", strconv.FormatFloat(hi.h, 'f', -1, 64)+" m", bd)
+		if best.h < m.h {
+			lo, hi = best, m
+			it.what = fmt.Sprintf("same tree — the %s top beside it joins this one (the taller top stays)", strconv.FormatFloat(lo.h, 'f', -1, 64)+" m")
+		}
+		sub := [2]float64{lo.lon, lo.lat}
+		if flagged[sub] {
+			continue // two taller tops named for one lower top: one flag
+		}
+		flagged[sub] = true
+		it.body["lon"], it.body["lat"] = math.Round(lo.lon*1e7)/1e7, math.Round(lo.lat*1e7)/1e7
+		if lo.h > 0 {
+			it.body["observed"] = map[string]interface{}{"h_m": lo.h}
+		}
+		it.body["expected"] = map[string]interface{}{"absent": true, "hint": "crown",
+			"of": map[string]interface{}{"lon": math.Round(hi.lon*1e7) / 1e7, "lat": math.Round(hi.lat*1e7) / 1e7}}
+		out = append(out, it)
+	}
+	items = out
+	return
 }

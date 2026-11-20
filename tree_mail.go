@@ -760,17 +760,17 @@ func tmHandle(raw []byte) (retry bool) {
 			fmt.Fprintf(&text, "%s: not read — %s\n", a.name, err)
 			continue
 		}
-		refused := map[string][]int{}
-		n0, same := len(items), 0
-		for _, r := range rows {
-			its, why := tmDiff(r, reporter, now)
-			switch {
-			case why != "":
-				refused[why] = append(refused[why], r.n)
-			case len(its) == 0:
-				same++
-			default:
-				items = append(items, its...)
+		n0 := len(items)
+		its, same, refused := tmDiffRows(rows, reporter, now)
+		items = append(items, its...)
+		notes, dropped, cut := 0, 0, 0
+		for _, it := range its {
+			if _, ok := it.body["note"]; ok {
+				notes++
+			}
+			dropped += it.dropped
+			if it.cut {
+				cut++
 			}
 		}
 		unchanged += same
@@ -779,6 +779,16 @@ func tmHandle(raw []byte) (retry bool) {
 			nref += len(v)
 		}
 		fmt.Fprintf(&text, "%s: %d points · %d edits · %d unchanged · %d refused\n", a.name, len(rows), len(items)-n0, same, nref)
+		if notes > 0 {
+			fmt.Fprintf(&text, "  %d with a note (shown publicly)", notes)
+			if cut > 0 {
+				fmt.Fprintf(&text, " · %d cut at %d characters", cut, tmNoteLimit())
+			}
+			if dropped > 0 {
+				fmt.Fprintf(&text, " · %d values left out: they look like an e-mail address or a phone number", dropped)
+			}
+			text.WriteString("\n")
+		}
 		whys := make([]string, 0, len(refused))
 		for w := range refused {
 			whys = append(whys, w)
@@ -917,29 +927,31 @@ func tmRowList(rows []int) string {
 	return "rows " + strings.Join(s, ", ")
 }
 
-// tmHelpText — what to send back; the reply to "subscribe" and "help".
+// tmHelpText — what to send back; the reply to "subscribe" and "help". Short
+// on purpose: three steps and one table, read on a phone at a glance.
 func tmHelpText(c *tmConfig, k *tmKey, welcome bool) string {
 	var b strings.Builder
 	if welcome {
-		b.WriteString("Subscribed: this address may now send tree edits.\n\n")
+		b.WriteString("Subscribed — this address may now send tree edits.\n\n")
 	}
-	fmt.Fprintf(&b, `SEND a mail to %s with a .kmz, .kml or .csv attached.
-  Locus Map: export the folder as KML with "compress to KMZ" on.
-  QGIS: save "Trees as points (current view)" as KML or CSV.
-  A mail holds 1 MB: about 20 000 trees as KMZ, 800 as plain KML/CSV.
+	fmt.Fprintf(&b, `1  EXPORT  QGIS "Trees as points (current view)" as KML or CSV · Locus Map as KMZ
+2  RENAME  the trees you checked (table below)
+3  MAIL    the whole file to %s
 
-EDIT a tree by changing its NAME. Leave the description alone (it holds the tree's id).
-  Fichte          species: German, English, Latin or forestry code
-  25 m            height, measured or estimated
-  bhd 40 cm       stem diameter
-  gefällt 2025    since the flight: gefällt, windwurf, tot, gebrochen, käfer, weg (date optional)
-  kein baum       a mast or pole, not a tree
-  Combine freely: "Fichte 25 m bhd 40 cm".
-  A new point named e.g. "Eiche 15 m" adds a tree the map misses.
-Untouched points are ignored: send the whole folder back.
+NAME            MEANS
+Fichte          species (German, English, Latin, code)
+25 m            height
+bhd 40 cm       stem diameter
+gefällt 2025    felled · also windwurf, tot, gebrochen, käfer, weg
+kein baum       not a tree (mast, pole)
+gleicher baum   a second top of the tree beside it
+Eiche 15 m      on a new point: adds a missing tree
 
-You get a receipt per mail. Subjects: "undo" + the same file takes its edits back, "help" sends this text, "stop" ends the subscription.
-Limits: %d attachments per mail, %d points per file, %d edits per day.
+Combine: "Fichte 25 m bhd 40 cm". Untouched trees are ignored.
+Comment: type below the table in the description, or a "note" column. Notes are public.
+
+Subjects: undo (+ the same file) · help · stop
+Limits: 1 MB per mail · %d files · %d points per file · %d edits per day
 `, c.addr, tmAttachments, tmMaxRows, min(k.daily, tmAddrDaily))
 	return b.String()
 }

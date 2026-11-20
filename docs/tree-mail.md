@@ -59,3 +59,20 @@ State: `data/tree_mail/state.json` (address hashes → key name, day counters);
 Species: names go to the peer as written; its resolver knows German, English,
 Latin, codes and abbreviations and answers an unknown one with suggestions,
 which the second receipt quotes. No LLM in the path.
+
+## Same tree · notes (2026-11-20)
+
+- **`same tree`** (`gleicher baum`, `zwiesel`, `doppelt`, …; `tmSaid.flag = "crown"`): `tmDiffRows` runs
+  every row through `tmDiff`, then binds each marked row to the tallest unmarked row of the file
+  within `(reach_a + reach_b) × 1.25 + 1 m` (reach = `crown_d / 2`, else `0.2 × h`, ≤ 25 m). The flag
+  sits on the LOWER top: `{lon,lat,claim:"spurious",observed{h_m},expected{absent:true,hint:"crown",
+  of:{lon,lat}}}` — the same body the tree card sends (`trSameSend`). `of` carries no id: the
+  export's `t<lon>_<lat>` is ours, the peer's ids are another grid. Undo = `retract:true` like any flag.
+- **Notes** (`tmNote`): reader's text = `note` column/field + lines typed into the description beside
+  the table (`tmRow.free`); unread fields (`tmRow.extra`, minus `tmIgnore`) ride along only on a row
+  that reports something. `tmPersonal` drops e-mail / phone-like values (notes are public at the
+  peer); length ≤ the peer's `limits.note_chars` (`tmNoteLimit`, 280 when it names none, ceiling `treeNoteCeil` 4500). A note ALONE is sent only when the peer advertises `limits.note_chars` in
+  `trees/taxa/dict` (`treeNoteCap`, asked hourly; `debug/inflight` → `tree_report.peer_notes`) — the
+  tree card's `note…` chip is gated by the same field. Until then the peer ignores `note` silently
+  on a tree report and answers 400 to a note-only body.
+- The help mail (`tmHelpText`) is three steps + one table; keep it glanceable on a phone.

@@ -249,7 +249,7 @@ at {OBS_NAME} — the same reports the map's tree card sends.
 2. **Export.** In QGIS save *Trees as points (current view)* as KML (or CSV).
    Locus Map and similar apps import the KML: each tree is a point named
    `26 m spruce`, its `id` / `h` / `species` in the description.
-3. **Edit the name** of a tree — leave the description alone, it holds the id:
+3. **Edit the name** of a tree — leave the table in the description alone, it holds the id:
 
    | Name | Report |
    |---|---|
@@ -258,12 +258,30 @@ at {OBS_NAME} — the same reports the map's tree card sends.
    | `bhd 40 cm` | stem diameter |
    | `gefällt 2025` · `windwurf` · `tot` · `gebrochen` · `käfer` · `weg` | what happened since the flight, date optional (`2025`, `8.2025`, `14.8.2025`) |
    | `kein baum` | a mast or a pole, not a tree |
+   | `gleicher baum` · `same tree` · `zwiesel` · `doppelt` | a second top of the tree beside it — one tree, several tops |
    | `passt` | the ring is this tree |
 
    Combine freely (`Fichte 25 m bhd 40 cm`). A new point of your own named
    `Eiche 15 m` adds a tree the map misses (when a tree stands at that spot the
    report goes to it). In a table (CSV, QGIS) the columns `species`, `height`,
    `dbh`, `state`, `date`, `note` are read as well.
+
+   **Same tree.** A big crown often carries several tops. Name every extra top
+   `gleicher baum`; it is bound to the tallest tree of the file whose crown
+   touches it and that is not named so itself — so send the whole folder. One
+   rule, the map's too: the taller top stays. If you named the taller one, the
+   lower one is reported instead and the receipt says so. No tree beside it in
+   the file → the row is refused.
+
+   **Comment.** Type below the table in the description, or fill a `note`
+   column: it becomes the tree's note at {OBS_NAME} (public — no names, no phone
+   numbers; a value that looks like an e-mail address or a
+   phone number is left out and the receipt counts it). Columns and fields
+   that are not read (`Baumnummer`, `Pflege` …) travel in the note of every
+   tree you edited, as `key: value · key: value`; on an untouched tree they
+   are ignored, as are the fields a phone app adds (altitude, accuracy, time).
+   Until {OBS_NAME} stores notes, a note travels with a species, a height or a
+   state; a note alone is refused in the receipt.
 4. **Mail the file** to {TREES_MAIL} as `.kmz`, `.kml` or `.csv` — the whole
    folder, untouched points are ignored. A mail holds 1 MB: about 20 000 trees
    as KMZ (Locus Map: *export → KML, compress to KMZ*), about 800 as plain KML/CSV.
