@@ -718,6 +718,17 @@ relay, two throw-away reporters, leaves nothing standing).
   `limits.note_chars` (4 500; our relay refuses more), line breaks kept, Shift+Enter = newline.
   Edit = a new note, remove = `note:null` (`403` → *not your note*). Long notes fold to
   `more`/`less`; the peek shows the first line.
+- **Note editor look**: one hairline box, the footer inside it. With a keyboard the footer is the
+  count plus two glyphs, `↵` (save; asleep until there is something to save) and `×` (Esc);
+  `remove` lives on the saved note. A phone (≤ 640 px or coarse pointer) puts the label above,
+  gives the box the card's width, 16 px text and spelled-out 36 px `remove · cancel · save`.
+  The box grows to 8 whole lines (5 on the card over the map) and keeps its footer in sight.
+- **`no_apex`**: the fresh rows no longer hold the card's apex — the ring goes, the card stays
+  as `trGoneCard` to say why (a card that vanishes reads as a crash).
+- Verified by hand 2026-11-20 (desktop + 390 px): swap offer, `bad_of`, `no_apex`, merged-top
+  card, note editor. To provoke the refusals, make the page's rows stale before the tap
+  (`e.c.h[i]` lower than the peer's → warning + swap; a far `e.c.lon[i]` → `bad_of`; shift the
+  pinned `a.lon/a.lat` off every apex → `no_apex`).
 - A tree card carries no in-view legend (`hiLegendNow` drops `.lg12` while `pk.t==='tree'`): it
   used to arrive with it and lose it at the first tap.
 
