@@ -1,0 +1,100 @@
+package main
+
+// ne_glyph_treemerged.go — MERGED TOPS, tile refresh and the note editor of the tree card
+// (docs/ne-glyph.md row *TREE REPORTS*; observed-layer peer contract #same-tree, #tree-note,
+// "Caching" under /trees/bbox).
+//
+// A reader says "same tree" on the extra top of a broad crown (ne_glyph_treerep.go trSame). The peer
+// then drops that apex from the columns, adds its crown to its tree and lists it in `merged` — only
+// when the tile has one. Here a merged top is an appended row with c.kd[i] = 5 and
+// e.u[i].m = {n, ag, pi, plon, plat, px, py, cr}: n readers said same tree, ag said it is its own;
+// pi = the row of its tree in this tile (−1 = another tile: plon/plat then come from the peer's
+// EPSG:3035 of_x/of_y, trLL35). It is drawn as a dotted ring at its own crown with one hairline to
+// its tree, never counted as a tree (apDraw), and has a card of its own (trMgCard): a two-way vote
+// `same tree` / `its own tree`. Merged while n > ag — the peer's rule, applied locally at the answer
+// (trMgAfter → trMgFlip) and then read back: every own flag re-reads the tile with a forced
+// revalidation (trFresh, fetch cache:'no-cache') and swaps the rows in place under the pinned card
+// (trReload). A tree report only re-reads to renew the browser's copy; no cache-buster parameter.
+
+const neGlyphTreeMergedCSS = `
+.glyph-tip .tr textarea{appearance:none;-webkit-appearance:none;display:block;background:transparent;border:1px solid var(--rule);border-radius:3px;padding:.3em .45em;margin:.1em 0 0 .4em;flex:1 1 100%;min-width:0;width:auto;box-sizing:border-box;font:inherit;line-height:1.4;color:var(--fg);outline:none;pointer-events:auto;resize:none;overflow:auto}
+.glyph-tip .tr textarea:focus{border-color:var(--fg)}.glyph-tip .tr textarea::placeholder{color:var(--mut);opacity:.8}
+.glyph-tip .tr .rw.nr{align-items:flex-start}
+.glyph-tip .tr .rw .vl>span.nb{display:flex;flex:1 1 100%;align-items:center;gap:.1em .2em;font-size:var(--fz2);min-height:1.5em}.glyph-tip .tr .nb .nc{margin-right:auto;font-variant-numeric:tabular-nums}.glyph-tip .tr .nb .sp{flex:1}
+.glyph-tip .tr .rw .vl>span.nq{flex:1 1 100%;white-space:pre-line;overflow-wrap:anywhere;line-height:1.4;max-height:11em;overflow:auto;pointer-events:auto}.glyph-tip .tr .rw .vl>span.nq.cl{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.glyph-tip .tr button.mg i{font-style:normal;color:var(--mut);margin-left:.6em}
+@media(hover:none) and (pointer:coarse){.glyph-tip .tr textarea{font-size:16px}}
+`
+
+const neGlyphTreeMergedJS = `
+/* ── merged tops, tile refresh, note editor (ne_glyph_treemerged.go) ── */
+/* EPSG:3035 (ETRS89-LAEA, the peer's x / y integer metres) → lon, lat; exact to a centimetre */
+function trLL35(X,Y){var A=6378137,e2=0.00669438002290,E=Math.sqrt(e2),q=function(s){return(1-e2)*(s/(1-e2*s*s)-Math.log((1-E*s)/(1+E*s))/(2*E))},f0=52*Math.PI/180,s0=Math.sin(f0),qp=q(1),b0=Math.asin(q(s0)/qp),Rq=A*Math.sqrt(qp/2),D=A*Math.cos(f0)/(Math.sqrt(1-e2*s0*s0)*Rq*Math.cos(b0)),x=X-4321000,y=Y-3210000,rho=Math.hypot(x/D,D*y);if(!rho)return[10,52];var C=2*Math.asin(rho/(2*Rq)),b=Math.asin(Math.cos(C)*Math.sin(b0)+D*y*Math.sin(C)*Math.cos(b0)/rho),e4=e2*e2,e6=e4*e2;return[10+Math.atan2(x*Math.sin(C),D*rho*Math.cos(b0)*Math.cos(C)-D*D*y*Math.sin(b0)*Math.sin(C))*180/Math.PI,(b+(e2/3+31*e4/180+517*e6/5040)*Math.sin(2*b)+(23*e4/360+251*e6/3780)*Math.sin(4*b)+761*e6/45360*Math.sin(6*b))*180/Math.PI]}
+function apBB(t){var d=LOD[t.lod][0];return(t.i*d).toFixed(4)+','+(t.j*d).toFixed(4)+','+((t.i+1)*d).toFixed(4)+','+((t.j+1)*d).toFixed(4)}
+/* the columns of one /trees/bbox answer onto the tile (hiApex, trReload) */
+function apCols(e,j){var c=j.columns||{},lon=c.lon||[],lat=c.lat||[],h=c.h_m||[],cr=c.crown_m2||null,n=lon.length,x=new Float64Array(n),y=new Float64Array(n),rm=new Float32Array(n),r=new Float32Array(n);
+ for(var i=0;i<n;i++){x[i]=px(lon[i]);y[i]=py(lat[i]);var A=cr&&cr[i]!=null?cr[i]:Math.PI*Math.pow(Math.max(2,h[i]*0.2),2);rm[i]=Math.sqrt(A/Math.PI);r[i]=rm[i]*e.my}
+ e.c={n:n,lon:lon,lat:lat,h:h,cr:cr,rm:rm,x:x,y:y,r:r,sp:c.species||null,vt:c.vitality||null,kg:c.kg_code||null};e.n=n;trIngest(e,j);return n}
+function trMgSize(e,i,cr){var c=e.c,h=c.h[i],A=cr>0?cr:Math.PI*Math.pow(Math.max(2,h*0.2),2);c.rm[i]=Math.sqrt(A/Math.PI);c.r[i]=c.rm[i]*e.my;if(c.cr)c.cr[i]=cr>0?cr:null}
+/* trIngest: the peer's merged block → rows of kind 5 */
+function trMgIngest(e,j){var M=j.merged,c=e.c;if(!M||!M.lon)return;for(var k=0;k<M.lon.length;k++){var pi=M.of_i&&M.of_i[k]!=null&&M.of_i[k]<e.n0?M.of_i[k]:-1,m={n:M.n?M.n[k]:1,ag:M.against?M.against[k]:0,pi:pi,cr:M.crown_m2?M.crown_m2[k]:null,plon:null,plat:null};
+  if(pi>=0){m.plon=c.lon[pi];m.plat=c.lat[pi]}else if(M.of_x&&M.of_x[k]!=null){var q=trLL35(M.of_x[k],M.of_y[k]);m.plon=q[0];m.plat=q[1]}if(m.plon!=null){m.px=px(m.plon);m.py=py(m.plat)}
+  var i=trPush(e,M.lon[k],M.lat[k],M.h_m?M.h_m[k]:null,5,{m:m});trMgSize(e,i,m.cr);if(c.kg&&pi>=0)c.kg[i]=c.kg[pi]}}
+/* the tree a merged top belongs to: its row in this tile, else the apex standing at plon / plat in the tile beside (≤ 1.5 m) */
+function trMgOf(a){var m=a.u&&a.u.m,e=a.e_;if(!m||m.plon==null||!e)return null;if(m.pi>=0)return m.pi<e.c.n&&e.c.kd[m.pi]!==9?{e:e,i:m.pi}:null;var te=trTileAt(m.plon,m.plat);if(!te)return null;if(m.qe===te)return m.qi>=0?{e:te,i:m.qi}:null;var c=te.c,cl=Math.cos(m.plat*Math.PI/180)*111320,b=-1,bd=1.5;for(var i=0;i<c.n;i++){if(c.kd&&c.kd[i])continue;var dy=(c.lat[i]-m.plat)*111320;if(dy>bd||dy<-bd)continue;var d=Math.hypot((c.lon[i]-m.plon)*cl,dy);if(d<bd){bd=d;b=i}}m.qe=te;m.qi=b;if(b>=0){m.plon=c.lon[b];m.plat=c.lat[b];if(te===e)m.pi=b}return b>=0?{e:te,i:b}:null}
+function trDir(dx,dy){return'\u2191\u2197\u2192\u2198\u2193\u2199\u2190\u2196'.charAt(Math.round(Math.atan2(dx,dy)/0.7854)&7)}
+/* where its tree stands from the top: compass arrow + metres */
+function trMgRel(a){var m=a.u&&a.u.m;if(!m||m.plon==null)return'';var dx=(m.plon-a.lon)*Math.cos(a.lat*Math.PI/180)*111320,dy=(m.plat-a.lat)*111320;return trDir(dx,dy)+'\u202f'+Math.max(1,Math.round(Math.hypot(dx,dy)))+'\u202fm'}
+/* my voice on this top: 1 = I said same tree, -1 = I said it is its own, 0 = none known to this browser */
+function trMgMe(a){var v=TR.mine['f'+trLL(a.lon,a.lat)];return v==='looks_right'?-1:v?1:0}
+function trMgNew(a,of,old){var e=a.e_,u=e.u[a.i]||(e.u[a.i]={});a.u=u;if(e.ob[a.i])e.ob[a.i].u=u;var te=trTileAt(of.lon,of.lat),ti=te?trFind(te,{lon:of.lon,lat:of.lat},false):-1;u.m={n:old?old.n:0,ag:old?old.ag:0,pi:te===e?ti:-1,plon:of.lon,plat:of.lat,px:px(of.lon),py:py(of.lat),cr:a.crown_m2};if(te&&te!==e){u.m.qe=te;u.m.qi=ti}return u.m}
+/* the peer's rule applied here until the tile is read again: a merged top is no tree row, its crown is its tree's */
+function trMgFlip(a,on){var e=a.e_,c=e.c,i=a.i;if(on?c.kd[i]!==0:c.kd[i]!==5)return;var p=trMgOf(a),cr=a.crown_m2||0;c.kd[i]=on?5:0;a.kd=c.kd[i];e.ix=null;if(p&&cr&&p.e.c.cr&&p.e.c.cr[p.i]!=null){var pc=p.e.c;pc.cr[p.i]=Math.max(1,+(pc.cr[p.i]+(on?cr:-cr)).toFixed(1));pc.rm[p.i]=Math.sqrt(pc.cr[p.i]/Math.PI);pc.r[p.i]=pc.rm[p.i]*p.e.my;var o=p.e.ob[p.i];if(o){o.crown_m2=pc.cr[p.i];o.r=pc.r[p.i];o.rm=pc.rm[p.i]}}}
+function trMgSay(m){return m.n+(m.n===1?' reader says':' readers say')+' same tree'+(m.ag?', '+m.ag+(m.ag===1?' says':' say')+' its own':'')}
+/* trAnswer: a flag (or its withdraw) that is a voice on "same tree" was written — count it, flip the row, read the tile again; returns the footer's words ('' = not such a flag) */
+function trMgAfter(a,body,s,j){var e=a.e_,ret=!!body.retract,x=body.expected,cr=j&&j.crown,m=a.u&&a.u.m,wrote=s===201&&!(j&&j.folded),tl=false;if(a.kd===4||!e||(s!==200&&s!==201))return'';
+ /* any voice that can join or part two tops: the rows are read again (a plain "not a tree" is not — the peer drops that apex and the card with its undo would go) */if(body.claim==='looks_right'||body.claim==='spurious'&&(ret||x&&x.hint==='crown'))trFreshSoon(e,300,true);
+ if(!m&&a.kd===0&&a.fl){/* readers disagree: the top is on the map, its flag row knows the tree and the tally after this write */var fx=a.fl.expected&&a.fl.expected.spurious,cl=a.fl.claims||{};if(fx&&fx.hint==='crown'&&fx.of&&fx.of.lon!=null){m=trMgNew(a,fx.of,{n:cl.spurious||0,ag:cl.looks_right||0});tl=true}}
+ var same=body.claim==='spurious'&&(ret?!!m:!!(x&&x.hint==='crown')),obj=body.claim==='looks_right'&&!!m&&(m.n>0||a.kd===5||!!(cr&&cr.against));if(!same&&!obj)return'';var ui=a.tr||(a.tr={});
+ if(same&&!ret){var of=cr&&cr.of&&cr.of.lon!=null?cr.of:x.of;if(!m||(a.kd!==5&&of&&of.lon!=null))m=trMgNew(a,of,m);if(!tl){if(wrote)m.n++;else if(m.n<1)m.n=1}ui.swap=!!(j.warnings&&j.warnings.length);if(ui.swap)ui.warn='this is the taller top \u2014 the taller one should stay'}
+ else if(tl){}else if(same){if(wrote)m.n=Math.max(0,m.n-1)}else if(!ret){if(wrote)m.ag++}else if(wrote)m.ag=Math.max(0,m.ag-1);
+ var on=m.n>0&&m.n>m.ag;trMgFlip(a,on);var p=trMgOf(a);if(p&&p.e!==e)trFreshSoon(p.e,300,true);var ph=p?p.e.c.h[p.i]:ui.sh;
+ if(same&&!ret)return on?'same tree \u00b7 joins the '+(ph?apH(ph)+' ':'')+(cr&&cr.rebound?'tree, its main top':'top'):'noted \u00b7 '+trMgSay(m);
+ if(same)return on?'yours taken back \u00b7 '+trMgSay(m):'its own tree again';
+ if(!ret)return on?'noted \u00b7 '+trMgSay(m):'its own tree again';
+ return on?'taken back \u00b7 joined again':'taken back'}
+function trMgSame(a,of){var m=a.u&&a.u.m,p=trMgOf(a);of=of||(m&&m.plon!=null?{lon:m.plon,lat:m.plat}:null);if(!of){a.tr.err='its tree is not on the map here';trRe(a);return}a.tr.sh=p?p.e.c.h[p.i]:0;trPost(a,{layer:'trees',claim:'spurious',observed:{h_m:a.height_m,crown_m2:a.crown_m2||undefined},expected:{absent:true,hint:'crown',of:{lon:+(+of.lon).toFixed(7),lat:+(+of.lat).toFixed(7)}}},{lon:+a.lon.toFixed(7),lat:+a.lat.toFixed(7)})}
+/* "its own tree": mine → take it back. Not known to be mine → ask to take it back first (another browser of the same reader); the peer's 403 not_yours / 404 then makes it an objection */
+function trMgOwn(a){var me=trMgMe(a),ui=a.tr;if(me<0){trFlagBack(a,'looks_right');return}if(!me)ui.then=function(s){if(s!==403&&s!==404)return false;trPost(a,{layer:'trees',claim:'looks_right'},{lon:+a.lon.toFixed(7),lat:+a.lat.toFixed(7)});return true};trFlagBack(a,'spurious')}
+/* the peer warned that the flagged top is the taller one: take it back, flag the other with this one as its tree */
+function trMgSwap(a){var p=trMgOf(a),ui=a.tr;if(!p)return;var o=apObj(p.e,p.i);o.e_=p.e;ui.then=function(s){if(s!==200&&s!==201)return false;o.tr={sh:a.height_m};apPin({e:p.e,i:p.i,a:o,el:null},true);trPost(o,{layer:'trees',claim:'spurious',observed:{h_m:o.height_m,crown_m2:o.crown_m2||undefined},expected:{absent:true,hint:'crown',of:{lon:+a.lon.toFixed(7),lat:+a.lat.toFixed(7)}}},{lon:+o.lon.toFixed(7),lat:+o.lat.toFixed(7)});return true};trFlagBack(a,'spurious')}
+function trMgPeek(a){var p=trMgOf(a),r=trMgRel(a);return'<b>second top '+apH(a.height_m)+'</b><span class="mut"> \u00b7 part of '+(p?'the '+apH(p.e.c.h[p.i])+' tree':'a tree')+(r?' '+r:'')+'</span>'}
+var TR_UNDO='undo<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><i class="cd"></i>';
+function trMgCard(a){var ui=a.tr||(a.tr={}),m=a.u&&a.u.m||{n:1,ag:0},nm=ixBy[a.kg_code],p=trMgOf(a),r=trMgRel(a),me=trMgMe(a),back='yours \u2014 tap again to take it back',
+  s='<div class="hd th"><b>second top \u00b7 '+apH(a.height_m)+'</b><span class="age">part of a tree \u00b7 not counted</span></div><div class="sub">'+(nm?esc(nm[1])+' \u00b7 ':'')+(a.kg_code?'KG '+a.kg_code+' \u00b7 ':'')+coordS(a.lon,a.lat)+'</div><div class="tr">';
+ s+='<div class="rw"><span class="lb" title="the tree this top was joined to \u2014 its crown counts there">part of</span><span class="vl">'+(p?trB('mgof',null,'<b>tree '+apH(p.e.c.h[p.i])+'</b>'+(r?'<i>'+r+'</i>':''),'v mg',null,'show that tree'):'<span>a tree'+(r?' '+r+' from here':'')+'</span>')+(a.crown_m2?'<span class="mut">+ '+Math.round(a.crown_m2)+'\u202fm\u00b2 crown</span>':'')+'</span></div>';
+ s+='<div class="rw"><span class="lb" title="readers who joined this top to the tree, and readers who say it is a tree of its own. It stays joined while more say same tree">readers</span><span class="vl"><span>'+m.n+' same tree'+(me>0?(m.n>1?' \u00b7 you too':' \u00b7 you'):'')+'</span>'+(m.ag?'<span class="mut">\u00b7 '+m.ag+' its own'+(me<0?' \u00b7 you':'')+'</span>':'')+'</span></div>';
+ s+='<div class="rw"><span class="lb" title="what do you see?">today</span><span class="vl">'+trB('mgs',null,'same tree','c',me>0?true:null,me>0?back:'yes \u2014 one tree, several tops')+trB('mgo',null,'its own tree','c',me<0?true:null,me<0?back:me>0?'take yours back':'no \u2014 this top is a tree of its own')+'</span></div><div class="ft">';
+ if(ui.busy)s+='<span>sending'+ldots()+'</span>';else{if(ui.err)s+='<span class="er">'+esc(ui.err)+'</span>';if(ui.warn)s+='<span class="er">'+esc(ui.warn)+'</span>'+(ui.swap&&p?trB('swap',null,'swap','c',null,'keep this top, join the other one to it'):'');if(ui.done)s+='<span class="ok">\u2713 '+esc(ui.done)+'</span>'+(ui.un?trB('un',null,TR_UNDO,'u',null,'take this back'):'')}
+ return s+'</div></div>'}
+/* the tree's own card: the tops readers joined to it, each a way to that top's card */
+function trTops(a){var L=[],e0=a.e_;if(!e0||a.kd)return'';for(var k in hi.tiles){var e=hi.tiles[k];if(e.v!=='apex'||!e.ok||!e.c||!e.c.kd||!e.u)continue;var lim=1.5*(e.my||1);for(var s in e.u){var m=e.u[s].m,i=+s;if(!m||e.c.kd[i]!==5)continue;if(e===e0&&m.pi>=0?m.pi===a.i:m.px!=null&&Math.abs(m.px-a.x)<lim&&Math.abs(m.py-a.y)<lim)L.push({e:e,i:i})}}
+ if(!L.length)return'';TR.tops=L=L.slice(0,6);var h='<div class="rw"><span class="lb" title="tops readers joined to this tree: one tree, several tops. Their crowns are counted here">tops</span><span class="vl"><span class="tg g3">';L.forEach(function(q,n){var c=q.e.c,dx=c.x[q.i]-a.x,dy=a.y-c.y[q.i];h+=trB('mgt',n,apH(c.h[q.i])+'<i>'+trDir(dx,dy)+'\u202f'+Math.max(1,Math.round(Math.hypot(dx,dy)/(q.e.my||1)))+'\u202fm</i>','c',null,'a second top of this tree \u2014 open it to say it is a tree of its own')});return h+'</span></span></div>'}
+/* apFlags: a "same tree" flag row belongs to the top it names (merged or, when readers disagree, back on the map) — never to the nearest other apex */
+function trMgFlag(e,f){var x=f.expected&&f.expected.spurious;if(!x||x.hint!=='crown'||!e.c||!e.c.kd)return false;var ix=trIx(e),k=trLL(f.lon,f.lat),i=ix['m'+k];if(i==null)i=ix[k];if(i!=null){e.flI[i]=f;if(e.ob[i])e.ob[i].fl=f}return true}
+/* trDraw: the picked merged top — its tie, and the ring of its tree lit */
+function trMgLit(a,T,zpx){if(!a||a.kd!==5||!a.u||!a.u.m)return null;var m=a.u.m,p=trMgOf(a),X=p?p.e.c.x[p.i]:m.px,Y=p?p.e.c.y[p.i]:m.py;if(X==null)return null;X=(X-vb.x)*zpx;Y=(Y-vb.y)*zpx;T.push((a.x-vb.x)*zpx,(a.y-vb.y)*zpx,X,Y);return p?[X,Y,Math.max(2.4,p.e.c.r[p.i]*zpx)]:null}
+/* ── refresh: the tile's ETag carries flag / report state. After an own write the tile is read again with a forced revalidation (200 new body, or 304) so the browser's copy is never a day old; after a flag the rows are swapped in under the card ── */
+function trFreshSoon(e,ms,apply){if(!e||!e.t||e.part)return;if(apply)e.frA=1;clearTimeout(e.frT);e.frT=setTimeout(function(){trFresh(e)},ms||300)}
+function trFresh(e){var key=e.key;if(hi.tiles[key]!==e||!e.ok)return;var ap=e.frA;e.frA=0;fetch(APEX+'?bbox='+apBB(e.t)+APEX_Q,{credentials:'omit',cache:'no-cache'}).then(function(r){if(!r.ok)throw 0;return ap?r.json():r.arrayBuffer()}).then(function(j){if(!ap||hi.tiles[key]!==e||!j||j.ready===false||!j.columns)return;var a=hi.apx&&hi.apx.e===e?hi.apx.a:null;if(a&&a.tr&&a.tr.busy){/* an answer is on its way: read once more after it */trFreshSoon(e,900,true);return}trReload(e,j)}).catch(function(){})}
+function trReload(e,j){var pin=hi.apx&&hi.apx.e===e?hi.apx:null,a=pin&&pin.a,i=-1;if(TR.pick){if(TR.pick.tr)TR.pick.tr.same=null;TR.pick=null;TR.hot=null}
+ apCols(e,j);e.ob={};e.flI={};e.fl=[];var c=e.c;if(e.fq){apFiltDrop(e);apFilt(e)}
+ if(a){var u=a.u||{};if(a.kd===3)i=trPush(e,a.lon,a.lat,a.height_m,3,u);else{i=trFind(e,{lon:a.lon,lat:a.lat,client_id:u.cid,tree_id:u.tid},a.kd===1);if(i<0){i=trIx(e)['m'+trLL(a.lon,a.lat)];if(i==null)i=-1}}
+  if(i<0)apUnpin();else{a.i=i;pin.i=i;a.kd=c.kd[i];a.u=e.u[i]||null;a.x=c.x[i];a.y=c.y[i];a.r=c.r[i];a.rm=c.rm[i];a.height_m=c.h[i];a.crown_m2=c.cr?c.cr[i]:null;if(a.kd!==3){a.kg_code=c.kg?c.kg[i]:'';a.species=c.sp?c.sp[i]:0;a.vitality=c.vt?c.vt[i]:0}a.fl=null;e.ob[i]=a}}
+ apFlags(e,apBB(e.t));apMarks(e);apSched();if(a&&i>=0&&!(a.tr&&(a.tr.mode||a.tr.same)))trRe(a)}
+/* ── note editor: a text area that grows with the text and counts against the peer's limits.note_chars ── */
+function trNoteKey(a){var u=a.u||{};return'n'+(u.cid||u.tid||trLL(a.lon,a.lat))}
+function trNoteCnt(n,N){return fmt(n)+'\u202f/\u202f'+fmt(N)}
+function trNoteFit(t){t.style.height='auto';t.style.height=Math.min(t.scrollHeight+2,(parseFloat(getComputedStyle(t).lineHeight)||18)*8)+'px';var c=t.parentNode.querySelector('.nc'),N=+t.getAttribute('maxlength')||trNoteMax(),n=t.value.length;if(c){c.textContent=trNoteCnt(n,N);c.classList.toggle('er',n>=N);c.classList.toggle('mut',n<N)}if(floating()&&picked)place(picked,true)}
+tip.addEventListener('input',function(e){var t=e.target;if(t&&t.classList&&t.classList.contains('nt'))trNoteFit(t)});
+`

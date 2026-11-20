@@ -688,6 +688,39 @@ so the first reader of a copied link waited for every tile to render again. Now:
 - **Check.** A systemd drop-in `Environment=NE_WARM_DELAY=20s` + restart → `🔥 warm: replaying … / done` in the journal
   (remove the drop-in afterwards).
 
+## Tree card — merged tops, objections, notes (`ne_glyph_treemerged.go`, 2026-11-20)
+
+Contract of record: the observed-layer peer's `llm.txt`, anchors `#same-tree`, `#tree-note` and
+*Caching* under `/trees/bbox`. Production check: `scripts/tree_same_prod_test.py` (through our
+relay, two throw-away reporters, leaves nothing standing).
+
+- **Rows.** A tile's `merged` block (tops readers folded into a neighbour) is appended to the
+  tile's columns as row kind `kd 5` (`trMgIngest`; `e.u[i].m = {n, ag, parent…}`; block
+  coordinates are EPSG:3035 → `trLL35`). Kinds: 0 apex · 1 added · 2 reported · 3 draft ·
+  4 hidden by a `linear` flag · **5 merged top** · 9 gone. A `kd 5` row is drawn (dotted ring +
+  hairline to its tree, `trDraw`) and tappable, and **never counted**: `apDraw`/`apSum` skip it,
+  the parent row already carries the summed crown.
+- **Card of a merged top** (`trMgCard`): `part of` (the tree, tap = go there), `readers`
+  (n same tree · against), `today`: `same tree` / `its own tree`. `its own tree` retracts when
+  the flag is the reader's own; the peer's `403 not_yours` (or 404) turns into a `looks_right`
+  objection (`trMgOwn`) — a top is merged only while same-tree voices outnumber objections.
+  The parent's card lists its tops in a `tops` row (`trTops`).
+- **Flagging** (`trSame` → `trMgAfter`): 201 `crown{of,dist_m,rebound?}` flips the row locally at
+  once (`trMgFlip`) and re-reads the tile; `warnings[]` (the flagged top is the taller one) →
+  footer offers `swap`; `400 bad_of` / `404 no_apex` are shown as they are and not retried.
+  Undo = retract; undo of a retract re-flags against the same tree.
+- **Refresh without a cache-buster** (`trFresh`/`trReload`): the tile URL is fetched again with
+  `cache:'no-cache'` — a forced revalidation, 304 when nothing changed — and the rows are swapped
+  in place under the pinned card. Only crown-relevant answers re-read (crown hint, `looks_right`,
+  a `spurious` retract); the rest just renews the browser's copy. Never add a query parameter:
+  the peer's tiles are `max-age=300` + ETag and a buster would defeat both.
+- **Notes** (`trNote`): a textarea that grows, live counter against the peer's
+  `limits.note_chars` (4 500; our relay refuses more), line breaks kept, Shift+Enter = newline.
+  Edit = a new note, remove = `note:null` (`403` → *not your note*). Long notes fold to
+  `more`/`less`; the peek shows the first line.
+- A tree card carries no in-view legend (`hiLegendNow` drops `.lg12` while `pk.t==='tree'`): it
+  used to arrive with it and lose it at the first tap.
+
 ## Soak test (`ne_glyph_soak.js` → `/api/v1/ne/glyph/soak.js`)
 
 Roads step (`run`, `{roads:false}` skips): `;roads` at LOD 1 (default weight written bare, `.ov-rd` opacity .7), `;roads=0.4` with observed + change at LOD 0 (weight kept in hash and group, tile meta carries `rd km rdc`), `;roads` at LOD 2 (token kept, group hidden, icon `off`); `layers()` asserts `rd` tiles = base at LOD 0/1 and none at LOD 2, `ov-rd` shown ⇔ on & near, z-order over `ov-subc` and under `ov-rel`/`ov-tree`, `v-rd`, bar, legend *roads* line, hash token; matrix adds roads alone / with change / subsidy / trees / relief / photo; the share-link round trip compares `roads`/`roadsOp`; `offline()` switches the roads on under each fault.
