@@ -29,6 +29,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
@@ -383,8 +384,9 @@ const neLayerTreesMaxKm2 = 40.0
 // vitality): a normal vector layer in QGIS, so the height classes are a
 // graduated renderer the reader can re-ramp, relabel or re-break in the
 // Symbology panel — a vector-tile layer has no such renderer. Fetched from
-// the observed-layer peer in 0.025° pieces (its own tile size, each whole in
-// one answer), relayed through here so the caller's identity is counted.
+// the observed-layer peer in 0.0125° pieces (neOGCPiece, shared with the
+// trees-by-extent layer; `"truncated":true` + X-Trees-Truncated when a piece is
+// not whole), relayed through here so the caller's identity is counted.
 func handleNELayerTreesGeoJSON(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	box, msg := neMVTParseBox(q.Get("bbox"))
@@ -403,10 +405,14 @@ func handleNELayerTreesGeoJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	const step = 0.025
+	// The pieces of the trees-by-extent layer (ne_mvt_ogc.go): a quarter of the
+	// peer's 0.025° tile each. The peer answers one box with ≤ 100 000 rows,
+	// tallest first, so a whole tile of closed stand lost its shorter trees
+	// without a word; a quarter tile stays under that.
+	const step = neOGCPieceStep
 	i0, i1 := int(math.Floor(box[0]/step)), int(math.Floor(box[2]/step))
 	j0, j1 := int(math.Floor(box[1]/step)), int(math.Floor(box[3]/step))
-	if _, ok := neMVTGate(w, r, (i1-i0+1)*(j1-j0+1), box[0], box[1], box[2], box[3]); !ok {
+	if _, ok := neMVTGate(w, r, ((i1-i0+1)*(j1-j0+1)+3)/4, box[0], box[1], box[2], box[3]); !ok {
 		return
 	}
 	hlo, hhi, hasHt := neLayerHtRange(q.Get("ht"))
@@ -414,77 +420,72 @@ func handleNELayerTreesGeoJSON(w http.ResponseWriter, r *http.Request) {
 	gz, hit := neLayerLRU.get(key)
 	whole := true
 	if !hit {
-		type piece struct {
-			tc  neLayerTreeCols
-			err error
-		}
-		var jobs [][4]float64
+		type ij struct{ i, j int }
+		var ids []ij
 		for i := i0; i <= i1; i++ {
 			for j := j0; j <= j1; j++ {
-				jobs = append(jobs, [4]float64{math.Max(box[0], float64(i)*step), math.Max(box[1], float64(j)*step), math.Min(box[2], float64(i+1)*step), math.Min(box[3], float64(j+1)*step)})
+				ids = append(ids, ij{i, j})
 			}
 		}
-		out := make([]piece, len(jobs))
-		done := make(chan int, len(jobs))
-		for k := range jobs {
+		pieces := make([][]byte, len(ids))
+		errs := make([]error, len(ids))
+		wholes := make([]bool, len(ids))
+		done := make(chan struct{}, len(ids))
+		for k := range ids {
 			go func(k int) {
-				defer func() { done <- k }()
-				b := jobs[k]
-				u := fmt.Sprintf("%s/api/v1/trees/bbox?bbox=%.6f,%.6f,%.6f,%.6f&min_height=3&format=columns&fields=lon,lat,h_m,crown_m2,species,vitality&limit=100000", pr.ObsAPI, b[0], b[1], b[2], b[3])
-				body, code, err := neLayerPeerGet(u, 24<<20)
-				if err == nil && code != 200 && code != 404 {
-					err = fmt.Errorf("trees: peer %d", code)
-				}
-				if err == nil && code == 200 {
-					err = json.Unmarshal(body, &out[k].tc)
-				}
-				out[k].err = err
+				defer func() { done <- struct{}{} }()
+				pieces[k], wholes[k], errs[k] = neOGCPiece(ids[k].i, ids[k].j)
 			}(k)
 		}
-		for range jobs {
+		for range ids {
 			<-done
 		}
-		var buf bytes.Buffer
-		buf.WriteString(`{"type":"FeatureCollection","name":"trees","features":[`)
-		n := 0
-		for k := range out {
-			if out[k].err != nil {
+		for k := range ids {
+			if errs[k] != nil {
 				neLayerPeerErr.Add(1)
 				w.Header().Set("Retry-After", "5")
 				w.Header().Set("Cache-Control", "no-store")
 				apiError(w, "trees unavailable — retry in a few seconds", http.StatusServiceUnavailable)
 				return
 			}
-			tc := &out[k].tc
-			if tc.Truncated || (tc.Ready != nil && !*tc.Ready) {
-				whole = false
-			}
-			c, b := &tc.Columns, jobs[k]
-			for i := range c.Lon {
-				if i >= len(c.Lat) || i >= len(c.H) {
-					break
-				}
-				// half-open pieces: an apex on a shared edge is listed once
-				if c.Lon[i] < b[0] || c.Lon[i] >= b[2] || c.Lat[i] < b[1] || c.Lat[i] >= b[3] {
-					continue
-				}
-				h := c.H[i]
-				if q := math.Round(h * 2); hasHt && (q < math.Ceil(hlo*2) || q > math.Floor(hhi*2)) {
+			whole = whole && wholes[k]
+		}
+		// the box is half-open like the pieces: two boxes side by side list an apex once
+		bw, bs := int32(math.Ceil(box[0]*1e6)), int32(math.Ceil(box[1]*1e6))
+		be, bn := int32(math.Ceil(box[2]*1e6)), int32(math.Ceil(box[3]*1e6))
+		qlo, qhi := byte(0), byte(255)
+		if hasHt {
+			qlo, qhi = byte(math.Min(255, math.Max(0, math.Ceil(hlo*4)))), byte(math.Min(255, math.Max(0, math.Floor(hhi*4))))
+		}
+		var buf bytes.Buffer
+		buf.WriteString(`{"type":"FeatureCollection","name":"trees",`)
+		if !whole {
+			// never silently short: a piece the peer cut or is still building
+			buf.WriteString(`"truncated":true,`)
+		}
+		buf.WriteString(`"features":[`)
+		n := 0
+		for _, rows := range pieces {
+			for o := 0; o+neOGCRow <= len(rows); o += neOGCRow {
+				lon := int32(binary.LittleEndian.Uint32(rows[o:]))
+				lat := int32(binary.LittleEndian.Uint32(rows[o+4:]))
+				h := rows[o+8]
+				if lon < bw || lon >= be || lat < bs || lat >= bn || h < qlo || h > qhi {
 					continue
 				}
 				if n > 0 {
 					buf.WriteByte(',')
 				}
 				n++
-				fmt.Fprintf(&buf, `{"type":"Feature","geometry":{"type":"Point","coordinates":[%.6f,%.6f]},"properties":{"h":%.1f`, c.Lon[i], c.Lat[i], h)
-				if i < len(c.Crown) && c.Crown[i] > 0 {
-					fmt.Fprintf(&buf, `,"crown_d":%.1f,"crown_m2":%.1f`, 2*math.Sqrt(c.Crown[i]/math.Pi), c.Crown[i])
+				fmt.Fprintf(&buf, `{"type":"Feature","geometry":{"type":"Point","coordinates":[%.6f,%.6f]},"properties":{"h":%.2f`, float64(lon)/1e6, float64(lat)/1e6, float64(h)/4)
+				if cr := float64(binary.LittleEndian.Uint16(rows[o+9:])) / 10; cr > 0 {
+					fmt.Fprintf(&buf, `,"crown_d":%.1f,"crown_m2":%.1f`, 2*math.Sqrt(cr/math.Pi), cr)
 				}
-				if i < len(c.Species) && c.Species[i] != "" && c.Species[i] != "unknown" {
-					fmt.Fprintf(&buf, `,"species":%q`, c.Species[i])
+				if sp := neOGCSpecies.word(rows[o+11] >> 4); sp != "" {
+					fmt.Fprintf(&buf, `,"species":%q`, sp)
 				}
-				if i < len(c.Vitality) && c.Vitality[i] != "" && c.Vitality[i] != "unknown" {
-					fmt.Fprintf(&buf, `,"vitality":%q`, c.Vitality[i])
+				if vi := neOGCVitality.word(rows[o+11] & 15); vi != "" {
+					fmt.Fprintf(&buf, `,"vitality":%q`, vi)
 				}
 				buf.WriteString("}}")
 			}
@@ -500,6 +501,8 @@ func handleNELayerTreesGeoJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if whole {
 		w.Header().Set("Cache-Control", "public, max-age=3600")
+	} else {
+		w.Header().Set("X-Trees-Truncated", "1")
 	}
 	w.Header().Add("Vary", "Accept-Encoding")
 	body := gz
