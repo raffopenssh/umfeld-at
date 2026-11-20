@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -301,7 +302,7 @@ func TestNEMVTProject(t *testing.T) {
 		if w.Code != 200 {
 			t.Fatalf("share project → %d %s", w.Code, body)
 		}
-		for _, want := range []string{`enabled="1" name="observed · forest (wald)"`, `enabled="0" name="declared · forest (wald)"`, `enabled="1" name="trees · tallest 5–15 m (hexagons, far zooms)"`, `enabled="0" name="change · confirmed"`, `.pbf?f%3Dht%3E%3D20`, `name="Trees · crowns by height · ≥ 20 m" source="type=xyz`, `providerKey="ogr"`, `/api/v1/ne/mvt/trees.geojson?bbox=`, `ht=20..`, `type="graduatedSymbol" attr="h"`, `/api/v1/ne/mvt/pic/sub/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/pic/observed/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/relief/{z}/{x}/{y}.png`, `<blendMode>8</blendMode>`, `max-zoom="24"`, "-observed-trees-photo-subsidy-f-ht-ge-20-", `name="Filter veil" source="type=xyz`, `%26veil%3D1`, `name="Cells outside the filter"`, `&amp;f=ht%3E%3D20&amp;veil=1`, `name="Cells in the filter"`, `name="Trees as points · ≥ 20 m"`, `name="Land use · observed (LiDAR)"`, `set_color_part(&#39;`} {
+		for _, want := range []string{`enabled="1" name="observed · forest (wald)"`, `enabled="0" name="declared · forest (wald)"`, `enabled="1" name="trees · tallest 5–15 m (hexagons, far zooms)"`, `enabled="0" name="change · confirmed"`, `.pbf?f%3Dht%3E%3D20`, `name="Trees · crowns by height · ≥ 20 m" source="type=xyz`, `providerKey="ogr"`, `/api/v1/ne/mvt/ogc?ht=20..`, `ht=20..`, `type="graduatedSymbol" attr="h"`, `/api/v1/ne/mvt/pic/sub/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/pic/observed/{z}/{x}/{y}.png`, `/api/v1/ne/mvt/relief/{z}/{x}/{y}.png`, `<blendMode>8</blendMode>`, `max-zoom="24"`, "-observed-trees-photo-subsidy-f-ht-ge-20-", `name="Filter veil" source="type=xyz`, `%26veil%3D1`, `name="Cells outside the filter"`, `&amp;f=ht%3E%3D20&amp;veil=1`, `name="Cells in the filter"`, `name="Trees as points · ≥ 20 m (current view)"`, `name="Land use · observed (LiDAR)"`, `set_color_part(&#39;`} {
 			if !strings.Contains(body, want) && !strings.Contains(w.Header().Get("Content-Disposition"), want) {
 				t.Errorf("share project lacks %q", want)
 			}
@@ -362,5 +363,101 @@ func TestNEMVTLayerRoutes(t *testing.T) {
 	}
 	if got := neQGSEnc("http://h/a/{z}.pbf?f=ht%3E%3D20&key=k"); got != "http://h/a/{z}.pbf?f%3Dht%3E%3D20%26key%3Dk" {
 		t.Errorf("neQGSEnc → %q", got)
+	}
+}
+
+// Trees by extent (ne_mvt_ogc.go): the OGC API Features source of the project's
+// point layer. A stub peer answers every piece with the trees that fall in it.
+func TestNEOGCTrees(t *testing.T) {
+	type tree struct {
+		lon, lat, h, crown float64
+		sp, vi             string
+	}
+	all := []tree{{16.17881, 48.25066, 26.25, 55.7, "spruce", "vital"}, {16.17886, 48.25070, 24.75, 48.5, "unknown", "vital"},
+		{16.17852, 48.25099, 9, 0, "pine", "dead"}, {16.3001, 48.3001, 31, 80, "larch", "stressed"}}
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		b, _ := neMVTParseBox(r.URL.Query().Get("bbox"))
+		var lon, lat, h, cr []float64
+		var sp, vi []string
+		for _, x := range all {
+			if x.lon >= b[0] && x.lon <= b[2] && x.lat >= b[1] && x.lat <= b[3] {
+				lon, lat, h, cr, sp, vi = append(lon, x.lon), append(lat, x.lat), append(h, x.h), append(cr, x.crown), append(sp, x.sp), append(vi, x.vi)
+			}
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"ready": true, "columns": map[string]interface{}{"lon": lon, "lat": lat, "h_m": h, "crown_m2": cr, "species": sp, "vitality": vi}})
+	}))
+	defer srv.Close()
+	pc0 := peers()
+	setPeersForTest(peerConf{PublicURL: "https://umfeld.example", ObsName: "obs-peer", ObsAPI: srv.URL})
+	defer setPeersForTest(pc0)
+	neLayerLRU.dropPrefix("treep/")
+	defer neLayerLRU.dropPrefix("treep/")
+	get := func(p string) (int, map[string]interface{}, string) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", p, nil)
+		r.Host = "umfeld.example"
+		if !handleNEOGC(w, r, strings.TrimPrefix(r.URL.Path, "/api/v1/ne/")) {
+			t.Fatalf("%s not routed", p)
+		}
+		var m map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &m)
+		return w.Code, m, w.Body.String()
+	}
+	const B = "/api/v1/ne/mvt/ogc"
+	// what QGIS walks: landing (data + service-desc, the caller's key kept) → api → collection → items
+	_, _, land := get(B + "?key=k1&ht=20..")
+	for _, want := range []string{`"rel":"data"`, `"rel":"service-desc"`, `https://umfeld.example/api/v1/ne/mvt/ogc/collections?ht=20..\u0026key=k1`} {
+		if !strings.Contains(land, want) {
+			t.Errorf("landing lacks %s: %s", want, land)
+		}
+	}
+	for _, p := range []string{"/api", "/conformance", "/collections", "/collections/trees"} {
+		if c, m, _ := get(B + p); c != 200 || m == nil {
+			t.Errorf("%s → %d", p, c)
+		}
+	}
+	if c, _, _ := get(B + "/collections/parcels/items"); c != 404 {
+		t.Errorf("unknown collection → %d", c)
+	}
+	n := func(m map[string]interface{}) int { f, _ := m["features"].([]interface{}); return len(f) }
+	box := "bbox=16.178,48.2505,16.179,48.251"
+	c, m, body := get(B + "/collections/trees/items?" + box)
+	if c != 200 || n(m) != 3 || !strings.Contains(body, `"id":"t16178810_48250660"`) || !strings.Contains(body, `"name":"26 m spruce","h":26.25,"crown_d":8.4,"species":"spruce","vitality":"vital"`) || !strings.Contains(body, `"name":"25 m","h":24.75,"crown_d":7.9,"species":null`) {
+		t.Errorf("items → %d %s", c, body)
+	}
+	h0 := hits
+	if _, m, _ = get(B + "/collections/trees/items?" + box + "&ht=20.."); n(m) != 2 || hits != h0 {
+		t.Errorf("ht filter → %d features, %d peer fetches after the first", n(m), hits-h0)
+	}
+	// pages: limit + next link with the offset, the last page without
+	_, m, body = get(B + "/collections/trees/items?" + box + "&limit=2&key=k1")
+	if n(m) != 2 || !strings.Contains(body, `"rel":"next"`) || !strings.Contains(body, "offset=2") || !strings.Contains(body, "key=k1") {
+		t.Errorf("page 1 → %s", body)
+	}
+	if _, m, body = get(B + "/collections/trees/items?" + box + "&limit=2&offset=2"); n(m) != 1 || strings.Contains(body, `"rel":"next"`) {
+		t.Errorf("page 2 → %s", body)
+	}
+	// no box: a schema probe gets fully said trees whatever the filter; a download gets nothing
+	if _, m, body = get(B + "/collections/trees/items?limit=10&ht=60.."); n(m) != 1 || !strings.Contains(body, "spruce") {
+		t.Errorf("sample → %s", body)
+	}
+	if _, m, _ = get(B + "/collections/trees/items?limit=10000"); n(m) != 0 {
+		t.Errorf("no box, large limit → %d features", n(m))
+	}
+	if _, m, _ = get(B + "/collections/trees/items"); n(m) != 0 {
+		t.Errorf("no box, no limit → %d features", n(m))
+	}
+	for p, want := range map[string]int{"?bbox=9,46,17,49": 413, "?bbox=1,2,3": 400, "?bbox=1,1,2,2": 200, "?" + box + "&limit=0": 400, "?" + box + "&offset=-1": 400} {
+		if c, _, _ := get(B + "/collections/trees/items" + p); c != want {
+			t.Errorf("items%s → %d, want %d", p, c, want)
+		}
+	}
+	// the project's point layer reads this source by the view
+	w := httptest.NewRecorder()
+	handleNEMVT(w, httptest.NewRequest("GET", "/api/v1/ne/mvt.qgs?bbox=10.07,47.13,10.09,47.14&key=k1&f=ht%3E%3D20", nil), "mvt.qgs")
+	if p := w.Body.String(); !strings.Contains(p, `providerKey="OAPIF"`) || !strings.Contains(p, `restrictToRequestBBOX=&#39;1&#39;`) || !strings.Contains(p, `/api/v1/ne/mvt/ogc?ht=20..&amp;key=k1&#39;`) || strings.Contains(p, "trees.geojson") {
+		t.Errorf("project lacks the OAPIF tree layer")
 	}
 }

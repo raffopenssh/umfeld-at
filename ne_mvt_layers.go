@@ -67,6 +67,7 @@ func NELayerStats() map[string]interface{} {
 	m := neLayerLRU.stats()
 	m["relief"], m["trees"], m["pic"], m["cells_geojson"] = neLayerServed[0].Load(), neLayerServed[1].Load(), neLayerServed[2].Load(), neLayerServed[3].Load()
 	m["peer_errors"] = neLayerPeerErr.Load()
+	m["trees_ogc"] = neOGCServed.Load()
 	return m
 }
 

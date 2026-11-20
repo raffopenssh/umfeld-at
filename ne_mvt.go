@@ -1084,6 +1084,9 @@ func handleNEMVT(w http.ResponseWriter, r *http.Request, rest string) {
 		handleNEMVTStatus(w, r)
 		return
 	}
+	if handleNEOGC(w, r, rest) { // trees by extent, OGC API Features (ne_mvt_ogc.go)
+		return
+	}
 	if handleNEMVTLayer(w, r, rest) { // relief, trees, overlay pictures (ne_mvt_layers.go)
 		return
 	}

@@ -9,7 +9,7 @@ statistics) as **H3 cell polygons with every attribute**, in two forms:
 | Vector tiles (MVT) | `{PUBLIC_URL}/api/v1/ne/mvt/{z}/{x}/{y}.pbf` | live layer, always current (what the project uses) |
 | PMTiles archive | `{PUBLIC_URL}/api/v1/ne/pmtiles?bbox=w,s,e,n` (`&format=zip`: with style and project) | one file per area, works offline |
 | **Cells as a plain vector layer** | `{PUBLIC_URL}/api/v1/ne/mvt/cells.geojson?bbox=w,s,e,n` (`&f=` the matching cells · `&f=…&veil=1` the rest) | one view as GeoJSON polygons with every attribute: identify, attribute table, **processing tools** (in the project, off at first) |
-| Companion layers | `…/ne/mvt/trees.geojson?bbox=` · `…/ne/mvt/trees/14/{x}/{y}.pbf` · `…/ne/mvt/relief/{z}/{x}/{y}.png` · `…/ne/mvt/pic/{declared\|observed\|sub\|subc\|roads}/{z}/{x}/{y}.png` | what the page draws around the cells: tree crowns, hillshade, the page's own pictures (used by the project) |
+| Companion layers | `…/ne/mvt/ogc` (trees by extent, OGC API Features) · `…/ne/mvt/trees.geojson?bbox=` · `…/ne/mvt/trees/14/{x}/{y}.pbf` · `…/ne/mvt/relief/{z}/{x}/{y}.png` · `…/ne/mvt/pic/{declared\|observed\|sub\|subc\|roads}/{z}/{x}/{y}.png` | what the page draws around the cells: tree crowns, hillshade, the page's own pictures (used by the project) |
 | Style (QML) | `{PUBLIC_URL}/api/v1/ne/mvt.qml?for=tiles` / `?for=ogr` (`&share=` for a state of the page) | the legend alone, for a layer you added yourself / for an archive |
 
 TileJSON: `/api/v1/ne/mvt.json` (lists every field). Zoom 9–15. Same data at the
@@ -124,12 +124,22 @@ basemaps (basemap.at, OpenStreetMap) are asked directly. Top to bottom:
   first. The view as **plain vector layers**, one fetch each (they do not grow
   when you pan): what the attribute table, *select by expression* and the
   processing tools accept — a vector-tile layer cannot be their input.
-  - **Trees as points** — `mvt/trees.geojson?bbox=w,s,e,n[&ht=lo..hi]` (the
-    view plus a quarter around it, up to 40 km²), a **graduated renderer on
-    `h`** in the page's bands and greens. To recolour: *Layer styling → Colour
-    ramp →* any ramp — the rings follow. The ring's diameter is the crown in
-    metres on the ground (data-defined size: `crown_d` × 1/cos(latitude) in
-    EPSG:3857).
+  - **Trees as points (current view)** — the trees as real points that
+    **follow the map**: an OGC API Features source (`mvt/ogc`, collection
+    `trees`) which QGIS reads by the canvas extent, page by page, into its own
+    local cache — panning fetches the new part, nothing is downloaded twice.
+    Visible below 1:15 000; a **graduated renderer on `h`** in the page's bands
+    and greens (to recolour: *Layer styling → Colour ramp →* any ramp — the
+    rings follow; the ring's diameter is the crown in metres on the ground).
+    Fields: `id`, `name` (a label such as `26 m spruce`), `h` (m), `crown_d`
+    (m), `species`, `vitality`. A `ht` term of the filter limits them.
+    **To take trees into the field** (KML for Locus Map, GPX, GeoPackage, CSV):
+    tick the layer, zoom to the stand, right-click → *Export → Save features
+    as…* and tick *Extent → Map canvas extent*. The file holds what you see —
+    roughly 400 bytes per tree as KML, so a view of a few hundred metres
+    (thousands of trees) is a few MB; a whole municipality is not a field
+    file. Keep `id` and the position unchanged: they are what names the tree
+    when observations come back.
   - **Cells as polygons** — `mvt/cells.geojson?bbox=`, styled like the map
     (groups by the profile of the link, each fill shaded by the group's share;
     change; declared ≠ observed). Fields carry their label and unit as alias;
@@ -177,6 +187,14 @@ Tiles are cached server-side; a tile whose source bins do not exist yet answers
 area fills in within seconds to a minute. `/api/v1/ne/mvt/status?bbox=w,s,e,n`
 tells you how much of an area is ready (`status: ready|warming|cold`, `eta_s`);
 `&prepare=1` queues the missing parts before you open the layer.
+
+**The trees by hand:** *Layer → Add Layer → Add WFS / OGC API Features Layer →
+New*, URL `{PUBLIC_URL}/api/v1/ne/mvt/ogc` (with `?key=…` if you have one,
+`?ht=20..` for a height range), *Connect*, add `trees`, and tick *Only request
+features overlapping the view extent*. Zoom in first: a box over 40 km² is
+answered `413`. Outside QGIS it is plain GeoJSON:
+`…/mvt/ogc/collections/trees/items?bbox=w,s,e,n&limit=10000` (+ `offset=`, or
+follow the `next` link).
 
 ## QGIS — offline PMTiles
 

@@ -300,6 +300,11 @@ GET /api/v1/ne/mvt/cells.geojson?bbox=w,s,e,n[&f=][&veil=1][&res=10|11]
                                             lat, match — a plain vector layer for identify, the attribute table and processing tools.
                                             f= the matching cells, f=…&veil=1 the rest (together: the view). res 12 up to 16 km²,
                                             res-11 aggregates up to 110 km², res-10 up to 700 km², larger → 413.
+GET /api/v1/ne/mvt/ogc                      the TREES as points BY EXTENT — OGC API Features (collection "trees"):
+                                            /collections/trees/items?bbox=w,s,e,n[&limit=][&offset=][&ht=lo..hi], box ≤ 40 km², pages ≤ 50 000
+                                            with a next link. Properties name, h (m), crown_d (m), species, vitality; id = the position.
+                                            In QGIS: Layer → Add WFS / OGC API Features layer, or the project's "Trees as points
+                                            (current view)" — it follows the canvas, so "save features as…" writes what is in view.
 GET /api/v1/ne/mvt.qgs?bbox=|kg=|adm=|share=[&f=][&key=]
                                             a QGIS PROJECT (.qgs, a few KB): opens on the box (share= with ;at= = the page's view),
                                             the live tile layer with a legend of the page's toggles (declared/observed · change ·

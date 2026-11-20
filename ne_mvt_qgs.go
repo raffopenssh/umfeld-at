@@ -368,6 +368,23 @@ func neQGSVector(id, name, url, geom, rights, renderer string, checked bool, opa
 	return
 }
 
+// neQGSTreePtsMinScale — the point layer appears below this scale: a screen
+// of it stays under the items endpoint's box (neOGCTreesMaxKm2).
+const neQGSTreePtsMinScale = 15000
+
+// neQGSOAPIF — a vector layer on an OGC API Features collection, fetched by
+// the view (restrictToRequestBBOX) in pages and kept in QGIS's local cache.
+func neQGSOAPIF(id, name, url, typename, rights, renderer, opacity string, minScale int) (tree, layer string) {
+	id = neQGSID(id)
+	src := html.EscapeString(fmt.Sprintf(" pagingEnabled='true' pageSize='%d' restrictToRequestBBOX='1' typename='%s' url='%s'", neOGCLimitDef, typename, url))
+	tree = fmt.Sprintf(`<layer-tree-layer id="%s" name="%s" source="%s" providerKey="OAPIF" checked="Qt::Unchecked" expanded="0" legend_exp="" patch_size="-1,-1"><customproperties><Option/></customproperties></layer-tree-layer>`, id, html.EscapeString(name), src)
+	layer = fmt.Sprintf(`<maplayer type="vector" geometry="Point" wkbType="Point" hasScaleBasedVisibilityFlag="1" maxScale="1" minScale="%d" autoRefreshMode="Disabled" styleCategories="AllStyleCategories" readOnly="1"><id>%s</id><datasource>%s</datasource><layername>%s</layername><srs>%s</srs><resourceMetadata><rights>%s</rights><abstract>%s</abstract></resourceMetadata><provider encoding="UTF-8">OAPIF</provider><flags><Identifiable>1</Identifiable><Removable>1</Removable><Searchable>0</Searchable><Private>0</Private></flags><customproperties><Option/></customproperties>%s<blendMode>0</blendMode><layerOpacity>%s</layerOpacity><featureBlendMode>0</featureBlendMode></maplayer>`,
+		minScale, id, src, html.EscapeString(name), neQGSCRS4326, html.EscapeString(rights),
+		html.EscapeString("The trees of the map as points — the part you are looking at, fetched as you pan (below 1:"+strconv.Itoa(minScale)+"). To hand them on: tick the layer, zoom to the area, right-click → Export → Save features as… (KML, GeoPackage, CSV); the file holds the trees in view. Fields: name (label), h (m), crown_d (m), species, vitality."),
+		renderer, opacity)
+	return
+}
+
 const neQGSCRS4326 = `<spatialrefsys nativeFormat="Wkt"><wkt>GEOGCRS["WGS 84",DATUM["World Geodetic System 1984",ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1]]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],CS[ellipsoidal,2],AXIS["geodetic latitude (Lat)",north,ORDER[1],ANGLEUNIT["degree",0.0174532925199433]],AXIS["geodetic longitude (Lon)",east,ORDER[2],ANGLEUNIT["degree",0.0174532925199433]],ID["EPSG",4326]]</wkt><proj4>+proj=longlat +datum=WGS84 +no_defs</proj4><srsid>3452</srsid><srid>4326</srid><authid>EPSG:4326</authid><description>WGS 84</description><projectionacronym>longlat</projectionacronym><ellipsoidacronym>EPSG:7030</ellipsoidacronym><geographicflag>true</geographicflag></spatialrefsys>`
 
 // neQGSHexShade — the page's shade as a data-defined fill: the group colour at
@@ -612,15 +629,11 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 			rights: pr.ObsName + " (CC BY 4.0), BEV", renderer: neQGSTreeStyles(), checked: view.trees, opacity: "0.9", minScale: 34000,
 			abstract: "Every tree found by LiDAR as a ring the size of its crown, coloured by height — as on the map. Live tiles: they load wherever the map goes. Visible below 1:34 000. Click a ring with the identify tool: h (m), crown_d (m), crown_m2, species, vitality."})
 		over = append(over, bm{tree: t, layer: l, id: "trees"})
-		// for analysis: the view and a margin around it in one fetch → a point
-		// layer with a graduated renderer (re-rampable), in the vector group
-		mx, my := (box[2]-box[0])*0.25, (box[3]-box[1])*0.25
-		tb := [4]float64{box[0] - mx, box[1] - my, box[2] + mx, box[3] + my}
-		if neQGSBoxKm2(tb) > neLayerTreesMaxKm2 {
-			tb = box
-		}
-		if neQGSBoxKm2(tb) <= neLayerTreesMaxKm2 && sp.archive == "" {
-			t, l := neQGSVector("treepts", tp, q(base+"/api/v1/ne/mvt/trees.geojson", fmt.Sprintf("bbox=%.5f,%.5f,%.5f,%.5f", tb[0], tb[1], tb[2], tb[3]), ht), "Point", pr.ObsName+" (CC BY 4.0), BEV", neQGSTreeGraduated(), false, "0.9", 34000)
+		// for analysis and export: the trees as real points that FOLLOW the map —
+		// an OGC API Features source (ne_mvt_ogc.go) read by the canvas extent
+		// into QGIS's own cache, so "save features as…" writes what is in view
+		if sp.archive == "" {
+			t, l := neQGSOAPIF("treepts", tp+" (current view)", q(base+"/api/v1/ne/mvt/ogc", ht), "trees", pr.ObsName+" (CC BY 4.0), BEV", neQGSTreeGraduated(), "0.9", neQGSTreePtsMinScale)
 			vec = append(vec, bm{tree: t, layer: l, id: "treepts", grp: true})
 		}
 	}
