@@ -64,7 +64,7 @@ stages). Env: `/etc/umfeld-at.env` (0600; template in
 `UMFELD_TOKEN` + `UMFELD_TOKEN_NAMES` (parallel lists), `CONTRIBUTOR_TOKEN` +
 `CONTRIBUTOR_TOKEN_NAMES`, `NE_WRITER`, `NE_WRITE_BUDGET_MB`, `NE_WRITE_BUDGET_MB_OVERRIDES`
 (`name:MB,…`), `UMFELD_PEER_OBS_NAME/_API/_WEB`, `UMFELD_PEER_SUB_NAME/_API/_TOKEN`,
-`UMFELD_PEER_MAP_NAME`, `TREE_MAIL_KEYS` (`key:name[:edits/day],…`); the unit sets `PORT=8000`, `GOMEMLIMIT`. Long passes (`-ne-train-dict`,
+`UMFELD_PEER_MAP_NAME`, `TREE_MAIL_KEYS` (`key:name[:edits/day][:@mail.domain][:addr=N],…`); the unit sets `PORT=8000`, `GOMEMLIMIT`. Long passes (`-ne-train-dict`,
 `-osm-import`, `-toponyms-import`, `-kg-universe-build`) run as a separate process.
 Go build cache: this is ONE main package, so every edit adds ~40 MB of cache objects (build +
 test binary) that Go keeps 5 days → GBs under agent iteration. `go-cache-trim.timer` (daily,

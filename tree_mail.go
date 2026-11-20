@@ -88,6 +88,8 @@ type tmKey struct {
 	secret []byte // folded: lower case, letters and digits only
 	name   string
 	daily  int
+	domain string // "@x.example": only addresses there may subscribe ("" = any)
+	addrs  int    // addresses the key binds at a time (a personal key: 1)
 }
 
 type tmConfig struct {
@@ -109,7 +111,9 @@ func tmKeyFold(s string) []byte {
 }
 
 // tmConf — the environment, once; a var so tests can set it.
-var tmConf = sync.OnceValue(func() *tmConfig {
+var tmConf = sync.OnceValue(tmConfRead)
+
+func tmConfRead() *tmConfig {
 	c := &tmConfig{addr: strings.ToLower(strings.TrimSpace(os.Getenv("TREE_MAIL_ADDRESS"))), dir: os.Getenv("TREE_MAIL_DIR"), state: filepath.Join("data", "tree_mail")}
 	if c.addr == "" {
 		if h := publicHost(); strings.Contains(h, ".") {
@@ -126,20 +130,27 @@ var tmConf = sync.OnceValue(func() *tmConfig {
 		if len(p) < 2 || p[1] == "" || len(p[1]) > 32 {
 			continue
 		}
-		k := tmKey{secret: tmKeyFold(p[0]), name: p[1], daily: tmKeyDaily}
+		k := tmKey{secret: tmKeyFold(p[0]), name: p[1], daily: tmKeyDaily, addrs: tmAddrsPerKey}
 		if len(k.secret) < tmKeyMinLen {
 			log.Printf("tree-mail: key %q ignored (shorter than %d letters/digits)", k.name, tmKeyMinLen)
 			continue
 		}
-		if len(p) > 2 {
-			if n, err := strconv.Atoi(p[2]); err == nil && n > 0 {
+		for _, f := range p[2:] { // in any order: 500 (edits a day) · @x.example · addr=1
+			f = strings.ToLower(strings.TrimSpace(f))
+			if n, err := strconv.Atoi(f); err == nil && n > 0 {
 				k.daily = n
+			} else if strings.HasPrefix(f, "@") && len(f) > 3 {
+				k.domain = f
+			} else if n, err := strconv.Atoi(strings.TrimPrefix(f, "addr=")); err == nil && n > 0 && n <= tmAddrsPerKey {
+				k.addrs = n
+			} else if f != "" {
+				log.Printf("tree-mail: key %q: field %d not understood, ignored", k.name, len(p))
 			}
 		}
 		c.keys = append(c.keys, k)
 	}
 	return c
-})
+}
 
 // tmReporter — the reporter id a key's edits carry at the peer: stable for the
 // key, short, and neither the key nor its name (HMAC keyed with the key).
@@ -669,8 +680,19 @@ func tmHandle(raw []byte) (retry bool) {
 			}
 		}
 		tm.mu.Unlock()
-		if n >= tmAddrsPerKey {
-			reply("Re: subscribe", "This key already has "+strconv.Itoa(tmAddrsPerKey)+" addresses. Send \"stop\" from one of them first.\n")
+		// a right key that cannot bind this address is answered: the sender holds the key, silence would read as a broken service
+		if key.domain != "" && !strings.HasSuffix(from, key.domain) {
+			reply("Re: subscribe", tmOtherDomainText)
+			tmCount("subscribe_other_domain")
+			return false
+		}
+		if bound && bind.Key == key.name {
+			reply("Re: subscribe", "This address is already subscribed with this key — nothing to do.\n\n"+tmHelpText(c, key, false))
+			tmCount("subscribe_again")
+			return false
+		}
+		if n >= key.addrs {
+			reply("Re: subscribe", tmKeyInUseText(key.addrs, bound))
 			tmCount("subscribe_full")
 			return false
 		}
@@ -925,6 +947,31 @@ func tmRowList(rows []int) string {
 		return "row " + s[0]
 	}
 	return "rows " + strings.Join(s, ", ")
+}
+
+// tmOtherDomainText — the key is right, the sender's mail domain is not the
+// one the key was issued for. The domain is not named.
+const tmOtherDomainText = `Not subscribed: this key was issued for the addresses of one organisation, and this address is not one of them.
+
+Send "subscribe <key>" again from your address there.
+`
+
+// tmKeyInUseText — the key is right and every address it may bind is taken.
+func tmKeyInUseText(addrs int, bound bool) string {
+	var b strings.Builder
+	if addrs == 1 {
+		b.WriteString("Not subscribed: this key is already in use by another address. A key is personal — one key, one address.\n\n")
+	} else {
+		fmt.Fprintf(&b, "Not subscribed: this key is already in use by %d addresses, as many as it allows.\n\n", addrs)
+	}
+	b.WriteString(`Your key, new address?   Mail "stop" from the old address, then "subscribe <key>" from this one.
+Somebody else's key?     Ask the person who gave you this one for a key of your own.
+
+Nothing was changed`)
+	if bound {
+		b.WriteString(": this address keeps the subscription it had")
+	}
+	return b.String() + ".\n"
 }
 
 // tmHelpText — what to send back; the reply to "subscribe" and "help". Short

@@ -13,7 +13,22 @@ wrong keys per address and 1 000 in total per day, answered with silence).
 
     k=$(LC_ALL=C tr -dc 'abcdefghjkmnpqrstuvwxyz23456789' </dev/urandom | head -c8); echo "${k:0:4}-${k:4}"
 
-Add `<key>:<name>` to the list, `scripts/deploy.sh` (or restart). Removing a key
+Add `<key>:<name>` to the list, `scripts/deploy.sh` (or restart). Optional fields after the
+name, in any order: `300` (edits a day), `@x.example` (only addresses of that mail domain may
+subscribe — compared at subscribe time, never stored), `addr=1` (addresses the key binds at a
+time, default and ceiling 5). A **personal key** is `key:name:@x.example:addr=1`: one person, one
+reporter id, one address.
+
+A right key that cannot bind the sender is **answered** (the sender holds the key; silence would
+read as a broken service), a wrong key never is:
+
+| Case | Answer | counter |
+|---|---|---|
+| every address of the key is taken | *already in use by another address* — your key: `stop` from the old address; somebody else's: ask for one of your own | `subscribe_full` |
+| the key's mail domain is another | *issued for the addresses of one organisation* (the domain is not named) | `subscribe_other_domain` |
+| this address already holds this key | *already subscribed* + the help | `subscribe_again` |
+
+Of an address only the keyed hash is kept (binding, the day's counters) — no domain, no local part. Removing a key
 drops its addresses at their next mail. Keys and names never appear in public
 docs, answers or logs (logs carry the name only).
 

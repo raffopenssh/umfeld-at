@@ -287,7 +287,7 @@ func tmSetup(t *testing.T) (*tmStub, string) {
 	os.MkdirAll(filepath.Join(dir, "Maildir", "new"), 0o700)
 	oldConf, oldGW, oldURL, oldKey := tmConf, tmGatewayURL, treeReportURL, treeReportKey
 	cfg := &tmConfig{addr: "trees@vm.example", dir: filepath.Join(dir, "Maildir"), state: filepath.Join(dir, "state"),
-		keys: []tmKey{{secret: tmKeyFold("K7M3-QX9D"), name: "anna", daily: 5}}}
+		keys: []tmKey{{secret: tmKeyFold("K7M3-QX9D"), name: "anna", daily: 5, addrs: tmAddrsPerKey}}}
 	tmConf = func() *tmConfig { return cfg }
 	tmGatewayURL = gw.URL
 	treeReportURL = func() string { return peer.URL }
@@ -548,5 +548,76 @@ func TestTmSubjectShape(t *testing.T) {
 		if strings.Contains(tmSubjectShape(in), "abcd") {
 			t.Errorf("%q: the shape leaks subject text", in)
 		}
+	}
+}
+
+// A right key that cannot bind the sender is answered, and says what to do:
+// a personal key in use, a key of another mail domain, the same address again.
+func TestTreeMailKeyInUse(t *testing.T) {
+	st, dir := tmSetup(t)
+	const addr = "trees@vm.example"
+	c := tmConf()
+	c.keys = append(c.keys, tmKey{secret: tmKeyFold("p2p2-p2p2"), name: "org-1", daily: 5, addrs: 1, domain: "@org.example"})
+	last := func() string {
+		t.Helper()
+		tmSweep(true)
+		if len(st.sent) != 1 {
+			t.Fatalf("want one reply, got %v", st.sent)
+		}
+		b := st.sent[0]["body"]
+		st.sent = nil
+		if l := strings.ToLower(b); strings.Contains(l, "p2p2") || strings.Contains(l, "org.example") || strings.Contains(l, "org-1") {
+			t.Fatalf("reply names the key, its name or its domain: %s", b)
+		}
+		return b
+	}
+	bound := func() int { tm.mu.Lock(); defer tm.mu.Unlock(); return len(tm.st.Bind) }
+	tmDeliver(t, dir, addr, "eve@else.example", "subscribe p2p2-p2p2", "", nil, "")
+	if b := last(); !strings.Contains(b, "Not subscribed") || !strings.Contains(b, "organisation") || bound() != 0 {
+		t.Fatalf("other domain: %s", b)
+	}
+	tmDeliver(t, dir, addr, "eve@notorg.example", "subscribe p2p2-p2p2", "", nil, "") // suffix of the name, not the domain
+	if b := last(); !strings.Contains(b, "organisation") || bound() != 0 {
+		t.Fatalf("look-alike domain: %s", b)
+	}
+	tmDeliver(t, dir, addr, "Ann@Org.example", "subscribe p2p2-p2p2", "", nil, "")
+	if b := last(); !strings.Contains(b, "Subscribed") || bound() != 1 {
+		t.Fatalf("first address: %s", b)
+	}
+	tmDeliver(t, dir, addr, "ann@org.example", "subscribe p2p2-p2p2", "", nil, "")
+	if b := last(); !strings.Contains(b, "already subscribed") || !strings.Contains(b, "MAIL") || bound() != 1 {
+		t.Fatalf("same address again: %s", b)
+	}
+	tmDeliver(t, dir, addr, "bob@org.example", "subscribe p2p2-p2p2", "", nil, "")
+	if b := last(); !strings.Contains(b, "already in use by another address") || !strings.Contains(b, `"stop"`) || !strings.Contains(b, "key of your own") || bound() != 1 {
+		t.Fatalf("key in use: %s", b)
+	}
+	// stop frees it
+	tmDeliver(t, dir, addr, "ann@org.example", "stop", "", nil, "")
+	last()
+	tmDeliver(t, dir, addr, "bob@org.example", "subscribe p2p2-p2p2", "", nil, "")
+	if b := last(); !strings.Contains(b, "Subscribed") || bound() != 1 {
+		t.Fatalf("after stop: %s", b)
+	}
+	if s := fmt.Sprint(TreeMailStats()); strings.Contains(s, "example") || strings.Contains(s, "p2p2") {
+		t.Fatalf("stats leak: %s", s)
+	}
+}
+
+func TestTreeMailKeyFields(t *testing.T) {
+	t.Setenv("TREE_MAIL_KEYS", "aaaa-bbbb:one, cccc-dddd:two:@Org.Example:addr=1:300 ,eeee-ffff:three:200")
+	t.Setenv("TREE_MAIL_ADDRESS", "trees@vm.example")
+	c := tmConfRead()
+	if len(c.keys) != 3 {
+		t.Fatalf("keys: %+v", c.keys)
+	}
+	if k := c.keys[0]; k.addrs != tmAddrsPerKey || k.domain != "" || k.daily != tmKeyDaily {
+		t.Fatalf("plain key: %+v", k)
+	}
+	if k := c.keys[1]; k.addrs != 1 || k.domain != "@org.example" || k.daily != 300 {
+		t.Fatalf("personal key: %+v", k)
+	}
+	if k := c.keys[2]; k.daily != 200 || k.addrs != tmAddrsPerKey {
+		t.Fatalf("daily key: %+v", k)
 	}
 }

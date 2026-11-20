@@ -246,6 +246,8 @@ at {OBS_NAME} — the same reports the map's tree card sends.
 1. **Subscribe once.** Ask for a key (`/api/v1/feedback`). From the address you
    will send from, mail **{TREES_MAIL}** with the subject `subscribe <your key>`.
    The answer explains the rest; it is the only mail that names the key.
+   A key is personal: one that is already in use by another address is answered
+   with what to do (`stop` from the old address, or ask for a key of your own).
 2. **Export.** In QGIS save *Trees as points (current view)* as KML (or CSV).
    Locus Map and similar apps import the KML: each tree is a point named
    `26 m spruce`, its `id` / `h` / `species` in the description.
@@ -271,7 +273,9 @@ at {OBS_NAME} — the same reports the map's tree card sends.
    touches it and that is not named so itself — so send the whole folder. One
    rule, the map's too: the taller top stays. If you named the taller one, the
    lower one is reported instead and the receipt says so. No tree beside it in
-   the file → the row is refused.
+   the file → the row is refused. A top that readers merged is no longer in
+   the next export (its crown is part of its tree's); on the map it stays as a
+   dotted ring, and that is where *its own tree* undoes a merge.
 
    **Comment.** Type below the table in the description, or fill a `note`
    column: it becomes the tree's note at {OBS_NAME} (public — no names, no phone
