@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -215,3 +216,24 @@ assert.deepStrictEqual(all('nuss').filter(function(t){return/^(Pinus|Prunus)/.te
 /* via: named only when the shown name did not match */
 assert.strictEqual(trSearch(IX,'Fichte')[0].via,null);assert.strictEqual(trSearch(IX,'PIEAB')[0].via,'PIEAB');assert.strictEqual(trSearch(IX,'Rottanne')[0].via,'Rottanne');assert.strictEqual(trSearch(IX,'PiAb')[0].via,'Picea abies');
 `
+
+// TestGlyphScriptNoDuplicateFunctions — the page is ONE script: a second
+// `function name(` at a line start silently replaces the first (hoisting).
+// 2026-11-21: the legend's trKey() replaced the species search's trKey(s,ae) —
+// the search box offered one chip whatever was typed, and Enter took it. The
+// node test of the search (TestGlyphTreeMatch) loads its file alone and passed.
+func TestGlyphScriptNoDuplicateFunctions(t *testing.T) {
+	src := glyphScriptBody(t)
+	seen := map[string]int{}
+	for _, m := range regexp.MustCompile(`(?m)^ *function ([A-Za-z0-9_$]+)\(`).FindAllStringSubmatch(src, -1) {
+		seen[m[1]]++
+	}
+	if len(seen) < 300 {
+		t.Fatalf("only %d functions found at line starts — pattern or script changed", len(seen))
+	}
+	for n, c := range seen {
+		if c > 1 {
+			t.Errorf("function %s declared %d times at a line start: the last one wins everywhere", n, c)
+		}
+	}
+}

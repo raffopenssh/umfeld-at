@@ -408,13 +408,23 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   and not supersampled; no blur/filter/promoted crown canvas; tile pictures unclipped and unfaded; no animation
   in the SVG) and CSS instead of native full screen in a WebView — were shown unnecessary by the same run and
   are **removed**; do not bring them back for this freeze.
+- **iPad: full screen by CSS only** (2026-11-21, `IPAD` = `navigator.platform` iPad, or Mac with touch points): iPadOS ends
+  native full screen by itself when a text field takes the keyboard — find box, filter, the species search ("full screen
+  collapses"). `fsToggle` does not ask for native there (`?fs` lifts it). Net for any other touch browser doing the same:
+  `fullscreenchange` with a text field of the figure focused ≤ 1.5 s ago keeps `fsOn` (CSS) and sets `fsNoNat` for the session.
+- **One script, one name per function** (`TestGlyphScriptNoDuplicateFunctions`): the legend's `trKey()` once replaced the species
+  search's `trKey(s,ae)` — one chip (Fichte) whatever was typed, Enter took it. The legend's is `trKeyLine`.
 - **One raster per batch** (`hiCommit`/`hiFlush`, `hi.cq` + `hi.cq2`): a landed, decoded tile waits and the whole
   batch joins the SVG on one timer (400 ms while `lf.on`, 120 ms else); readout/legend/`fltCardFix` once per batch;
   `.hi.ld` turns the per-image fade off while heavy. Relief squares go through the same batch (`cq2`, not counted in
   `hi.left`). Every insert re-rasters the blended stack, and on a phone that raster is slower than a frame.
   `hiCommit` must sit at **script scope** (it was once declared inside `hiTile` — tiles saw it, `relFetch` got
   `ReferenceError`, the hillshade never appeared; `?trace` column `rel` shows it).
-- **Relief without an SVG filter** (`relBake`): the water key (alpha = |R−180|·127, formerly `filter=url(#relf)`
+- **Relief tone curve, not a key** (2026-11-21): flat ground (tone 180) is re-centred on the overlay blend's neutral 128
+  (0..180 → 0..128, 180..255 → 128..255; `relBake`, fallback filter `#relf`, relay `neLayerReliefBake`). The former alpha key
+  punched a hole wherever a slope's shade passed through 180 — contour slivers, **triangles** at z ≥ 16 where a 25 m cell
+  spans dozens of pixels. Do not bring an alpha key back.
+- **Relief without an SVG filter** (`relBake`): the curve (then still the water key, alpha = |R−180|·127, formerly `filter=url(#relf)`
   per `<image>`) is baked into the pixels on a 256-px canvas at decode time (`createImageBitmap` → `toBlob`);
   the filter stays only as the fallback. A dozen filtered images re-ran the filter at every repaint of the
   stack — on an emulated 384×721 @ 2.8 phone that was ~1 s of blank hillshade per tile batch (the "flashing").

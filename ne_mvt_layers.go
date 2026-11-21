@@ -7,9 +7,9 @@
 //	GET /api/v1/ne/mvt/pic/{declared|observed|sub|subc|roads}/{z}/{x}/{y}.png
 //	                                                  the landing page's own overlay pictures as XYZ tiles (z 12–16, 512 px)
 //
-// relief — the peer's tile, with the page's water key baked in (flat ground,
-// tone 180, becomes transparent: the same rule as relBake in the page) so an
-// overlay blend shades slopes and leaves plains alone; `raw=1` relays the
+// relief — the peer's tile, with the page's tone curve baked in (flat ground,
+// tone 180, becomes the overlay blend's neutral 128: the same rule as relBake
+// in the page) so an overlay blend shades slopes and leaves plains alone; `raw=1` relays the
 // peer's bytes untouched.
 //
 // trees — the peer's /trees/bbox columns for the tile box (+ a crown's margin,
@@ -195,7 +195,7 @@ func neLayerPeerGet(url string, max int64) ([]byte, int, error) {
 	return b, resp.StatusCode, err
 }
 
-// neLayerRelief — the peer's hillshade tile; baked: flat ground transparent.
+// neLayerRelief — the peer's hillshade tile; baked: flat ground neutral grey.
 func neLayerRelief(z, x, y int, raw bool) ([]byte, error) {
 	pr := peers()
 	if pr.ObsWeb == "" {
@@ -228,9 +228,13 @@ func neLayerRelief(z, x, y int, raw bool) ([]byte, error) {
 	return b, nil
 }
 
-// neLayerReliefBake — the page's water key (relBake): alpha = |R − 180| × 127,
-// clamped, so the model's flat tone (lakes, plains, no-data beyond the border)
-// vanishes and every slope keeps its ink; 179/181 keep half.
+// neLayerReliefBake — the page's tone curve (relBake): the model's flat tone
+// 180 (lakes, plains, no-data beyond the border) is re-centred on 128, the
+// neutral grey of an overlay blend (0..180 → 0..128, 180..255 → 128..255), so
+// flat ground leaves the map alone and slopes shade continuously. It was an
+// alpha key (|R − 180| × 127) until 2026-11-21: every slope whose shade passes
+// through 180 got a hole — triangles at the deep zooms. A tile that is flat
+// everywhere stays 204.
 func neLayerReliefBake(pngb []byte) ([]byte, error) {
 	src, err := png.Decode(bytes.NewReader(pngb))
 	if err != nil {
@@ -241,19 +245,16 @@ func neLayerReliefBake(pngb []byte) ([]byte, error) {
 	draw.Draw(dst, dst.Rect, src, bd.Min, draw.Src)
 	any := false
 	for i := 0; i < len(dst.Pix); i += 4 {
-		d := int(dst.Pix[i]) - 180
-		if d < 0 {
-			d = -d
-		}
-		a := d * 127
-		if a > 255 {
-			a = 255
-		}
-		a = a * int(dst.Pix[i+3]) / 255
-		dst.Pix[i+3] = uint8(a)
-		if a > 0 {
+		v := int(dst.Pix[i])
+		if v != 180 && dst.Pix[i+3] > 0 {
 			any = true
 		}
+		if v <= 180 {
+			v = (v*128 + 90) / 180
+		} else {
+			v = 128 + ((v-180)*127+37)/75
+		}
+		dst.Pix[i], dst.Pix[i+1], dst.Pix[i+2] = uint8(v), uint8(v), uint8(v)
 	}
 	if !any {
 		return []byte{}, nil

@@ -105,7 +105,7 @@ basemaps (basemap.at, OpenStreetMap) are asked directly. Top to bottom:
   (`mvt/pic/sub/…`; under `;change` their lineage, `mvt/pic/subc/…`). Pictures
   only: the outlines themselves are not handed out. On with `;subsidy`.
 - **Terrain relief** — the hillshade of {OBS_NAME}, relayed
-  (`mvt/relief/{z}/{x}/{y}.png`, zoom 8–17), flat ground keyed transparent and
+  (`mvt/relief/{z}/{x}/{y}.png`, zoom 8–17), flat ground re-centred on neutral grey (128) and
   blended *overlay* like the page (`?raw=1` = the tile untouched). On with `;relief`.
 - **Cells · click for details** — the live vector-tile layer
   (`mvt/{z}/{x}/{y}.pbf`, zoom 9–15, the filter `?f=` in the URL). **The layer
