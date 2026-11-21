@@ -1254,7 +1254,9 @@ var tmFramePiece = func(i, j int) ([]byte, bool) {
 //     = none of them ever moved: nothing to send.
 //  2. the LiDAR height decides where it is given: a row whose position AND
 //     height are an apex of today's copy is in today's frame — the frame that
-//     apex carries, whatever KG it is in.
+//     apex carries, whatever KG it is in; a row that finds its height only
+//     where the KG's shift (moved_m) puts it today is from the copy before
+//     (the peer's "stale" token). Both fit → 3, then today's.
 //  3. else the peer's answer for the row's KG, when the KG boxes around the
 //     point agree (treeFrameOf); else nothing — the peer infers it.
 //
@@ -1287,8 +1289,15 @@ func tmFrames(ctx context.Context, items []tmItem) {
 	type ll struct{ lon, lat int32 }
 	type hf struct{ h, f byte }
 	pieces := map[ij]bool{}
-	for _, p := range pts {
+	shifts := make([][]treeFrameShift, len(pts))
+	for n, p := range pts {
 		pieces[ij{int(math.Floor(p[0] / neOGCPieceStep)), int(math.Floor(p[1] / neOGCPieceStep))}] = true
+		if items[need[n]].h0 > 0 {
+			shifts[n] = treeFrameShifts(kgs, p[0], p[1])
+			for _, s := range shifts[n] {
+				pieces[ij{int(math.Floor(s.lon / neOGCPieceStep)), int(math.Floor(s.lat / neOGCPieceStep))}] = true
+			}
+		}
 	}
 	today := map[ll]hf{}
 	if len(pieces) <= tmFramePieces {
@@ -1302,12 +1311,54 @@ func tmFrames(ctx context.Context, items []tmItem) {
 			}
 		}
 	}
+	// the apex of today's copy at a point (the copy is metre-snapped and served
+	// to 1e-6°: a few units cover the rounding of the way there and back)
+	at := func(lon, lat, h float64, exact bool) (hf, bool) {
+		k := ll{int32(math.Round(lon * 1e6)), int32(math.Round(lat * 1e6))}
+		r := int32(3)
+		if exact {
+			r = 0
+		}
+		for dx := -r; dx <= r; dx++ {
+			for dy := -r; dy <= r; dy++ {
+				if a, ok := today[ll{k.lon + dx, k.lat + dy}]; ok && math.Abs(h-float64(a.h)/4) <= 0.13 {
+					return a, true
+				}
+			}
+		}
+		return hf{}, false
+	}
 	byHeight, byKG := 0, 0
 	for n, i := range need {
 		it := &items[i]
-		if a, ok := today[ll{int32(math.Round(pts[n][0] * 1e6)), int32(math.Round(pts[n][1] * 1e6))}]; ok && it.h0 > 0 && math.Abs(it.h0-float64(a.h)/4) <= 0.13 {
-			it.body["frame"] = neOGCFrame(a.f)
-			byHeight++
+		if it.h0 > 0 {
+			here, isHere := at(pts[n][0], pts[n][1], it.h0, true)
+			stale := ""
+			for _, s := range shifts[n] {
+				// the same height where the tree stands today, in a copy that is not itself from before
+				if a, ok := at(s.lon, s.lat, it.h0, false); ok && neOGCFrame(a.f) != s.stale {
+					stale = s.stale
+					break
+				}
+			}
+			switch {
+			case isHere && stale == "":
+				it.body["frame"] = neOGCFrame(here.f)
+				byHeight++
+				continue
+			case !isHere && stale != "":
+				it.body["frame"] = stale
+				byHeight++
+				continue
+			}
+			// neither, or both (two trees of one height a shift apart): the KG's answer
+			if f := treeFrameOf(kgs, pts[n][0], pts[n][1]); f != "" {
+				it.body["frame"] = f
+				byKG++
+			} else if isHere {
+				it.body["frame"] = neOGCFrame(here.f)
+				byHeight++
+			}
 			continue
 		}
 		if f := treeFrameOf(kgs, pts[n][0], pts[n][1]); f != "" {

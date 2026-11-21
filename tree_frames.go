@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"regexp"
 	"sync"
@@ -137,9 +138,11 @@ func TreeFrameStats() map[string]interface{} {
 
 // treeFrameKG — what the peer says about the points of a file in one KG.
 type treeFrameKG struct {
-	Frame     string `json:"frame"`   // the frame the file is in
-	Current   string `json:"current"` // the frame the KG is in today
-	Confident *bool  `json:"confident"`
+	Frame     string    `json:"frame"`   // the frame the file is in
+	Current   string    `json:"current"` // the frame the KG is in today
+	Confident *bool     `json:"confident"`
+	Stale     string    `json:"stale"`   // the frame of a copy from before the correction
+	Moved     []float64 `json:"moved_m"` // EPSG:3035 metres from a Stale position to today's
 }
 
 // treeFrameAsk — POST /trees/frame: per KG, which frame a file's points are
@@ -187,12 +190,15 @@ func treeFrameAsk(ctx context.Context, pts [][2]float64) (map[string]treeFrameKG
 // decide). We hold no KG outlines, only their boxes: the candidates of the
 // point must agree — a KG the peer does not list never moved ("p0") — and a KG
 // the peer is unsure about says nothing.
+// treeFrameKGsAt — the KG candidates of a point; a var so tests decide.
+var treeFrameKGsAt = KGCodesForPointMem
+
 func treeFrameOf(kgs map[string]treeFrameKG, lon, lat float64) string {
 	if len(kgs) == 0 {
 		return ""
 	}
 	got, listed := "", false
-	for _, kg := range KGCodesForPointMem(lon, lat) {
+	for _, kg := range treeFrameKGsAt(lon, lat) {
 		f := treeFrameZero
 		if v, ok := kgs[kg]; ok {
 			if (v.Confident != nil && !*v.Confident) || treeFrameToken(v.Frame) == "" {
@@ -209,4 +215,77 @@ func treeFrameOf(kgs map[string]treeFrameKG, lon, lat float64) string {
 		return ""
 	}
 	return got
+}
+
+// EPSG:3035 (ETRS89-LAEA Europe, the CRS the peer shifts in) ⇄ lon, lat.
+// Snyder's ellipsoidal Lambert azimuthal equal-area on GRS80, origin 52° N
+// 10° E at (4321000, 3210000); agrees with PROJ to a millimetre in Austria.
+const (
+	laeaA  = 6378137.0
+	laeaE2 = 0.00669438002290
+)
+
+var laeaE, laeaQp, laeaB0, laeaRq, laeaD = func() (e, qp, b0, rq, d float64) {
+	e = math.Sqrt(laeaE2)
+	f0 := 52 * math.Pi / 180
+	s0 := math.Sin(f0)
+	qp = (1 - laeaE2) * (1/(1-laeaE2) - math.Log((1-e)/(1+e))/(2*e))
+	q0 := (1 - laeaE2) * (s0/(1-laeaE2*s0*s0) - math.Log((1-e*s0)/(1+e*s0))/(2*e))
+	b0 = math.Asin(q0 / qp)
+	rq = laeaA * math.Sqrt(qp/2)
+	d = laeaA * math.Cos(f0) / (math.Sqrt(1-laeaE2*s0*s0) * rq * math.Cos(b0))
+	return
+}()
+
+func laeaFwd(lon, lat float64) (x, y float64) {
+	s := math.Sin(lat * math.Pi / 180)
+	q := (1 - laeaE2) * (s/(1-laeaE2*s*s) - math.Log((1-laeaE*s)/(1+laeaE*s))/(2*laeaE))
+	b := math.Asin(q / laeaQp)
+	dl := (lon - 10) * math.Pi / 180
+	k := laeaRq * math.Sqrt(2/(1+math.Sin(laeaB0)*math.Sin(b)+math.Cos(laeaB0)*math.Cos(b)*math.Cos(dl)))
+	return 4321000 + k*laeaD*math.Cos(b)*math.Sin(dl),
+		3210000 + k/laeaD*(math.Cos(laeaB0)*math.Sin(b)-math.Sin(laeaB0)*math.Cos(b)*math.Cos(dl))
+}
+
+func laeaInv(X, Y float64) (lon, lat float64) {
+	x, y := X-4321000, Y-3210000
+	rho := math.Hypot(x/laeaD, laeaD*y)
+	if rho == 0 {
+		return 10, 52
+	}
+	c := 2 * math.Asin(rho/(2*laeaRq))
+	b := math.Asin(math.Cos(c)*math.Sin(laeaB0) + laeaD*y*math.Sin(c)*math.Cos(laeaB0)/rho)
+	e4, e6 := laeaE2*laeaE2, laeaE2*laeaE2*laeaE2
+	lon = 10 + math.Atan2(x*math.Sin(c), laeaD*rho*math.Cos(laeaB0)*math.Cos(c)-laeaD*laeaD*y*math.Sin(laeaB0)*math.Sin(c))*180/math.Pi
+	lat = (b + (laeaE2/3+31*e4/180+517*e6/5040)*math.Sin(2*b) + (23*e4/360+251*e6/3780)*math.Sin(4*b) + 761*e6/45360*math.Sin(6*b)) * 180 / math.Pi
+	return
+}
+
+// treeFrameShifts — for a file's point: the corrections it may be from
+// before (KGs round the point the peer lists with a shift), as today's
+// position of that point + the token of the copy before.
+type treeFrameShift struct {
+	lon, lat float64 // where the same tree is today
+	stale    string
+}
+
+func treeFrameShifts(kgs map[string]treeFrameKG, lon, lat float64) []treeFrameShift {
+	var out []treeFrameShift
+	for _, kg := range treeFrameKGsAt(lon, lat) {
+		v, ok := kgs[kg]
+		if !ok || len(v.Moved) != 2 || treeFrameToken(v.Stale) == "" || (v.Moved[0] == 0 && v.Moved[1] == 0) || math.Hypot(v.Moved[0], v.Moved[1]) > 100 {
+			continue
+		}
+		dup := false
+		for _, o := range out {
+			dup = dup || o.stale == v.Stale
+		}
+		if dup {
+			continue
+		}
+		x, y := laeaFwd(lon, lat)
+		lo, la := laeaInv(x+v.Moved[0], y+v.Moved[1])
+		out = append(out, treeFrameShift{lo, la, v.Stale})
+	}
+	return out
 }

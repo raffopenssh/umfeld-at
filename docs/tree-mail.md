@@ -101,7 +101,9 @@ shift; its `llm.txt#position-frames`). Code + overview: `tree_frames.go`.
 - A file without the field (older export, an app that dropped it): `tmFrames` asks the peer once
   (`POST /trees/frame`, the file's apex points). No KG listed → nothing is sent. Else, per row:
   the LiDAR height decides where given — position AND `h` equal to an apex of today's copy
-  (`neOGCPiece`, ≤ 16 pieces per file) = that apex's frame; else the peer's answer for the KG when
+  (`neOGCPiece`, ≤ 16 pieces per file) = that apex's frame; position + the KG's `moved_m`
+  (EPSG:3035, `laeaFwd`/`laeaInv`) on an apex of that height, and none at the row's own position =
+  the copy before (the peer's `stale` token); both fit → the next rule, then today's; else the peer's answer for the KG when
   the KG boxes round the point agree and the peer is confident; else no frame (the peer infers).
 - Answers: `frame.moved_m` / `frame.ambiguous` are counted (`edits_moved_frame`,
   `edits_frame_unclear`, `frame_by_height`, `frame_by_kg` on `debug/inflight` → `tree_mail`) and

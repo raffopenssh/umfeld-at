@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -54,18 +55,29 @@ func TestTreeMailFramesByHeight(t *testing.T) {
 		}
 		json.Unmarshal(b, &q)
 		asked += len(q.Points)
-		io.WriteString(w, `{"points":2,"kgs":{"01202":{"frame":"p0","current":"p-5+5","stale_hits":1,"current_hits":1,"confident":false}}}`)
+		io.WriteString(w, `{"points":2,"kgs":{"01202":{"frame":"p0","current":"p-5+5","stale_hits":1,"current_hits":1,"confident":false,"stale":"p0","moved_m":[-5,5]}}}`)
 	}))
 	defer peer.Close()
-	oldU, oldP := treeFrameURL, tmFramePiece
-	defer func() { treeFrameURL, tmFramePiece = oldU, oldP }()
+	oldU, oldP, oldK := treeFrameURL, tmFramePiece, treeFrameKGsAt
+	defer func() { treeFrameURL, tmFramePiece, treeFrameKGsAt = oldU, oldP, oldK }()
+	treeFrameKGsAt = func(lon, lat float64) []string { return []string{"01202"} }
 	treeFrameURL = func() string { return peer.URL }
 	fi := neOGCFrames.idx("p-5+5")
+	// today's copy: one apex of 26 m, one of 31 m; a file from before the
+	// correction has the 31 m tree 5 m east and 5 m south of it (EPSG:3035)
+	x31, y31 := laeaFwd(16.1590, 48.2630)
+	oldLon, oldLat := laeaInv(x31+5, y31-5)
 	tmFramePiece = func(i, j int) ([]byte, bool) {
-		var rec [neOGCRow]byte
+		if i != int(math.Floor(16.1584/neOGCPieceStep)) || j != int(math.Floor(48.2624/neOGCPieceStep)) {
+			return nil, true
+		}
+		var rec [2 * neOGCRow]byte
 		binary.LittleEndian.PutUint32(rec[0:], uint32(16158400))
 		binary.LittleEndian.PutUint32(rec[4:], uint32(48262400))
 		rec[8], rec[12] = 26*4, fi
+		binary.LittleEndian.PutUint32(rec[neOGCRow:], uint32(16159000))
+		binary.LittleEndian.PutUint32(rec[neOGCRow+4:], uint32(48263000))
+		rec[neOGCRow+8], rec[neOGCRow+12] = 31*4, fi
 		return rec[:], true
 	}
 	mk := func(lon, lat, h float64) tmItem {
@@ -77,12 +89,14 @@ func TestTreeMailFramesByHeight(t *testing.T) {
 		mk(16.15846, 48.26236, 26), // 7 m off: the copy before the correction; the peer is unsure → nothing
 		{apex: true, body: map[string]interface{}{"lon": 16.1, "lat": 48.2, "frame": "p0"}}, // carries its own
 		{body: map[string]interface{}{"lon": 16.1584, "lat": 48.2624}},                      // a drawn point
+		mk(math.Round(oldLon*1e6)/1e6, math.Round(oldLat*1e6)/1e6, 31),                      // the copy before: its height stands where the shift puts it today → the stale frame
+		mk(math.Round(oldLon*1e6)/1e6, math.Round(oldLat*1e6)/1e6, 24),                      // same place, no such height there → undecided
 	}
 	tmFrames(context.Background(), items)
-	if asked != 3 {
-		t.Fatalf("asked the peer about %d points, want 3", asked)
+	if asked != 5 {
+		t.Fatalf("asked the peer about %d points, want 5", asked)
 	}
-	want := []interface{}{"p-5+5", nil, nil, "p0", nil}
+	want := []interface{}{"p-5+5", nil, nil, "p0", nil, "p0", nil}
 	for i, w := range want {
 		if items[i].body["frame"] != w {
 			t.Errorf("item %d: frame %v, want %v", i, items[i].body["frame"], w)
@@ -115,6 +129,24 @@ func TestGlyphFrameJS(t *testing.T) {
 	for _, s := range []string{"trFrameOf(a,body)", "trFrameAns(a,j)", "trFrameRev(j)", "e.fr=j.frames||null", ":'p0'"} {
 		if !strings.Contains(js, s) {
 			t.Errorf("glyph JS lost %q", s)
+		}
+	}
+}
+
+// EPSG:3035 against PROJ (pyproj 3.6, always_xy)
+func TestLAEA(t *testing.T) {
+	for _, c := range [][4]float64{
+		{16.1584, 48.2624, 4777839.9142, 2813388.6172},
+		{9.6, 47.2, 4290667.6371, 2676351.6324},
+		{13.04, 46.6, 4554090.5896, 2614399.5916},
+	} {
+		x, y := laeaFwd(c[0], c[1])
+		if math.Abs(x-c[2]) > 0.002 || math.Abs(y-c[3]) > 0.002 {
+			t.Errorf("fwd %v: %.4f %.4f", c, x, y)
+		}
+		lo, la := laeaInv(c[2], c[3])
+		if math.Abs(lo-c[0]) > 2e-8 || math.Abs(la-c[1]) > 2e-8 {
+			t.Errorf("inv %v: %.9f %.9f", c, lo, la)
 		}
 	}
 }
