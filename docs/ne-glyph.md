@@ -424,6 +424,19 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   (0..180 → 0..128, 180..255 → 128..255; `relBake`, fallback filter `#relf`, relay `neLayerReliefBake`). The former alpha key
   punched a hole wherever a slope's shade passed through 180 — contour slivers, **triangles** at z ≥ 16 where a 25 m cell
   spans dozens of pixels. Do not bring an alpha key back.
+- **Relief tileset version** (2026-11-21, the peer's rebuild `4.1795274706`): the peer's tiles are `immutable` for a year, so
+  the cache is keyed on `version` of `<peer>/tiles/hillshade.json` (TileJSON: minzoom 10, maxzoom 17, native_maxzoom 13). Page:
+  `relVer` asks at most every 5 min while the relief is on, every tile URL carries `?v=<version>` (ignored by the server), a change
+  → `relClear` + `relView`; no tile before the first answer, floor `REL_V0` when there is none. Relay: `neReliefVersion`
+  (same 5 min, lazy — no loop), LRU keys carry the version, a change drops `rel/` + `relraw/`, answers carry
+  `X-Tileset-Version` and `max-age` one day; `relief_version` on the `ne_mvt.layers` inflight line.
+  What the rebuild settled, so **do not add back**: a despike / seam filter (seams are fixed at the source; the one we tried
+  never shipped), the CSS blur past z 13 (the DTM is interpolated before shading — oversampled, smooth; do not sharpen
+  either). Alpha is taken as given (strictly 0 or 255, 0 = no data, an empty square
+  is 204; the tone curve never touches it). The clip to the state border `#relclip` **stays**: products are rectangles and
+  some carry real terrain across the border (z12 2156/1436, Liechtenstein west of Feldkirch). Known left-overs are the peer's to reprocess — a straight step from a corrupt DTM tile
+  (e.g. z15 17294/11534 col 190), ≤ 5 m horizontal offset inside ~580 older products: no workaround, report via the
+  peer's `/api/v1/flags`.
 - **Relief without an SVG filter** (`relBake`): the curve (then still the water key, alpha = |R−180|·127, formerly `filter=url(#relf)`
   per `<image>`) is baked into the pixels on a 256-px canvas at decode time (`createImageBitmap` → `toBlob`);
   the filter stays only as the fallback. A dozen filtered images re-ran the filter at every repaint of the

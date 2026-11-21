@@ -2,7 +2,7 @@
 // (ne_mvt_qgs.go), all served by THIS service so that one key counts every
 // layer of the map and an anonymous reader still talks to one host:
 //
-//	GET /api/v1/ne/mvt/relief/{z}/{x}/{y}.png        the observed-layer peer's hillshade, relayed (z 8–17)
+//	GET /api/v1/ne/mvt/relief/{z}/{x}/{y}.png        the observed-layer peer's hillshade, relayed (z 10–17)
 //	GET /api/v1/ne/mvt/trees/{z}/{x}/{y}.pbf         tree apices as points, layer "trees" (z 14 only; ht=lo..hi)
 //	GET /api/v1/ne/mvt/pic/{declared|observed|sub|subc|roads}/{z}/{x}/{y}.png
 //	                                                  the landing page's own overlay pictures as XYZ tiles (z 12–16, 512 px)
@@ -37,16 +37,19 @@ import (
 	"image/draw"
 	"image/png"
 	"io"
+	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
 const (
-	neLayerReliefMinZ = 8
+	neLayerReliefMinZ = 10 // the tileset's minzoom (TileJSON)
 	neLayerReliefMaxZ = 17
 	neLayerTreesZ     = 14
 	neLayerPicMinZ    = 12
@@ -69,6 +72,9 @@ func NELayerStats() map[string]interface{} {
 	m["relief"], m["trees"], m["pic"], m["cells_geojson"] = neLayerServed[0].Load(), neLayerServed[1].Load(), neLayerServed[2].Load(), neLayerServed[3].Load()
 	m["peer_errors"] = neLayerPeerErr.Load()
 	m["trees_ogc"] = neOGCServed.Load()
+	neReliefVer.Lock()
+	m["relief_version"] = neReliefVer.v
+	neReliefVer.Unlock()
 	return m
 }
 
@@ -130,7 +136,12 @@ func handleNEMVTLayer(w http.ResponseWriter, r *http.Request, rest string) bool 
 	switch kind {
 	case "relief":
 		body, err = neLayerRelief(z, x, y, r.URL.Query().Get("raw") == "1")
-		ctype, cache = "image/png", "public, max-age=604800"
+		// a day, not a week: the peer rebuilds the tileset (2026-11-21), the
+		// version is in the header and a client may key its own cache on it
+		ctype, cache = "image/png", "public, max-age=86400"
+		if v := neReliefVersion(); v != "" {
+			w.Header().Set("X-Tileset-Version", v)
+		}
 		neLayerServed[0].Add(1)
 	case "trees":
 		var whole bool
@@ -201,14 +212,17 @@ func neLayerRelief(z, x, y int, raw bool) ([]byte, error) {
 	if pr.ObsWeb == "" {
 		return nil, nil
 	}
-	key := fmt.Sprintf("rel/%d/%d/%d", z, x, y)
+	// the cache is keyed on the tileset version: a rebuild at the peer purges
+	// every relayed tile (neReliefVersion), and ?v= busts whatever sits between
+	ver := neReliefVersion()
+	key := fmt.Sprintf("rel/%s/%d/%d/%d", ver, z, x, y)
 	if raw {
 		key = "relraw" + key[3:]
 	}
 	if b, ok := neLayerLRU.get(key); ok {
 		return b, nil
 	}
-	b, code, err := neLayerPeerGet(fmt.Sprintf("%s/tiles/hillshade/%d/%d/%d.png", pr.ObsWeb, z, x, y), 4<<20)
+	b, code, err := neLayerPeerGet(fmt.Sprintf("%s/tiles/hillshade/%d/%d/%d.png?v=%s", pr.ObsWeb, z, x, y, url.QueryEscape(ver)), 4<<20)
 	if err != nil {
 		return nil, err
 	}
@@ -228,13 +242,61 @@ func neLayerRelief(z, x, y int, raw bool) ([]byte, error) {
 	return b, nil
 }
 
+// neReliefVersion — the `version` of the peer's hillshade tileset
+// (GET /tiles/hillshade.json, TileJSON), asked at most every 5 minutes and
+// only while relief tiles are being served (no loop: an idle service asks
+// nothing). A change drops every relayed relief tile. While the peer does not
+// answer, the last known version stands (the floor: the 2026-11-21 rebuild).
+const neReliefVersionFloor = "4.1795274706"
+
+var neReliefVer struct {
+	sync.Mutex
+	v     string
+	asked time.Time
+}
+
+func neReliefVersion() string {
+	pr := peers()
+	if pr.ObsWeb == "" {
+		return ""
+	}
+	neReliefVer.Lock()
+	if neReliefVer.v == "" {
+		neReliefVer.v = neReliefVersionFloor
+	}
+	v := neReliefVer.v
+	if time.Since(neReliefVer.asked) < 5*time.Minute {
+		neReliefVer.Unlock()
+		return v
+	}
+	neReliefVer.asked = time.Now() // one asker per window; the others ride on the known version
+	neReliefVer.Unlock()
+	b, code, err := neLayerPeerGet(pr.ObsWeb+"/tiles/hillshade.json", 64<<10)
+	var tj struct {
+		Version string `json:"version"`
+	}
+	if err != nil || code != 200 || json.Unmarshal(b, &tj) != nil || tj.Version == "" || len(tj.Version) > 64 {
+		return v
+	}
+	neReliefVer.Lock()
+	defer neReliefVer.Unlock()
+	if tj.Version != neReliefVer.v {
+		log.Printf("relief: tileset version %s → %s, relayed tiles dropped", neReliefVer.v, tj.Version)
+		neReliefVer.v = tj.Version
+		neLayerLRU.dropPrefix("rel/")
+		neLayerLRU.dropPrefix("relraw/")
+	}
+	return neReliefVer.v
+}
+
 // neLayerReliefBake — the page's tone curve (relBake): the model's flat tone
-// 180 (lakes, plains, no-data beyond the border) is re-centred on 128, the
+// 180 (lakes, plains) is re-centred on 128, the
 // neutral grey of an overlay blend (0..180 → 0..128, 180..255 → 128..255), so
 // flat ground leaves the map alone and slopes shade continuously. It was an
 // alpha key (|R − 180| × 127) until 2026-11-21: every slope whose shade passes
-// through 180 got a hole — triangles at the deep zooms. A tile that is flat
-// everywhere stays 204.
+// through 180 got a hole — triangles at the deep zooms. Alpha is the peer's
+// (strictly 0 = no data or 255) and passes through untouched. A tile that is
+// flat everywhere stays 204.
 func neLayerReliefBake(pngb []byte) ([]byte, error) {
 	src, err := png.Decode(bytes.NewReader(pngb))
 	if err != nil {
