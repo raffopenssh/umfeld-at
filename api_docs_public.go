@@ -305,6 +305,8 @@ GET /api/v1/feedback?status=open
 POST /api/v1/trees/report    the map's own relay for a reader's tree report (species, height, DBH, state since the flight, add a missing tree,
                              "same tree" = a second top of the tree beside it, "its own tree" = the objection to that, a note, withdraw, undo one step, take a flag back) to {OBS_NAME} — same body and answers as its POST /api/v1/flags on the tree layer;
                              same-origin only, nothing is stored here. Other clients: report to {OBS_NAME} directly.
+                             Tree copies we hand out (mvt/ogc items, trees.geojson) carry "frame" per point (the position frame of {OBS_NAME},
+                             its llm.txt#position-frames) and the time they were read (timeStamp / as_of): send "frame" with a report made from them.
 
 Fair use: every client address has a budget of requests, transferred bytes and server time, sized
 so that a person exploring the map (large shared views included) never meets it. A client that

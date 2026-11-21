@@ -43,12 +43,14 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
@@ -917,6 +919,19 @@ func tmHandle(raw []byte) (retry bool) {
 			}
 		}
 	}
+	// position frames: rows the peer filed on the tree at its corrected position, rows it could not place
+	var frameNote strings.Builder
+	moved, unclear := 0, 0
+	for i, r := range res {
+		if r.moved {
+			moved++
+		}
+		if r.hint != "" {
+			if unclear++; unclear <= 5 {
+				fmt.Fprintf(&frameNote, "  row %d \"%s\": %s\n", items[i].row, tmClean(items[i].name, 40), tmClean(r.hint, 200))
+			}
+		}
+	}
 	giveBack(failed) // a refused row costs nothing
 	log.Printf("tree-mail: key=%q undo=%v edits=%d written=%d known=%d refused=%d unchanged=%d", key.name, undo, len(items), written, known, failed, unchanged)
 	tm.mu.Lock()
@@ -928,6 +943,26 @@ func tmHandle(raw []byte) (retry bool) {
 		out := fmt.Sprintf("%d written · %d already known · %d refused by the tree service:\n%s", written, known, failed, bad.String())
 		if failed > tmReceiptLines {
 			out += fmt.Sprintf("  … and %d more\n", failed-tmReceiptLines)
+		}
+		reply(re, out)
+	}
+	if moved > 0 || unclear > 0 {
+		// said by mail only (a file is a copy that ages); the live map follows silently
+		tm.mu.Lock()
+		tm.counts["edits_moved_frame"] += int64(moved)
+		tm.counts["edits_frame_unclear"] += int64(unclear)
+		tm.mu.Unlock()
+		log.Printf("tree-mail: key=%q position frames: %d edits filed at corrected positions, %d unclear", key.name, moved, unclear)
+		out := ""
+		if moved > 0 {
+			out += fmt.Sprintf("%d of your edits were made on a file from before the tree positions there were corrected (by a few metres). Nothing is lost: each is filed on the same tree at its position of today. Your file keeps working, but it shows the trees at the old place — export them again when convenient.\n", moved)
+		}
+		if unclear > 0 {
+			out += fmt.Sprintf("\n%d rows could be the tree before or after that correction and were taken as today's:\n%s", unclear, frameNote.String())
+			if unclear > 5 {
+				out += fmt.Sprintf("  … and %d more\n", unclear-5)
+			}
+			out += "If one landed on the wrong tree: export the trees again and repeat the edit on the new file.\n"
 		}
 		reply(re, out)
 	}
@@ -1006,8 +1041,17 @@ Limits: 1 MB per mail · %d files · %d points per file · %d edits per day
 // ── relay ──
 
 type tmResult struct {
-	http int
-	why  string
+	http  int
+	why   string
+	moved bool   // filed on the same tree at its corrected position: the file is from before a correction
+	hint  string // the peer could not tell which frame the row was in
+}
+
+// tmPeerFrame — the peer's frame{} of an answer (#position-frames).
+type tmPeerFrame struct {
+	Moved     []float64 `json:"moved_m"`
+	Ambiguous bool      `json:"ambiguous"`
+	Hint      string    `json:"hint"`
 }
 
 // tmPeerItem — what we read of one batch result.
@@ -1016,6 +1060,10 @@ type tmPeerItem struct {
 	Error      string          `json:"error"`
 	Reason     string          `json:"reason"`
 	DidYouMean json.RawMessage `json:"did_you_mean"`
+	Frame      *tmPeerFrame    `json:"frame"` // flags
+	Tree       *struct {
+		Frame *tmPeerFrame `json:"frame"`
+	} `json:"tree"` // tree reports
 	Candidates []struct {
 		Height float64 `json:"height_m"`
 		Dist   float64 `json:"dist_m"`
@@ -1082,6 +1130,7 @@ func tmRelay(ctx context.Context, items []tmItem, undo bool) []tmResult {
 		}
 		idx, bodies = append(idx, i), append(bodies, items[i].body)
 	}
+	tmFrames(ctx, items)
 	tmRelayPass(ctx, idx, bodies, res)
 	var idx2 []int
 	var bodies2 []map[string]interface{}
@@ -1132,6 +1181,18 @@ func tmRelayPass(ctx context.Context, idx []int, bodies []map[string]interface{}
 				*r = tmResult{http: 503, why: "the tree service did not take the batch (" + strconv.Itoa(status) + ") — send the file again later"}
 			case ans.Results[k].HTTP == 200 || ans.Results[k].HTTP == 201:
 				*r = tmResult{http: ans.Results[k].HTTP}
+				fr := ans.Results[k].Frame
+				if t := ans.Results[k].Tree; t != nil && t.Frame != nil {
+					fr = t.Frame
+				}
+				if fr != nil {
+					r.moved = len(fr.Moved) == 2 && (fr.Moved[0] != 0 || fr.Moved[1] != 0)
+					if fr.Ambiguous {
+						if r.hint = fr.Hint; r.hint == "" {
+							r.hint = "the position fits the tree before and after a correction — taken as today's"
+						}
+					}
+				}
 			default:
 				*r = tmResult{http: ans.Results[k].HTTP, why: ans.Results[k].why()}
 			}
@@ -1171,4 +1232,91 @@ func tmPost(ctx context.Context, body []byte) (out []byte, status int, err error
 			return nil, 0, ctx.Err()
 		}
 	}
+}
+
+// tmFramePieces — the most pieces of today's trees read to place a file's rows by height.
+const tmFramePieces = 16
+
+// tmFramePiece — today's trees of a piece; a var so tests decide.
+var tmFramePiece = func(i, j int) ([]byte, bool) {
+	if peers().ObsAPI == "" {
+		return nil, false
+	}
+	rows, _, _, err := neOGCPiece(i, j)
+	return rows, err == nil
+}
+
+// tmFrames — the position frame of every row that names a tree of an export
+// and does not carry one (an export from before frames, a KML that lost the
+// field). #position-frames, bulk import:
+//
+//  1. ask the peer which frame the file's points are in, per KG. No KG listed
+//     = none of them ever moved: nothing to send.
+//  2. the LiDAR height decides where it is given: a row whose position AND
+//     height are an apex of today's copy is in today's frame — the frame that
+//     apex carries, whatever KG it is in.
+//  3. else the peer's answer for the row's KG, when the KG boxes around the
+//     point agree (treeFrameOf); else nothing — the peer infers it.
+//
+// A row that carries a frame keeps it. Added trees and drawn points are
+// real-world positions and never get one.
+func tmFrames(ctx context.Context, items []tmItem) {
+	var need []int
+	var pts [][2]float64
+	for i := range items {
+		b := items[i].body
+		if !items[i].apex || b == nil || b["frame"] != nil {
+			continue
+		}
+		lon, ok1 := b["lon"].(float64)
+		lat, ok2 := b["lat"].(float64)
+		if !ok1 || !ok2 {
+			continue
+		}
+		need, pts = append(need, i), append(pts, [2]float64{lon, lat})
+	}
+	if len(need) == 0 {
+		return
+	}
+	kgs, err := treeFrameAsk(ctx, pts)
+	if err != nil || len(kgs) == 0 {
+		return
+	}
+	// 2. by height, where the file is small enough to read today's trees for it
+	type ij struct{ i, j int }
+	type ll struct{ lon, lat int32 }
+	type hf struct{ h, f byte }
+	pieces := map[ij]bool{}
+	for _, p := range pts {
+		pieces[ij{int(math.Floor(p[0] / neOGCPieceStep)), int(math.Floor(p[1] / neOGCPieceStep))}] = true
+	}
+	today := map[ll]hf{}
+	if len(pieces) <= tmFramePieces {
+		for p := range pieces {
+			rows, ok := tmFramePiece(p.i, p.j)
+			if !ok {
+				continue
+			}
+			for o := 0; o+neOGCRow <= len(rows); o += neOGCRow {
+				today[ll{int32(binary.LittleEndian.Uint32(rows[o:])), int32(binary.LittleEndian.Uint32(rows[o+4:]))}] = hf{rows[o+8], rows[o+12]}
+			}
+		}
+	}
+	byHeight, byKG := 0, 0
+	for n, i := range need {
+		it := &items[i]
+		if a, ok := today[ll{int32(math.Round(pts[n][0] * 1e6)), int32(math.Round(pts[n][1] * 1e6))}]; ok && it.h0 > 0 && math.Abs(it.h0-float64(a.h)/4) <= 0.13 {
+			it.body["frame"] = neOGCFrame(a.f)
+			byHeight++
+			continue
+		}
+		if f := treeFrameOf(kgs, pts[n][0], pts[n][1]); f != "" {
+			it.body["frame"] = f
+			byKG++
+		}
+	}
+	tm.mu.Lock()
+	tm.counts["frame_by_height"] += int64(byHeight)
+	tm.counts["frame_by_kg"] += int64(byKG)
+	tm.mu.Unlock()
 }

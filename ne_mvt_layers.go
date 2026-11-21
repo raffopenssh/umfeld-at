@@ -409,9 +409,11 @@ func neLayerReliefBake(pngb []byte) ([]byte, error) {
 
 // neLayerTreeCols — the peer's /trees/bbox?format=columns answer.
 type neLayerTreeCols struct {
-	Truncated bool  `json:"truncated"`
-	Ready     *bool `json:"ready"`
+	Truncated bool              `json:"truncated"`
+	Ready     *bool             `json:"ready"`
+	Frames    map[string]string `json:"frames"` // KG → position frame, only KGs that moved (tree_frames.go)
 	Columns   struct {
+		KG       []string  `json:"kg_code"`
 		Lon      []float64 `json:"lon"`
 		Lat      []float64 `json:"lat"`
 		H        []float64 `json:"h_m"`
@@ -419,6 +421,24 @@ type neLayerTreeCols struct {
 		Species  []string  `json:"species"`
 		Vitality []string  `json:"vitality"`
 	} `json:"columns"`
+}
+
+// frameIdx — KG → index in neOGCFrames for the KGs this answer names a frame
+// for; nil when it names none (every row is in p0).
+func (tc *neLayerTreeCols) frameIdx() map[string]byte {
+	var m map[string]byte
+	for kg, t := range tc.Frames {
+		if t = treeFrameToken(t); t == "" || t == treeFrameZero {
+			continue
+		}
+		if i := neOGCFrames.idx(t); i > 0 {
+			if m == nil {
+				m = map[string]byte{}
+			}
+			m[kg] = i
+		}
+	}
+	return m
 }
 
 // neLayerHtRange — "lo..hi" / "lo.." / "..hi" in metres; ok=false when absent or malformed.
@@ -449,7 +469,8 @@ func neLayerTrees(z, x, y int, ht string) ([]byte, bool, error) {
 		return nil, true, nil
 	}
 	hlo, hhi, hasHt := neLayerHtRange(ht)
-	key := fmt.Sprintf("tree/%s/%d/%d/%d", time.Now().UTC().Format("20060102"), z, x, y)
+	treeFrameCheck(false)
+	key := fmt.Sprintf("tree/%s/g%d/%d/%d/%d", time.Now().UTC().Format("20060102"), treeFrameGen.Load(), z, x, y)
 	if hasHt {
 		key += fmt.Sprintf("/%g..%g", hlo, hhi)
 	}
@@ -459,7 +480,7 @@ func neLayerTrees(z, x, y int, ht string) ([]byte, bool, error) {
 	w, s, e, n := mvtTileBox(z, x, y)
 	// a crown's margin (≈ 16 m): a disc centred just outside is drawn in this tile too
 	mx, my := (e-w)*0.01, (n-s)*0.01
-	url := fmt.Sprintf("%s/api/v1/trees/bbox?bbox=%.6f,%.6f,%.6f,%.6f&min_height=3&format=columns&fields=lon,lat,h_m,crown_m2,species,vitality&limit=100000", pr.ObsAPI, w-mx, s-my, e+mx, n+my)
+	url := fmt.Sprintf("%s/api/v1/trees/bbox?bbox=%.6f,%.6f,%.6f,%.6f&min_height=3&format=columns&fields=lon,lat,h_m,crown_m2,species,vitality,kg_code&limit=100000", pr.ObsAPI, w-mx, s-my, e+mx, n+my)
 	b, code, err := neLayerPeerGet(url, 24<<20)
 	if err != nil {
 		return nil, false, err
@@ -475,6 +496,7 @@ func neLayerTrees(z, x, y int, ht string) ([]byte, bool, error) {
 		return nil, false, err
 	}
 	c := &tc.Columns
+	fr := tc.frameIdx()
 	l := newMVTLayer("trees")
 	for i := range c.Lon {
 		if i >= len(c.Lat) || i >= len(c.H) {
@@ -498,6 +520,10 @@ func neLayerTrees(z, x, y int, ht string) ([]byte, bool, error) {
 		}
 		if i < len(c.Vitality) && c.Vitality[i] != "" && c.Vitality[i] != "unknown" {
 			f.str("vitality", c.Vitality[i])
+		}
+		if fr != nil && i < len(c.KG) && fr[c.KG[i]] > 0 {
+			// only in a KG whose positions were corrected: the frame of this copy
+			f.str("frame", neOGCFrames.word(fr[c.KG[i]]))
 		}
 		f.donePoint()
 	}
@@ -557,7 +583,7 @@ func handleNELayerTreesGeoJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hlo, hhi, hasHt := neLayerHtRange(q.Get("ht"))
-	key := fmt.Sprintf("treej/%s/%.5f,%.5f,%.5f,%.5f/%v/%g..%g", time.Now().UTC().Format("20060102"), box[0], box[1], box[2], box[3], hasHt, hlo, hhi)
+	key := fmt.Sprintf("treej/%s/g%d/%.5f,%.5f,%.5f,%.5f/%v/%g..%g", time.Now().UTC().Format("20060102"), treeFrameGen.Load(), box[0], box[1], box[2], box[3], hasHt, hlo, hhi)
 	gz, hit := neLayerLRU.get(key)
 	whole := true
 	if !hit {
@@ -571,11 +597,13 @@ func handleNELayerTreesGeoJSON(w http.ResponseWriter, r *http.Request) {
 		pieces := make([][]byte, len(ids))
 		errs := make([]error, len(ids))
 		wholes := make([]bool, len(ids))
+		asOf := int64(0) // the oldest download among the pieces
+		ats := make([]int64, len(ids))
 		done := make(chan struct{}, len(ids))
 		for k := range ids {
 			go func(k int) {
 				defer func() { done <- struct{}{} }()
-				pieces[k], wholes[k], errs[k] = neOGCPiece(ids[k].i, ids[k].j)
+				pieces[k], ats[k], wholes[k], errs[k] = neOGCPiece(ids[k].i, ids[k].j)
 			}(k)
 		}
 		for range ids {
@@ -590,6 +618,9 @@ func handleNELayerTreesGeoJSON(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			whole = whole && wholes[k]
+			if ats[k] > 0 && (asOf == 0 || ats[k] < asOf) {
+				asOf = ats[k]
+			}
 		}
 		// the box is half-open like the pieces: two boxes side by side list an apex once
 		bw, bs := int32(math.Ceil(box[0]*1e6)), int32(math.Ceil(box[1]*1e6))
@@ -600,6 +631,9 @@ func handleNELayerTreesGeoJSON(w http.ResponseWriter, r *http.Request) {
 		}
 		var buf bytes.Buffer
 		buf.WriteString(`{"type":"FeatureCollection","name":"trees",`)
+		if asOf > 0 { // when this copy was read from the source; "frame" on a point = its position frame
+			buf.WriteString(`"as_of":"` + time.Unix(asOf, 0).UTC().Format(time.RFC3339) + `",`)
+		}
 		if !whole {
 			// never silently short: a piece the peer cut or is still building
 			buf.WriteString(`"truncated":true,`)
@@ -628,6 +662,7 @@ func handleNELayerTreesGeoJSON(w http.ResponseWriter, r *http.Request) {
 				if vi := neOGCVitality.word(rows[o+11] & 15); vi != "" {
 					fmt.Fprintf(&buf, `,"vitality":%q`, vi)
 				}
+				fmt.Fprintf(&buf, `,"frame":%q`, neOGCFrame(rows[o+12]))
 				buf.WriteString("}}")
 			}
 		}

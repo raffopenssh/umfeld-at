@@ -769,6 +769,19 @@ relay, two throw-away reporters, leaves nothing standing).
 - A tree card carries no in-view legend (`hiLegendNow` drops `.lg12` while `pk.t==='tree'`): it
   used to arrive with it and lose it at the first tap.
 
+## Position frames (tree layer)
+
+Contract: observed-layer peer `llm.txt#position-frames`; server side in `tree_frames.go`, mail in
+`docs/tree-mail.md` §Position frames. In the page (`ne_glyph_treemerged.go`, block *position frames*):
+`apCols` keeps the tile's `frames` (`e.fr`, KG → token) and read time (`e.at`); `trPost` stamps
+every report with `frame` = the token of the tree's KG, `p0` when the tile named none (`trFrameOf`;
+not on added trees / `missing`). `trFrameAns` reads `tree.frame` / `frame`: `moved_m` → the apex
+tiles holding that KG are re-read with forced revalidation and the pinned card follows its tree
+(`trReload` → `trFrNear`: ≤ 2.5 m from the filed position, same LiDAR height). `trFrameRev`: a new
+`frames_rev` on `/trees/taxa` → every tile re-read, delta from 0 once (`localStorage neg-frv`).
+**Nothing of this is shown to the reader** — `?dbg` logs it. `apFlags` skips `source: auto-shift`
+rows (the peer's KG-level record of a correction).
+
 ## Soak test (`ne_glyph_soak.js` → `/api/v1/ne/glyph/soak.js`)
 
 Roads step (`run`, `{roads:false}` skips): `;roads` at LOD 1 (default weight written bare, `.ov-rd` opacity .7), `;roads=0.4` with observed + change at LOD 0 (weight kept in hash and group, tile meta carries `rd km rdc`), `;roads` at LOD 2 (token kept, group hidden, icon `off`); `layers()` asserts `rd` tiles = base at LOD 0/1 and none at LOD 2, `ov-rd` shown ⇔ on & near, z-order over `ov-subc` and under `ov-rel`/`ov-tree`, `v-rd`, bar, legend *roads* line, hash token; matrix adds roads alone / with change / subsidy / trees / relief / photo; the share-link round trip compares `roads`/`roadsOp`; `offline()` switches the roads on under each fault.

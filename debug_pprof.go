@@ -90,6 +90,7 @@ func RegisterDebugAPI(mux *http.ServeMux) {
 			"ne_glyph_sub":     NEGlyphSubStats(),     // ne_glyph_sub.go: INVEKOS H3 bins (LRU 8 MB) + .poly outline bins (LRU 24 MB), 24 h TTL
 			"ne_fidx":          NEFidxStats(),         // ne_glyph_fidx.go: filter index bins (LRU 48 MB + disk 2 GB)
 			"ne_stats":         NEStatsUnitStats(),    // api_ne_stats_unit.go: envelope + peer memo (LRU 16 MB, 10 min)
+			"tree_frames":      TreeFrameStats(),      // tree_frames.go: position frames of the tree layer
 			"tree_report":      TreeReportStats(),     // api_tree_report.go: relay to the observed-layer peer
 			"tree_mail":        TreeMailStats(),       // tree_mail.go: mailbox loop — bound address hashes (≤ 5 per key), day counters, queue (≤ 100 mails)
 			"peer_http":        PeerHTTPStats(),       // peer_http.go: subsidy-peer UA / 429 retries / X-RateLimit-Tier check

@@ -63,7 +63,7 @@ var tmAttrKeys = map[string]string{
 	"id": "id", "h": "h", "species": "species", "art": "species", "baumart": "species",
 	"state": "state", "zustand": "state", "status": "state", "dbh": "dbh", "bhd": "dbh", "dbh_cm": "dbh",
 	"note": "note", "notiz": "note", "date": "date", "datum": "date", "height": "height", "hoehe": "height", "höhe": "height", "h_m": "height",
-	"comment": "note", "kommentar": "note", "bemerkung": "note", "anmerkung": "note", "remark": "note", "crown_d": "crown_d",
+	"comment": "note", "kommentar": "note", "bemerkung": "note", "anmerkung": "note", "remark": "note", "crown_d": "crown_d", "frame": "frame",
 }
 
 // tmNoteMax — a note's length in characters when the peer names no limit;
@@ -738,6 +738,8 @@ type tmItem struct {
 	crown   bool    // "same tree": the tree it belongs to is found among the file's rows (tmCrowns)
 	h       float64 // the export's height of this row, 0 unknown
 	dropped int     // values left out of the note as personal
+	apex    bool    // a tree of the export (it has an id): its position lives in a position frame (tmFrames)
+	h0      float64 // the export's LiDAR height of that tree, 0 unknown — the check that a position is today's
 	cut     bool    // note clipped
 }
 
@@ -867,8 +869,15 @@ func tmDiff(r tmRow, reporter string, now time.Time) (items []tmItem, why string
 		date = "" // a date belongs to a state
 	}
 
+	frame := "" // the position frame the export wrote on the row (tree_frames.go); a drawn point has none
+	if id != "" {
+		frame = treeFrameToken(strings.TrimSpace(r.attrs["frame"]))
+	}
 	pos := func(m map[string]interface{}) map[string]interface{} {
 		m["lon"], m["lat"] = math.Round(lon*1e7)/1e7, math.Round(lat*1e7)/1e7
+		if frame != "" {
+			m["frame"] = frame
+		}
 		m["layer"] = "trees"
 		m["reporter"] = reporter
 		return m
@@ -912,7 +921,7 @@ func tmDiff(r tmRow, reporter string, now time.Time) (items []tmItem, why string
 		}
 		if len(b) > 0 {
 			b["claim"] = "tree"
-			items = append(items, tmItem{row: r.n, name: show, what: strings.Join(what, " · "), body: pos(b), add: id == "", dropped: dropped, cut: cut})
+			items = append(items, tmItem{row: r.n, name: show, what: strings.Join(what, " · "), body: pos(b), add: id == "", dropped: dropped, cut: cut, apex: id != "", h0: baseH})
 		}
 	}
 	if flag != "" {
@@ -928,7 +937,7 @@ func tmDiff(r tmRow, reporter string, now time.Time) (items []tmItem, why string
 		if hasH {
 			f["observed"] = map[string]interface{}{"h_m": baseH}
 		}
-		items = append(items, tmItem{row: r.n, name: show, what: w, body: f, crown: flag == "crown", h: baseH})
+		items = append(items, tmItem{row: r.n, name: show, what: w, body: f, crown: flag == "crown", h: baseH, apex: true, h0: baseH})
 	}
 	if len(items) == 0 && id == "" {
 		return nil, "not a tree of the export and nothing to add (name a species or a height)"

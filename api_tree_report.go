@@ -14,6 +14,10 @@
 // address) on top of the public fair-use gate per client. The peer's status
 // and JSON body are handed back unchanged (201 written · 200 folded · 400
 // did_you_mean · 404/409 candidates · 429).
+//
+// Position frames (tree_frames.go): "frame" / "as_of" of an item pass through
+// as sent — the client says which copy of the trees it reported from — and the
+// peer's frame{} comes back in the answer.
 package main
 
 import (
@@ -305,6 +309,7 @@ func treeReportDo(ctx context.Context, body []byte, component string) (status in
 	treeReportBucket.sent++
 	treeReportBucket.status[resp.StatusCode]++
 	treeReportBucket.mu.Unlock()
+	treeFrameAnswer(out) // moved_m: the reporter's copy (maybe ours too) is from before a position correction
 	return resp.StatusCode, out, resp.Header.Get("Retry-After"), nil
 }
 

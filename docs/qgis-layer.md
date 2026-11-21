@@ -132,7 +132,10 @@ basemaps (basemap.at, OpenStreetMap) are asked directly. Top to bottom:
     and greens (to recolour: *Layer styling → Colour ramp →* any ramp — the
     rings follow; the ring's diameter is the crown in metres on the ground).
     Fields: `id`, `name` (a label such as `26 m spruce`), `h` (m), `crown_d`
-    (m), `species`, `vitality`. A `ht` term of the filter limits them.
+    (m), `species`, `vitality`, `frame` (a short token such as `p0`: which
+    revision of the positions this copy shows — leave it alone, it travels
+    back with an edit so the edit lands on the same tree). A `ht` term of the
+    filter limits them.
     **To take trees into the field** (KML for Locus Map, GPX, GeoPackage, CSV):
     tick the layer, zoom to the stand, right-click → *Export → Save features
     as…* and tick *Extent → Map canvas extent*. The file holds what you see —

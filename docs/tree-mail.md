@@ -90,3 +90,23 @@ which the second receipt quotes. No LLM in the path.
   report (`tmNoteAlone`). Length = `limits.note_chars` of `trees/taxa/dict` when advertised
   (`treeNoteCap`, asked hourly; `debug/inflight` → `tree_report.peer_notes`), else 280; the peer cuts longer ones.
 - The help mail (`tmHelpText`) is three steps + one table; keep it glanceable on a phone.
+
+## Position frames (2026-11-21)
+
+The observed-layer peer may correct the tree positions of a KG after an export was made (a constant
+shift; its `llm.txt#position-frames`). Code + overview: `tree_frames.go`.
+
+- An export row carries `frame` (`p0` = never moved). `tmDiff` hands it back as `"frame"` on every
+  report of a row with an id; a drawn point (no id) never gets one — real-world positions do not move.
+- A file without the field (older export, an app that dropped it): `tmFrames` asks the peer once
+  (`POST /trees/frame`, the file's apex points). No KG listed → nothing is sent. Else, per row:
+  the LiDAR height decides where given — position AND `h` equal to an apex of today's copy
+  (`neOGCPiece`, ≤ 16 pieces per file) = that apex's frame; else the peer's answer for the KG when
+  the KG boxes round the point agree and the peer is confident; else no frame (the peer infers).
+- Answers: `frame.moved_m` / `frame.ambiguous` are counted (`edits_moved_frame`,
+  `edits_frame_unclear`, `frame_by_height`, `frame_by_kg` on `debug/inflight` → `tree_mail`) and
+  logged, and said in ONE extra mail after the receipt (the file is a copy that ages: "export again
+  when convenient"; unclear rows listed, ≤ 5). The live map never says any of it.
+- Our own copies: the day-keyed tree caches (`treep/`, `tree/`, `treej/`) carry `treeFrameGen` in
+  the key; it is bumped when the peer's `frames_rev` changes (asked ≤ every 10 min while trees are
+  served, within 30 s of a `moved_m` answer). `debug/inflight` → `tree_frames`.

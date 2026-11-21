@@ -38,7 +38,8 @@ const (
 	neOGCLimitDef    = 10000
 	neOGCLimitMax    = 50000
 	neOGCPieceStep   = 0.0125 // a quarter of the peer's tile: a closed stand stays under its 100 000-row answer
-	neOGCRow         = 12     // lon, lat int32 (1e-6°) · h uint8 (¼ m) · crown uint16 (0.1 m²) · species/vitality nibbles
+	neOGCRow         = 13     // lon, lat int32 (1e-6°) · h uint8 (¼ m) · crown uint16 (0.1 m²) · species/vitality nibbles · position frame (neOGCFrames, 0 = p0)
+	neOGCHead        = 8      // a cached piece starts with its download time (unix s, int64 LE): tree_frames.go
 )
 
 const neOGCOpenAPIType = "application/vnd.oai.openapi+json;version=3.0"
@@ -58,6 +59,17 @@ type neOGCVocab struct {
 }
 
 var neOGCSpecies, neOGCVitality = &neOGCVocab{words: []string{""}}, &neOGCVocab{words: []string{""}}
+
+// neOGCFrames — the position frames met ("" = p0, the KG never moved); a handful country-wide.
+var neOGCFrames = &neOGCVocab{words: []string{""}}
+
+// neOGCFrame — the frame token of a packed row.
+func neOGCFrame(i byte) string {
+	if w := neOGCFrames.word(i); w != "" {
+		return w
+	}
+	return treeFrameZero
+}
 
 func (v *neOGCVocab) idx(s string) byte {
 	if s == "" || s == "unknown" || len(s) > 32 {
@@ -94,33 +106,39 @@ func (v *neOGCVocab) word(i byte) string {
 	return ""
 }
 
-// neOGCPiece — the trees of piece (i,j) of the 0.025° grid, packed; whole =
-// the peer said this is all of them (only then it is cached).
-func neOGCPiece(i, j int) (rows []byte, whole bool, err error) {
-	key := fmt.Sprintf("treep/%s/%d/%d", time.Now().UTC().Format("20060102"), i, j)
-	if b, ok := neLayerLRU.get(key); ok {
-		return b, true, nil
+// neOGCPiece — the trees of piece (i,j) of the 0.025° grid, packed; at = when
+// they were downloaded (unix s); whole = the peer said this is all of them
+// (only then it is cached). Every row keeps the position frame of its KG as
+// the peer stated it in that download (tree_frames.go).
+func neOGCPiece(i, j int) (rows []byte, at int64, whole bool, err error) {
+	treeFrameCheck(false)
+	key := fmt.Sprintf("treep/%s/g%d/%d/%d", time.Now().UTC().Format("20060102"), treeFrameGen.Load(), i, j)
+	if b, ok := neLayerLRU.get(key); ok && len(b) >= neOGCHead {
+		return b[neOGCHead:], int64(binary.LittleEndian.Uint64(b)), true, nil
 	}
+	at = time.Now().Unix()
 	pr := peers()
 	w, s := float64(i)*neOGCPieceStep, float64(j)*neOGCPieceStep
-	u := fmt.Sprintf("%s/api/v1/trees/bbox?bbox=%.6f,%.6f,%.6f,%.6f&min_height=3&format=columns&fields=lon,lat,h_m,crown_m2,species,vitality&limit=100000", pr.ObsAPI, w, s, w+neOGCPieceStep, s+neOGCPieceStep)
+	u := fmt.Sprintf("%s/api/v1/trees/bbox?bbox=%.6f,%.6f,%.6f,%.6f&min_height=3&format=columns&fields=lon,lat,h_m,crown_m2,species,vitality,kg_code&limit=100000", pr.ObsAPI, w, s, w+neOGCPieceStep, s+neOGCPieceStep)
 	body, code, err := neLayerPeerGet(u, 24<<20)
 	if err != nil {
-		return nil, false, err
+		return nil, at, false, err
 	}
 	if code == 404 {
-		return nil, true, nil
+		return nil, at, true, nil
 	}
 	if code != 200 {
-		return nil, false, fmt.Errorf("trees: peer %d", code)
+		return nil, at, false, fmt.Errorf("trees: peer %d", code)
 	}
 	var tc neLayerTreeCols
 	if err := json.Unmarshal(body, &tc); err != nil {
-		return nil, false, err
+		return nil, at, false, err
 	}
 	c := &tc.Columns
 	n := min(len(c.Lon), len(c.Lat), len(c.H))
-	rows = make([]byte, 0, n*neOGCRow)
+	rows = make([]byte, neOGCHead, neOGCHead+n*neOGCRow)
+	binary.LittleEndian.PutUint64(rows, uint64(at))
+	fr := tc.frameIdx()
 	var rec [neOGCRow]byte
 	for k := 0; k < n; k++ {
 		// half-open pieces: an apex on a shared edge is in one piece only
@@ -143,13 +161,17 @@ func neOGCPiece(i, j int) (rows []byte, whole bool, err error) {
 			vi = neOGCVitality.idx(c.Vitality[k])
 		}
 		rec[11] = sp<<4 | vi
+		rec[12] = 0
+		if k < len(c.KG) && fr != nil {
+			rec[12] = fr[c.KG[k]]
+		}
 		rows = append(rows, rec[:]...)
 	}
 	whole = !tc.Truncated && (tc.Ready == nil || *tc.Ready)
 	if whole {
 		neLayerLRU.put(key, rows)
 	}
-	return rows, whole, nil
+	return rows[neOGCHead:], at, whole, nil
 }
 
 // neOGCLink — one link object; q = the caller's own parameters (key, ht) carried along.
@@ -333,18 +355,23 @@ func handleNEOGCTreeItems(w http.ResponseWriter, r *http.Request, self string, k
 	pieces := make([][]byte, len(ids))
 	errs := make([]error, len(ids))
 	wholes := make([]bool, len(ids))
+	ats := make([]int64, len(ids))
 	done := make(chan struct{}, len(ids))
 	for k := range ids {
 		go func(k int) {
 			defer func() { done <- struct{}{} }()
-			pieces[k], wholes[k], errs[k] = neOGCPiece(ids[k].i, ids[k].j)
+			pieces[k], ats[k], wholes[k], errs[k] = neOGCPiece(ids[k].i, ids[k].j)
 		}(k)
 	}
 	for range ids {
 		<-done
 	}
 	whole := true
+	asOf := int64(0) // the oldest download among the pieces
 	for k := range ids {
+		if ats[k] > 0 && (asOf == 0 || ats[k] < asOf) {
+			asOf = ats[k]
+		}
 		if errs[k] != nil {
 			neLayerPeerErr.Add(1)
 			w.Header().Set("Retry-After", "5")
@@ -383,11 +410,14 @@ scan:
 				buf.WriteByte(',')
 			}
 			n++
-			neOGCTreeFeature(&buf, lon, lat, h, binary.LittleEndian.Uint16(rows[o+9:]), rows[o+11])
+			neOGCTreeFeature(&buf, lon, lat, h, binary.LittleEndian.Uint16(rows[o+9:]), rows[o+11], rows[o+12])
 		}
 	}
 	buf.WriteString(`],"numberReturned":`)
 	buf.WriteString(strconv.Itoa(n))
+	if asOf > 0 { // when this copy of the trees was read from the source
+		buf.WriteString(`,"timeStamp":"` + time.Unix(asOf, 0).UTC().Format(time.RFC3339) + `"`)
+	}
 	buf.WriteString(`,"links":[`)
 	if more && !sample {
 		nx := url.Values{}
@@ -413,8 +443,10 @@ scan:
 
 // neOGCTreeFeature — one tree. The id is its position (1e-6°): stable between
 // fetches, so a client's cache keeps one copy, and it is what a report names.
-// name = the label a field app shows ("26 m" / "26 m spruce").
-func neOGCTreeFeature(buf *bytes.Buffer, lon, lat int32, h byte, crown uint16, sv byte) {
+// name = the label a field app shows ("26 m" / "26 m spruce"). frame = the
+// position frame of this copy (tree_frames.go): it comes back with an edit
+// and tells the peer which positions the file was made from.
+func neOGCTreeFeature(buf *bytes.Buffer, lon, lat int32, h byte, crown uint16, sv, fr byte) {
 	hm := float64(h) / 4
 	sp, vi := neOGCSpecies.word(sv>>4), neOGCVitality.word(sv&15)
 	name := strconv.FormatFloat(math.Round(hm), 'f', 0, 64) + " m"
@@ -437,5 +469,6 @@ func neOGCTreeFeature(buf *bytes.Buffer, lon, lat int32, h byte, crown uint16, s
 	} else {
 		buf.WriteString(`,"vitality":null`)
 	}
+	fmt.Fprintf(buf, `,"frame":%q`, neOGCFrame(fr))
 	buf.WriteString("}}")
 }
