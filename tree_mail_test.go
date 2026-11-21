@@ -78,6 +78,21 @@ func TestTreeMailSampleFiles(t *testing.T) {
 				t.Errorf("%s: %q has an id, must not be an add", f.name, it.name)
 			}
 		}
+		// the LiDAR height of the export comes out of the description's HTML table (what places a row in a position frame)
+		for _, it := range items {
+			if want := map[string]float64{"Fichte": 11, "12 m buche": 12.25}[it.name]; !it.apex || it.h0 != want {
+				t.Errorf("%s %q: apex %v, export height %v, want %v", f.name, it.name, it.apex, it.h0, want)
+			}
+		}
+		noH := 0
+		for _, r := range rows {
+			if tmNum(r.attrs["h"]) <= 0 || r.attrs["id"] == "" {
+				noH++
+			}
+		}
+		if noH != 0 {
+			t.Errorf("%s: %d rows without id / h out of the HTML", f.name, noH)
+		}
 		// "Fichte" on the 11 m tree, "12 m buche" on the 12.25 m tree: species only, the height is the export's own
 		if g := got["Fichte"]; g != `{"claim":"tree","lat":48.26372,"layer":"trees","lon":16.160198,"reporter":"mtest","species":"Fichte"}` {
 			t.Errorf("%s Fichte: %s", f.name, g)
@@ -619,5 +634,35 @@ func TestTreeMailKeyFields(t *testing.T) {
 	}
 	if k := c.keys[2]; k.daily != 200 || k.addrs != tmAddrsPerKey {
 		t.Fatalf("daily key: %+v", k)
+	}
+}
+
+// id, h and frame out of the HTML an app makes of the fields — in a KML
+// description and in a CSV's desc column, in the shapes apps write a table.
+func TestTreeMailHTMLFields(t *testing.T) {
+	tables := []string{
+		`<br /><tr><td><table width="100%"><tr><td align="left"><small><b>id</b></small></td><td align="center">t16158405_48262430</td></tr>
+<tr><td align="left"><small><b>h</b></small></td><td align="center">20.25</td></tr>
+<tr><td><small><b>frame</b></small></td><td>p-5+5</td></tr></table></td></tr>`,
+		`<table><tr><th>id</th><td>t16158405_48262430</td></tr><tr><th>h</th><td><i>20.25</i></td></tr><tr><th>frame</th><td> p-5+5 </td></tr></table>`,
+		`<table border="1"><tr><td>id</td><td>t16158405_48262430</td></tr><tr><td><strong>h:</strong></td><td>20.25</td></tr><tr><td><span class="k">frame</span></td><td><span>p-5+5</span></td></tr></table>`,
+		`id: t16158405_48262430<br>h: 20.25<br/>frame: p-5+5`,
+	}
+	for n, tb := range tables {
+		kml := `<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><name>Buche</name><description><![CDATA[` + tb + `]]></description><Point><coordinates>16.158405,48.262430,0</coordinates></Point></Placemark></Document></kml>`
+		csv := "name,lat,lon,desc\nBuche,48.262430,16.158405,\"" + strings.ReplaceAll(tb, `"`, `""`) + "\"\n"
+		for as, data := range map[string]string{"a.kml": kml, "a.csv": csv} {
+			rows, err := tmParseAttachment(as, []byte(data))
+			if err != nil || len(rows) != 1 {
+				t.Fatalf("table %d %s: %v, %d rows", n, as, err, len(rows))
+			}
+			if a := rows[0].attrs; a["id"] != "t16158405_48262430" || a["h"] != "20.25" || a["frame"] != "p-5+5" {
+				t.Errorf("table %d %s: attrs %v extra %v free %v", n, as, a, rows[0].extra, rows[0].free)
+			}
+			items, _ := tmDiff(rows[0], "mtest", time.Now())
+			if len(items) != 1 || !items[0].apex || items[0].h0 != 20.25 || items[0].body["frame"] != "p-5+5" {
+				t.Errorf("table %d %s: %+v", n, as, items)
+			}
+		}
 	}
 }

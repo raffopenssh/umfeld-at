@@ -237,7 +237,9 @@ func tmUnzipKML(data []byte) ([]byte, error) {
 }
 
 var (
-	tmHTMLRow = regexp.MustCompile(`(?is)<b>\s*([\w.]{1,24})\s*</b>\s*(?:</small>)?\s*</td>\s*<td[^>]*>([^<]{0,200})</td>`)
+	// a key cell and its value cell, whatever inline tags an app wraps them in
+	// (Locus: <td><small><b>h</b></small></td><td>20</td>; others: <th>h</th><td><i>20</i></td>)
+	tmHTMLRow = regexp.MustCompile(`(?is)<t[dh]\b[^>]{0,200}>\s*(?:<(?:b|i|u|em|strong|small|span|font)\b[^>]{0,200}>\s*){0,4}([\w.]{1,24})\s*:?\s*(?:</(?:b|i|u|em|strong|small|span|font)>\s*){0,4}</t[dh]>\s*<td\b[^>]{0,200}>\s*(?:<(?:b|i|u|em|strong|small|span|font)\b[^>]{0,200}>\s*){0,4}([^<]{0,200})(?:</(?:b|i|u|em|strong|small|span|font)>\s*){0,4}</td>`)
 	tmTextRow = regexp.MustCompile(`(?m)^\s*([\p{L}_]{1,24})\s*[:=]\s*(.{1,200}?)\s*$`)
 	tmTags    = regexp.MustCompile(`<[^>]{0,400}>`)
 	tmIDRe    = regexp.MustCompile(`^t(-?\d{1,9})_(-?\d{1,9})$`)
