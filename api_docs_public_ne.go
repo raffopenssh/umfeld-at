@@ -346,7 +346,7 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     is one block per layer on, in z-order: profile head + use bar, CHANGE (Δ bar, confirmed/candidate, sighting
     period), DIFF, SUBSIDY, relief note, TREES (count, tallest, trees by height band — from the apex tiles, any profile).
     Relief (view-bar icon, ;relief in the link, key r): {OBS_NAME}'s hillshade XYZ tiles
-    (GET {OBS_WEB}/tiles/hillshade/{z}/{x}/{y}.png, 25 m DTM, CC BY 4.0) blended faintly over the
+    (GET {OBS_WEB}/tiles/hillshade/{z}/{x}/{y}.png, 25 m DTM; alpha = inside Austria and terrain available; attribution = its TileJSON "attribution": BEV ALS DTM CC BY 4.0, border © OpenStreetMap contributors ODbL) blended faintly over the
     cells under full res, full weight at the coarse tiles and fading out by 300× where the 25 m cells would only show
     their seams; legend adds the source line. Any view, no data of ours.
     Photo (view-bar earth icon, ;ortho[=op] in the link, key o): basemap.at's orthophoto WMTS

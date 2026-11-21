@@ -608,15 +608,15 @@ warp across one tile is under a pixel; 1 px bleed against hairline seams) in a `
 group with `mix-blend-mode: overlay` (`isolation: isolate` on the svg so it blends with the
 cells only — mid grey leaves a cell untouched, lit slopes lighten, shaded darken). Weight
 (`relW`): .42 up to `HI_LOD0`, linear to 0 at `HI_LOD1` and no tiles fetched past it (the
-25 m cells and the observed-layer peer's mosaic seams would dominate the res-12 hexagons); a soft blur once a
-25 m cell exceeds 4 screen px. Fetched straight from the peer with ≤ 6 in flight, 429/503
+25 m cells and the observed-layer peer's mosaic seams would dominate the res-12 hexagons); no blur, no clip
+(superseded: `docs/ne-glyph.md` *Relief border = tile alpha*). Fetched straight from the peer with ≤ 6 in flight, 429/503
 `Retry-After` honoured with exponential back-off (4 tries), 204 = no data; LRU of 240 tiles,
 groups of the previous zoom stay visible until every wanted tile of the new zoom answered.
 Only under full res: toggled in the overview it turns full res on when the view is past
 `HI_MIN`, otherwise hints to zoom in and waits (the hash carries `;relief` either way). The
 button is text-like (muted ink, hairline; full ink and a thicker stroke when on), with the
 same dot loader as the view words. Legend gets a `relief · hillshade, 25 m terrain model ·
-{OBS_NAME}` line. Test hook: `neGlyph.state().relief / reliefZ / reliefLeft`.
+{OBS_NAME} · <TileJSON attribution>` line. Test hook: `neGlyph.state().relief / reliefZ / reliefLeft`.
 
 **Flags on trees** (since 2026-11-11 the card's `today` row — states and flags, `docs/ne-glyph.md` row *TREE REPORTS*; what follows is the older note form) (the observed-layer peer `#flags`): the card's `⚑ flag` line unfolds in place into five
 claims (*looks right · not a tree · too tall · too short · misplaced* → `looks_right ·

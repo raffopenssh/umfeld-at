@@ -34,6 +34,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 	"image/png"
 	"io"
@@ -74,6 +75,7 @@ func NELayerStats() map[string]interface{} {
 	m["trees_ogc"] = neOGCServed.Load()
 	neReliefVer.Lock()
 	m["relief_version"] = neReliefVer.v
+	m["relief_alpha_binary"] = strings.HasPrefix(neReliefVer.alpha, "binary")
 	neReliefVer.Unlock()
 	return m
 }
@@ -135,13 +137,21 @@ func handleNEMVTLayer(w http.ResponseWriter, r *http.Request, rest string) bool 
 	var err error
 	switch kind {
 	case "relief":
-		body, err = neLayerRelief(z, x, y, r.URL.Query().Get("raw") == "1")
-		// a day, not a week: the peer rebuilds the tileset (2026-11-21), the
-		// version is in the header and a client may key its own cache on it
+		// a day, then a 304: the ETag is the tileset version (+ the tile is in
+		// the URL), so a revalidation costs no body and no peer request
 		ctype, cache = "image/png", "public, max-age=86400"
 		if v := neReliefVersion(); v != "" {
 			w.Header().Set("X-Tileset-Version", v)
+			et := `"rel2-` + v + `"`
+			w.Header().Set("ETag", et)
+			if strings.Contains(r.Header.Get("If-None-Match"), et) {
+				w.Header().Set("Cache-Control", cache)
+				w.WriteHeader(http.StatusNotModified)
+				exportAccountFor(r, 0)
+				return true
+			}
 		}
+		body, err = neLayerRelief(z, x, y, r.URL.Query().Get("raw") == "1")
 		neLayerServed[0].Add(1)
 	case "trees":
 		var whole bool
@@ -243,16 +253,38 @@ func neLayerRelief(z, x, y int, raw bool) ([]byte, error) {
 }
 
 // neReliefVersion — the `version` of the peer's hillshade tileset
-// (GET /tiles/hillshade.json, TileJSON), asked at most every 5 minutes and
+// (GET /tiles/hillshade.json, TileJSON; the whole string is the key), asked
+// at most once an hour (the peer's contract) and
 // only while relief tiles are being served (no loop: an idle service asks
 // nothing). A change drops every relayed relief tile. While the peer does not
-// answer, the last known version stands (the floor: the 2026-11-21 rebuild).
-const neReliefVersionFloor = "4.1795274706"
+// answer, the last known version stands (the floor: the 2026-11-21 border-cut
+// rebuild). The same answer carries `attribution` (used verbatim:
+// neReliefAttribution) and `alpha`: "binary…" = the tile's alpha IS the border
+// (inside Austria AND terrain available), nothing is clipped here; anything
+// else is logged and shown on the inflight line (`relief_alpha`).
+const (
+	neReliefVersionFloor = "5.1795274706.1-0818165f"
+	neReliefAttrFloor    = "BEV ALS DTM (CC BY 4.0); Staatsgrenze © OpenStreetMap contributors (ODbL)"
+	neReliefPoll         = time.Hour
+)
 
 var neReliefVer struct {
 	sync.Mutex
 	v     string
+	attr  string
+	alpha string
 	asked time.Time
+}
+
+// neReliefAttribution — the TileJSON `attribution`, verbatim.
+func neReliefAttribution() string {
+	neReliefVersion()
+	neReliefVer.Lock()
+	defer neReliefVer.Unlock()
+	if neReliefVer.attr == "" {
+		return neReliefAttrFloor
+	}
+	return neReliefVer.attr
 }
 
 func neReliefVersion() string {
@@ -265,7 +297,7 @@ func neReliefVersion() string {
 		neReliefVer.v = neReliefVersionFloor
 	}
 	v := neReliefVer.v
-	if time.Since(neReliefVer.asked) < 5*time.Minute {
+	if time.Since(neReliefVer.asked) < neReliefPoll {
 		neReliefVer.Unlock()
 		return v
 	}
@@ -273,13 +305,24 @@ func neReliefVersion() string {
 	neReliefVer.Unlock()
 	b, code, err := neLayerPeerGet(pr.ObsWeb+"/tiles/hillshade.json", 64<<10)
 	var tj struct {
-		Version string `json:"version"`
+		Version     string `json:"version"`
+		Attribution string `json:"attribution"`
+		Alpha       string `json:"alpha"`
 	}
 	if err != nil || code != 200 || json.Unmarshal(b, &tj) != nil || tj.Version == "" || len(tj.Version) > 64 {
 		return v
 	}
 	neReliefVer.Lock()
 	defer neReliefVer.Unlock()
+	if tj.Attribution != "" && len(tj.Attribution) <= 300 {
+		neReliefVer.attr = tj.Attribution
+	}
+	if a := tj.Alpha; a != neReliefVer.alpha {
+		if !strings.HasPrefix(a, "binary") {
+			log.Printf("relief: TileJSON alpha is no longer binary (%.80q) — relayed tiles are NOT border-clipped", a)
+		}
+		neReliefVer.alpha = a
+	}
 	if tj.Version != neReliefVer.v {
 		log.Printf("relief: tileset version %s → %s, relayed tiles dropped", neReliefVer.v, tj.Version)
 		neReliefVer.v = tj.Version
@@ -288,6 +331,16 @@ func neReliefVersion() string {
 	}
 	return neReliefVer.v
 }
+
+// neReliefPalette — index = grey for 0..254, 255 = transparent.
+var neReliefPalette = func() color.Palette {
+	p := make(color.Palette, 256)
+	for i := 0; i < 255; i++ {
+		p[i] = color.NRGBA{uint8(i), uint8(i), uint8(i), 255}
+	}
+	p[255] = color.NRGBA{}
+	return p
+}()
 
 // neLayerReliefBake — the page's tone curve (relBake): the model's flat tone
 // 180 (lakes, plains) is re-centred on 128, the
@@ -305,10 +358,17 @@ func neLayerReliefBake(pngb []byte) ([]byte, error) {
 	bd := src.Bounds()
 	dst := image.NewNRGBA(image.Rect(0, 0, bd.Dx(), bd.Dy()))
 	draw.Draw(dst, dst.Rect, src, bd.Min, draw.Src)
-	any := false
-	for i := 0; i < len(dst.Pix); i += 4 {
-		v := int(dst.Pix[i])
-		if v != 180 && dst.Pix[i+3] > 0 {
+	// one byte per pixel on the wire: the curve leaves ≤ 205 greys and alpha
+	// is binary, so a tile with holes (border, missing DTM) goes out as a paletted PNG (index = grey, 255 =
+	// transparent; 255 as a grey folds into 254) — a fully opaque one as plain 8-bit
+	// grey; both well under the peer's RGBA bytes, in the LRU and to every client. A tile with any other alpha (the
+	// contract broken) keeps RGBA.
+	pal := image.NewPaletted(dst.Rect, neReliefPalette)
+	gray := image.NewGray(dst.Rect)
+	any, binary, opaque := false, true, true
+	for i, j := 0, 0; i < len(dst.Pix); i, j = i+4, j+1 {
+		v, a := int(dst.Pix[i]), dst.Pix[i+3]
+		if v != 180 && a > 0 {
 			any = true
 		}
 		if v <= 180 {
@@ -317,13 +377,31 @@ func neLayerReliefBake(pngb []byte) ([]byte, error) {
 			v = 128 + ((v-180)*127+37)/75
 		}
 		dst.Pix[i], dst.Pix[i+1], dst.Pix[i+2] = uint8(v), uint8(v), uint8(v)
+		gray.Pix[j] = uint8(v)
+		switch {
+		case a == 0:
+			pal.Pix[j], opaque = 255, false
+		case a == 255:
+			if v > 254 {
+				v = 254
+			}
+			pal.Pix[j] = uint8(v)
+		default:
+			binary, opaque = false, false
+		}
 	}
 	if !any {
 		return []byte{}, nil
 	}
 	var out bytes.Buffer
-	enc := png.Encoder{CompressionLevel: png.BestSpeed}
-	if err := enc.Encode(&out, dst); err != nil {
+	enc := png.Encoder{CompressionLevel: png.BestCompression}
+	var img image.Image = pal
+	if opaque {
+		img = gray // the inland majority: 8-bit grey, row filters work — ⅔ of the peer's bytes
+	} else if !binary {
+		img = dst
+	}
+	if err := enc.Encode(&out, img); err != nil {
 		return nil, err
 	}
 	return out.Bytes(), nil

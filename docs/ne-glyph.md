@@ -424,12 +424,21 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   (0..180 → 0..128, 180..255 → 128..255; `relBake`, fallback filter `#relf`, relay `neLayerReliefBake`). The former alpha key
   punched a hole wherever a slope's shade passed through 180 — contour slivers, **triangles** at z ≥ 16 where a 25 m cell
   spans dozens of pixels. Do not bring an alpha key back.
-- **Relief tileset version** (2026-11-21, the peer's rebuild `4.1795274706`): the peer's tiles are `immutable` for a year, so
+- **Relief tileset version** (2026-11-21, the peer's rebuild `5.1795274706.1-0818165f`; format `<render>.<registration>.<patch generation>-<outline sha>`, the whole string is the key): the peer's tiles are `immutable` for a year, so
   the cache is keyed on `version` of `<peer>/tiles/hillshade.json` (TileJSON: minzoom 10, maxzoom 17, native_maxzoom 13). Page:
-  `relVer` asks at most every 5 min while the relief is on, every tile URL carries `?v=<version>` (ignored by the server), a change
+  `relVer` asks at most once an hour while the relief is on, every tile URL carries `?v=<version>` (ignored by the server), a change
   → `relClear` + `relView`; no tile before the first answer, floor `REL_V0` when there is none. Relay: `neReliefVersion`
-  (same 5 min, lazy — no loop), LRU keys carry the version, a change drops `rel/` + `relraw/`, answers carry
-  `X-Tileset-Version` and `max-age` one day; `relief_version` on the `ne_mvt.layers` inflight line.
+  (same hour, lazy — no loop), LRU keys carry the version, a change drops `rel/` + `relraw/`, answers carry
+  `X-Tileset-Version`, `ETag` = the version (`If-None-Match` → 304 before any peer request) and `max-age` one day;
+  `relief_version` + `relief_alpha_binary` on the `ne_mvt.layers` inflight line. Relayed tiles live in RAM only (the 64 MB
+  layer LRU), nothing on disk; the baked tile is 8-bit **grey** when fully opaque, else **paletted** (index = grey, 255 = transparent), best
+  compression — ~⅔ of the peer's RGBA bytes inland, ~½ at the border.
+- **Relief border = tile alpha** (2026-11-21, tileset 5.x): alpha is binary at the source, 255 = inside Austria AND terrain,
+  cut on the outline we serve (`/glyph/admin/outline?c=AT`). The page does **not** clip; `relClip` (the `#relclip` path)
+  is the fallback `relVer` switches on only when the TileJSON `alpha` no longer starts with `binary`. No blur, no despike:
+  a seam is reported to the peer (z/x/y, pixel rows/cols, lon/lat, grey values across the line, straight in EPSG:3035 or
+  Web Mercator; check `<peer>/tiles/hillshade/seams.json` first — authoritative only when `seam_check.complete` and
+  `seam_check.tileset_version == version`). Attribution: TileJSON `attribution` verbatim (legend line, QGIS `rights`).
   What the rebuild settled, so **do not add back**: a despike / seam filter (seams are fixed at the source; the one we tried
   never shipped), the CSS blur past z 13 (the DTM is interpolated before shading — oversampled, smooth; do not sharpen
   either). Alpha is taken as given (strictly 0 or 255, 0 = no data, an empty square

@@ -650,7 +650,7 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 		over = append(over, bm{tree: t, layer: l, id: "subsidy"})
 	}
 	if pr.ObsWeb != "" {
-		t, l := neQGSRaster(neQGSRasterOpt{id: "relief", name: "Terrain relief", url: q(base + "/api/v1/ne/mvt/relief/{z}/{x}/{y}.png"), rights: pr.ObsName + " (CC BY 4.0), BEV",
+		t, l := neQGSRaster(neQGSRasterOpt{id: "relief", name: "Terrain relief", url: q(base + "/api/v1/ne/mvt/relief/{z}/{x}/{y}.png"), rights: neReliefAttribution(),
 			zmin: neLayerReliefMinZ, zmax: neLayerReliefMaxZ, opacity: 0.45, checked: view.relief, blend: 8})
 		over = append(over, bm{tree: t, layer: l, id: "relief"})
 	}
