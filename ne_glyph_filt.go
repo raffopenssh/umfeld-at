@@ -83,7 +83,7 @@ var fltDPc={w:0,t:-1e9};addEventListener('resize',function(){fltDPc.t=-1e9});fun
 function fltHL(lod){var k=1/fltDP(lod),h=1;while(h*1.414<k&&h<16)h*=2;return h}
 /* sp = the UPscale (device px per tile px, powers of √2, 1.41..8) at LOD 0/1: the veil comes as a vector tile the browser rasterises at screen resolution (ne_glyph_flt_vec.go) — 0 = raster */
 function fltSP(lod){if(lod===2)return 0;var k=fltDP(lod);if(k<1.15)return 0;var s=Math.pow(2,Math.round(2*Math.log(k)/Math.LN2)/2);return Math.min(8,Math.max(1.41,+s.toFixed(2)))}
-function fltQ(lod){var sp=fltSP(lod);return '&hl='+fltHL(lod)+(sp?'&vec=1&sp='+sp:'')}function fltKV(lod){var sp=fltSP(lod);return '~h'+fltHL(lod)+(sp?'~v'+sp:'')}
+function fltQ(lod){var sp=fltSP(lod);return '&hl='+fltHL(lod)+(sp?'&vec=1&sp='+sp:'')+'&c=2'/* c: bumps the URL past veil tiles a browser cached before late= existed (2026-11-22) */}function fltKV(lod){var sp=fltSP(lod);return '~h'+fltHL(lod)+(sp?'~v'+sp:'')}
 var fltDMQ=window.matchMedia?window.matchMedia('(prefers-color-scheme: dark)'):null;function fltDark(){return !!(fltDMQ&&fltDMQ.matches)}
 /* the state border under the veil: the far side in page colour (evenodd: a frame-sized box minus the country) and the ink line, one path above the veil tiles — present the moment the filter is on, independent of tiles */
 function fltBorder(){if(flt.bd||!hi.fbd)return;flt.bd=1;admOutline('AT').then(function(o){if(!o||!o.d){flt.bd=0;return}var p=document.createElementNS('http://www.w3.org/2000/svg','path');p.setAttribute('d','M-99999 -99999H99999V99999H-99999Z'+o.d);hi.fbd.appendChild(p)}).catch(function(){flt.bd=0})}
