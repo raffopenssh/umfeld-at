@@ -141,6 +141,31 @@ func neNatStart() {
 // neNatPeersPending — a peer sample moved and no build has folded it in yet.
 var neNatPeersPending atomic.Bool
 
+// neNatListsOnce — the one pass per run that the age rule does not hold back (apex lists gained).
+var neNatListsOnce atomic.Bool
+
+// neSampPeersBehind — the loaded sample was built from other peer bodies than
+// the ones on disk (behind); lists = it has no apex lists, tree mode is on and
+// the observed-layer body on disk is not the one it was built from.
+func neSampPeersBehind() (behind, lists bool) {
+	sp := neSampGet()
+	if sp == nil {
+		return false, false
+	}
+	of := func(m interface{}, k string) string {
+		if mm, ok := m.(map[string]interface{}); ok {
+			s, _ := mm[k].(string)
+			return s
+		}
+		return ""
+	}
+	obs := neSampPeerTag("obs")
+	obsBehind := obs != "" && of(sp.Hdr.Obs, "epoch") != obs
+	sub := neSampPeerTag("sub")
+	subBehind := sub != "" && of(sp.Hdr.Sub, "release") != sub
+	return obsBehind || subBehind, obsBehind && sp.treeH() == nil && neTreeHMode()
+}
+
 func neNatMaybeBuild() {
 	cur := neNatGet()
 	// the peers' national samples: conditional GETs, a few bytes while their epochs stand
@@ -152,8 +177,14 @@ func neNatMaybeBuild() {
 		// moved peer sample (a peer epoch used to rebuild at once, an hour
 		// after the store-driven pass: two passes back to back, 2026-11-18).
 		// The fetched sample waits on disk; a restart in between forgets the
-		// flag and the next store-driven pass folds it in.
-		if time.Since(cur.Built) < neNatMinAge || (!neNatPeersPending.Load() && cur.State == neNatState()) {
+		// flag, so the sample's own header is compared with the tags on disk
+		// (neSampPeersBehind) — the store may not move for days.
+		behind, lists := neSampPeersBehind()
+		if lists && neNatListsOnce.CompareAndSwap(false, true) {
+			// the peer's sample gained the apex lists and ours has none: a height term has no tree figure
+			// away from full zoom until the pass — once per run, not held back by the age rule
+			log.Printf("national sample: the peer's sample now carries apex height lists, ours has none → pass now")
+		} else if time.Since(cur.Built) < neNatMinAge || (!neNatPeersPending.Load() && !behind && cur.State == neNatState()) {
 			return
 		}
 	}
