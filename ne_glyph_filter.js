@@ -11,7 +11,7 @@
                                              {t:'bin', b, n, match, state} per bin (counts) — b = bin key 'i/j' (0.025°), tiles are the view's
                                              LOD-0/1 tiles painted at px screen pixels per frame unit (crisp at any zoom, bounded canvas)
         {t:'at', x, y}                       → {t:'at', hit:{match, rows:[[label, text]]}|null}
-        {t:'pts', k, xs, ys, bk:[bin keys], bi} → {t:'pts', k, m:Uint8Array (1 match · 0 veiled or no cell · 2 bin not here yet), done}
+        {t:'pts', k, xs, ys, bk:[bin keys], bi} → {t:'pts', k, m:Uint8Array (1 match · 0 veiled or no cell · 2 bin not here yet · 3 veiled, a matching cell within 1.6 R), done}
                                              a registered point set (the trees of one apex tile): re-sent whenever its bins land or the
                                              expression changes, until {t:'pts', k, drop:1}
         {t:'range', f}                       → {t:'range', f, fields:{id:{lo,hi,n,unk}}} the value span of every field of f over the loaded bins (the zero-match hint)
@@ -138,10 +138,16 @@ function at(x,y){var best=null,bd=1e9;for(var k0 in BINS){var B=BINS[k0],bin=B.c
 var PTS={},PTSR=0;
 function binInv(bin){if(bin.inv!==undefined)return bin.inv;var a=bin.hdr.a,q=a.length>=12,A=q?[a[1],a[2],a[7],a[8]]:[a[1],a[2],a[4],a[5]],o=q?[a[0],a[6]]:[a[0],a[3]],det=A[0]*A[3]-A[1]*A[2];if(!det||!isFinite(det))return bin.inv=null;return bin.inv={m:[A[3]/det,-A[1]/det,-A[2]/det,A[0]/det],o:o,q:q}}
 function posIJ(bin,i,j){var a=bin.hdr.a;if(a.length>=12)return[a[0]+a[1]*i+a[2]*j+a[3]*i*i+a[4]*i*j+a[5]*j*j,a[6]+a[7]*i+a[8]*j+a[9]*i*i+a[10]*i*j+a[11]*j*j];return[a[0]+a[1]*i+a[2]*j,a[3]+a[4]*i+a[5]*j]}
+/* a point whose own cell is veiled, but with a MATCHING cell centre within 1.6 circumradii (~16 m): the observed-layer peer books an apex on the
+   cell of its crown, the trees layer draws it at its refined top — up to ~6 m past the hexagon's edge (measured 2026-11-22, KG 92124: 12 % of the
+   apices in a height window). The page keeps such a tree when a height term is active (apKeep, m=3). */
+function matchNear(bin,M,x,y){var inv=binInv(bin);if(!inv||!bin.n)return false;var dx=x-inv.o[0],dy=y-inv.o[1],i=inv.m[0]*dx+inv.m[1]*dy,j=inv.m[2]*dx+inv.m[3]*dy;if(inv.q)for(var it=0;it<2;it++){var p=posIJ(bin,i,j);dx=x-p[0];dy=y-p[1];i+=inv.m[0]*dx+inv.m[1]*dy;j+=inv.m[2]*dx+inv.m[3]*dy}
+ var ri=Math.round(i),rj=Math.round(j),lat=lattice(bin),h=bin.hdr.hex,r2=0;for(var v=0;v<6;v++){var q2=h[v][0]*h[v][0]+h[v][1]*h[v][1];if(q2>r2)r2=q2}r2*=2.56;
+ for(var di=-2;di<=2;di++)for(var dj=-2;dj<=2;dj++){var k=lat.get(key(ri+di,rj+dj));if(k==null||!M[k])continue;var pp=pos(bin,k);if((pp[0]-x)*(pp[0]-x)+(pp[1]-y)*(pp[1]-y)<=r2)return true}return false}
 function cellAt(bin,x,y){var inv=binInv(bin);if(!inv||!bin.n)return-1;var dx=x-inv.o[0],dy=y-inv.o[1],i=inv.m[0]*dx+inv.m[1]*dy,j=inv.m[2]*dx+inv.m[3]*dy;if(inv.q)for(var it=0;it<2;it++){var p=posIJ(bin,i,j);dx=x-p[0];dy=y-p[1];i+=inv.m[0]*dx+inv.m[1]*dy;j+=inv.m[2]*dx+inv.m[3]*dy}
  var ri=Math.round(i),rj=Math.round(j),lat=lattice(bin),best=-1,bd=Infinity;for(var di=-1;di<=1;di++)for(var dj=-1;dj<=1;dj++){var k=lat.get(key(ri+di,rj+dj));if(k==null)continue;var pp=pos(bin,k),dd=(pp[0]-x)*(pp[0]-x)+(pp[1]-y)*(pp[1]-y);if(dd<bd){bd=dd;best=k}}
  if(best<0)return-1;var h=bin.hdr.hex,r2=0;for(var v=0;v<6;v++){var q2=h[v][0]*h[v][0]+h[v][1]*h[v][1];if(q2>r2)r2=q2}return bd<=r2*1.05?best:-1}
-function evalPts(P){var n=P.xs.length,m=new Uint8Array(n),done=true;for(var i=0;i<n;i++){var B=BINS[P.bk[P.bi[i]]];if(!B||!B.core||!B.m||B.mseq!==ESEQ){m[i]=2;done=false;continue}if(!B.core.n){m[i]=0;continue}var k=cellAt(B.core,P.xs[i],P.ys[i]);m[i]=k<0?0:B.m[k]?1:0}P.dirty=false;post({t:'pts',k:P.k,m:m,done:done})}
+function evalPts(P){var n=P.xs.length,m=new Uint8Array(n),done=true;for(var i=0;i<n;i++){var B=BINS[P.bk[P.bi[i]]];if(!B||!B.core||!B.m||B.mseq!==ESEQ){m[i]=2;done=false;continue}if(!B.core.n){m[i]=0;continue}var k=cellAt(B.core,P.xs[i],P.ys[i]);m[i]=k>=0&&B.m[k]?1:matchNear(B.core,B.m,P.xs[i],P.ys[i])?3:0}P.dirty=false;post({t:'pts',k:P.k,m:m,done:done})}
 function ptsFlush(){PTSR=0;if(!EXPR)return;for(var k in PTS)if(PTS[k].dirty)evalPts(PTS[k])}
 function ptsTouch(b){for(var k in PTS){var P=PTS[k];if(b&&P.bk.indexOf(b)<0)continue;P.dirty=true}if(!PTSR)PTSR=setTimeout(ptsFlush,0)}
 /* the value span of every field in f over the loaded bins — tells a reader with 0 matches what the data in view actually holds */

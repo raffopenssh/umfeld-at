@@ -727,6 +727,13 @@ returns raw 0.5 m bounds and `apKeep` compares `round(2·height_m)`, so a 34.8 m
 `neFiltApexRange` (the readout's tree figure) spans `ht` and `htmax` terms. Tests: `TestNEFiltTreeLists`,
 `TestNEFidxTreeHTail` (th plane), the reference evaluator and the JS parity bin carry lists.
 
+**Apex beside its cell (2026-11-22).** The trees layer draws an apex at its refined top; the observed-layer peer
+books it on the cell of its crown — up to ~6 m past the hexagon's edge (KG 92124, `ht=35..43`: 156 of 1 345
+in-window apices sat on a veiled cell with the matching one 9–16 m away, and vanished when the grip was released).
+The Worker's point test (`evalPts`) now answers **3** = own cell veiled, a matching cell centre within 1.6
+circumradii (`matchNear`); `apKeep` keeps a 3 when a height window is active (the tree's own height is in it) and
+drops it otherwise. Counts and the veil are untouched (they read the lists).
+
 ## 12. The veil near full zoom — vector tile, supersampled picture, two-layer ring (2026-11-04)
 
 At LOD 0/1 close to full zoom the browser upscales a tile px to several device px (z=900 on a 2× display:
