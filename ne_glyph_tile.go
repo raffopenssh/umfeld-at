@@ -519,6 +519,15 @@ func neGlyphTileRenderFH(lod neGlyphLOD, i, j int, view string, raw bool, win ne
 	}
 	var img image.Image
 	var poly [8][2]float64
+	// the meta counts only the cells whose centre lies in the tile's own box — the cell list is padded so the
+	// picture is whole to its edge, and counting the pad made every tile ~2 % too large (and two neighbours count
+	// their shared rim twice): "in view · 4364 k cells" beside the filter's "of 4278 k". Cells of the pad are
+	// painted with a scratch meta. Same rule as the veil tile (ne_glyph_flt_tile.go) and the unit stats.
+	var scratch neGlyphTileMeta
+	bx0, by0 := neGlyphProj(w, n)
+	bx1, by1 := neGlyphProj(e, s)
+	bx0, by0, bx1, by1 = (bx0-g.x0)*g.lod.px, (by0-g.y0)*g.lod.px, (bx1-g.x0)*g.lod.px, (by1-g.y0)*g.lod.px
+	inBox := func(cx, cy float64) bool { return cx >= bx0 && cx < bx1 && cy >= by0 && cy < by1 }
 	switch view {
 	case "rd":
 		// OSM roads + rail in the app's hand (ne_glyph_roads.go); no cells are read
@@ -545,7 +554,6 @@ func neGlyphTileRenderFH(lod neGlyphLOD, i, j int, view string, raw bool, win ne
 		// with the private request; the shares and the tree fields are all
 		// that is looked at. v=tree paints the tree band instead of the use.
 		res := neCollect(nil, ids, []string{"lu", "obs"}, &neReq{public: false, format: "bin", bevFirst: true})
-		m.n = len(res.ids)
 		tree := view == "tree"
 		var pimg *image.Paletted
 		if tree {
@@ -555,20 +563,26 @@ func neGlyphTileRenderFH(lod neGlyphLOD, i, j int, view string, raw bool, win ne
 		}
 		img = pimg
 		lay := neObsLayout(res.obsFlds, res.obsRec)
+		mIn := &m
 		for k, id := range res.ids {
-			row := res.obs[k]
-			if row == nil || lay == nil || len(row) != lay.rowBytes {
-				continue
-			}
 			np, cx, cy, ok := g.poly(id, &poly)
 			if !ok {
 				continue
 			}
+			m := &scratch
+			if inBox(cx, cy) {
+				m = mIn
+				m.n++
+			}
+			row := res.obs[k]
+			if row == nil || lay == nil || len(row) != lay.rowBytes {
+				continue
+			}
 			m.obs++
 			if tree {
-				neGlyphLUSum(row[lay.luOff:lay.luOff+9], &m) // the use sums still ride in the meta, the picture is the trees
+				neGlyphLUSum(row[lay.luOff:lay.luOff+9], m) // the use sums still ride in the meta, the picture is the trees
 			} else {
-				neGlyphPaintLU(pimg, row[lay.luOff:lay.luOff+9], poly[:np], np, cx, cy, &m)
+				neGlyphPaintLU(pimg, row[lay.luOff:lay.luOff+9], poly[:np], np, cx, cy, m)
 			}
 			if h, n, ok := neObsTrees(row, lay); ok {
 				m.trees += int64(n)
@@ -649,7 +663,7 @@ func neGlyphTileRenderFH(lod neGlyphLOD, i, j int, view string, raw bool, win ne
 		}
 	default:
 		res := neCollect(nil, ids, []string{"lu"}, &neReq{public: true, format: "bin", bevFirst: true})
-		m.n = len(res.ids)
+		mIn := &m
 		pimg := image.NewPaletted(image.Rect(0, 0, g.pw, g.ph), neGlyphTilePalette())
 		img = pimg
 		for k, id := range res.ids {
@@ -657,12 +671,17 @@ func neGlyphTileRenderFH(lod neGlyphLOD, i, j int, view string, raw bool, win ne
 			if !ok {
 				continue
 			}
+			m := &scratch
+			if inBox(cx, cy) {
+				m = mIn
+				m.n++
+			}
 			if res.lu[k][11]&neFlagSuperseded != 0 {
 				m.sup++
-				neGlyphPaintLUFaded(pimg, res.lu[k][12:21], poly[:np], &m)
+				neGlyphPaintLUFaded(pimg, res.lu[k][12:21], poly[:np], m)
 				continue
 			}
-			neGlyphPaintLU(pimg, res.lu[k][12:21], poly[:np], np, cx, cy, &m)
+			neGlyphPaintLU(pimg, res.lu[k][12:21], poly[:np], np, cx, cy, m)
 		}
 	}
 	var buf bytes.Buffer
@@ -1156,6 +1175,9 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	}
 	if ds > 1 {
 		key += "/ds" + strconv.Itoa(ds)
+	}
+	if view == "" || view == "obs" || view == "tree" {
+		key += "/c1" // meta counts centre-in-box cells only (2026-11-22): never serve the padded sums from before
 	}
 	if view == "tree" {
 		key += "/o" // opaque bitmap (neGlyphTreeSheetAlpha): never serve a translucent one from before
