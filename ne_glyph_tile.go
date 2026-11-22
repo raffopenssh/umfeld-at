@@ -1279,7 +1279,7 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 			meta += ";svg=1"
 			w.Header().Set("Content-Type", "image/svg+xml")
 		}
-		if fm.pending == 0 {
+		if fm.pending == 0 && fm.late == 0 {
 			w.Header().Set("ETag", etag)
 			neGlyphTilePut(key, neGlyphTileJoin(meta, pngb))
 		} else {

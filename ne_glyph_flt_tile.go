@@ -101,11 +101,11 @@ func neFltGrow(img *image.Paletted, r float64) {
 }
 
 type neGlyphFltMeta struct {
-	n, match, trees, tx, bins, pending int // tx: matching cells whose trees came from an apex list (= match → the figure is exact, inside the height term if one is set)
+	n, match, trees, tx, bins, pending, late int // late: bins whose apex lists are owed under a height term (ne_tree_h.go) · tx: matching cells whose trees came from an apex list (= match → the figure is exact, inside the height term if one is set)
 }
 
 func (m *neGlyphFltMeta) String() string {
-	return "match=" + strconv.Itoa(m.match) + ";trees=" + strconv.Itoa(m.trees) + ";tx=" + strconv.Itoa(m.tx) + ";bins=" + strconv.Itoa(m.bins) + ";pend=" + strconv.Itoa(m.pending)
+	return "match=" + strconv.Itoa(m.match) + ";trees=" + strconv.Itoa(m.trees) + ";tx=" + strconv.Itoa(m.tx) + ";bins=" + strconv.Itoa(m.bins) + ";pend=" + strconv.Itoa(m.pending) + ";late=" + strconv.Itoa(m.late)
 }
 
 // neFidxEdgeMap — for each IJ neighbour direction the hexagon edge (vertex index)
@@ -249,12 +249,16 @@ func neGlyphFltRender(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExpr, 
 		vec = &neFltVec{edges: make(map[[2]neFltVecPt]int, 1024)}
 	}
 	stamp := time.Now().UnixNano()
+	_, _, lists := neFiltApexRange(expr)
 	var poly [6][2]float64
 	polyS := poly[:]
 	for bi := bi0; bi <= bi1; bi++ {
 		for bj := bj0; bj <= bj1; bj++ {
 			m.bins++
-			raw, _, ok := neFidxPeek(bi, bj, stamp)
+			raw, _, ok, late := neFidxPeekL(bi, bj, stamp)
+			if late && lists {
+				m.late++ // the bin's apex lists are owed: the height term reads the tallest-tree floor here, the tile is not kept
+			}
 			if !ok {
 				// still building: this bin is painted from the national sample (res-10 faces) and the
 				// client asks again — the user keeps the map, the veil sharpens as the bins land

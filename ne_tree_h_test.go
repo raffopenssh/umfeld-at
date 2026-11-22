@@ -4,7 +4,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // TestNETreeHCount — the range count on sorted lists, the empty cell, the clamp ends.
@@ -217,4 +219,98 @@ func TestNEFidxBlockParseRagged(t *testing.T) {
 	if v1.cols["tree_h"] != nil {
 		t.Fatal("ragged column leaked into the planar map")
 	}
+}
+
+// TestNETreeHGateAsync — the lists of a block are a detached fetch: a fast one
+// wins the race, a slow one leaves the foreground after the hedge (lists owed,
+// wanted bins rebuilt when it lands), a failed one parks only its block, and a
+// losing streak drops the wait to zero without ever switching the mode off.
+func TestNETreeHGateAsync(t *testing.T) {
+	oldF, oldH, oldHedge, oldPin := neTreeHFetch, neTreeHLandedHook, neTreeHHedge, neTreeHPinned
+	defer func() {
+		neTreeHFetch, neTreeHLandedHook, neTreeHHedge, neTreeHPinned = oldF, oldH, oldHedge, oldPin
+		neTreeHLost.Store(0)
+	}()
+	neTreeHPinned, neTreeHHedge = "1", 40*time.Millisecond
+	neTreeHLost.Store(0)
+	var delay atomic.Int64
+	var okV atomic.Bool
+	okV.Store(true)
+	neTreeHFetch = func(bi, bj int) (bool, bool) {
+		time.Sleep(time.Duration(delay.Load()))
+		return okV.Load(), false
+	}
+	landed := make(chan [][2]int, 4)
+	neTreeHLandedHook = func(b [][2]int) { landed <- b }
+
+	// fast: inside the hedge
+	if !neTreeHAwait(9001, 9001) {
+		t.Fatal("fast tree set should win the race")
+	}
+	if neTreeHOwed(9001*4, 9001*4) {
+		t.Fatal("nothing owed after a win")
+	}
+	// slow: the foreground goes on, the lists land later and the wanted bin is rebuilt
+	delay.Store(int64(150 * time.Millisecond))
+	t0 := time.Now()
+	if neTreeHAwait(9002, 9002) {
+		t.Fatal("slow tree set must not hold the foreground")
+	}
+	if d := time.Since(t0); d > 120*time.Millisecond {
+		t.Fatalf("foreground waited %s, hedge is 40 ms", d)
+	}
+	i, j := 9002*4+1, 9002*4+2
+	if !neTreeHOwed(i, j) {
+		t.Fatal("lists in flight: owed")
+	}
+	neTreeHWantNote(i, j)
+	neTreeHWantNote(9003*4, 9003*4) // another block: not rebuilt by this landing
+	select {
+	case b := <-landed:
+		if len(b) != 1 || b[0] != [2]int{i, j} {
+			t.Fatalf("landed bins %v", b)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("late lists never landed")
+	}
+	if neTreeHOwed(i, j) {
+		t.Fatal("landed: nothing owed")
+	}
+	if !neTreeHMode() {
+		t.Fatal("a slow fetch must not switch the mode off")
+	}
+	// failed: only that block is parked; no new fetch while parked
+	okV.Store(false)
+	delay.Store(0)
+	if neTreeHAwait(9004, 9004) {
+		t.Fatal("failed fetch is not a win")
+	}
+	if !neTreeHOwed(9004*4, 9004*4) || neTreeHStart(9004, 9004) != nil {
+		t.Fatal("failed block should be parked")
+	}
+	if neTreeHOwed(9005*4, 9005*4) {
+		t.Fatal("another block is not blamed")
+	}
+	// a losing streak: no foreground wait at all, and one fast answer restores it
+	okV.Store(true)
+	delay.Store(int64(100 * time.Millisecond))
+	neTreeHLost.Store(0)
+	for k := 0; k < 3; k++ {
+		neTreeHAwait(9010+k, 9010)
+	}
+	if neTreeHHedgeNow() != 0 {
+		t.Fatalf("hedge after 3 lost races = %s", neTreeHHedgeNow())
+	}
+	t0 = time.Now()
+	neTreeHAwait(9020, 9010)
+	if d := time.Since(t0); d > 30*time.Millisecond {
+		t.Fatalf("async-only mode waited %s", d)
+	}
+	delay.Store(0)
+	neTreeHAwait(9021, 9010)
+	time.Sleep(50 * time.Millisecond)
+	if neTreeHHedgeNow() != neTreeHHedge {
+		t.Fatal("a fast answer should restore the hedge")
+	}
+	time.Sleep(200 * time.Millisecond) // let the detached fetches drain
 }

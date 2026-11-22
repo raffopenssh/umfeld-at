@@ -690,14 +690,28 @@ has lists), else — with a height term — the apex layer or nothing. Sample im
 (−1 = none), tail `u16 counts[n] · lists` after the columns; `fold9Trees` uses the same counter; `NSF9` ends with
 a `u8 exact` byte; `fnat?f=` JSON adds `trees[]` (×49) + `trees_exact`.
 
-**Gate** (bandwidth, and the peer builds a new field set on demand at 0.5–1.4 s per bin): the field list grows by
-`tree_h` only in **tree mode** (`neTreeHMode`). An hourly probe (`neTreeHLoop`, first after 2 min) fetches the
-block a user last needed with the tree set under a 6 s deadline; two fast answers that carry the column switch the
-mode on — `neFidxState` gains `;th`, so bins rebuild with lists on their next use (disk blobs of the old state age
-out under the 2 GB cap) and the sample URL changes (next national pass, peer ETag moves). A tree-set fetch slower
-than 8 s or failing in service switches the mode off for an hour (the block is re-asked with the prebuilt set at
-once). The mode **survives a restart** (marker `data/ne_fidx/tree_h.on`, `neTreeHRestore` in main — a deploy would otherwise drop the lists for two probes and flip every bin's state twice). `NE_TREE_H=0|1` pins it. While the mode is off, a bin already built **with** the lists (state `;th`) is served as is from the LRU / disk (`neFidxGetTH` in `neFidxGet` / `neFidxPeek`): a superset, nothing is read that is not there — and the other way round the veil (`neFidxPeek` only) paints the whole-cell bin while the `;th` build is queued (`neFidxGetNoTH`; `ht` is then the `tree_h_max` floor until the next poll) — so a flip never leaves the veil `pending` for a minute per view (it used to invalidate every bin on each flip). Inflight: `ne_fidx.tree_h {on, pinned, probes, probe_ok, off_until}`. Tests
-`TestNETreeHCount`, `TestNEFiltApexRange`, `TestNEFidxTreeHTail`, `TestNEFidxBlockParseRagged`.
+**Gate — capability, and the lists arrive asynchronously (2026-11-22).** The field list grows by `tree_h` in
+**tree mode** (`neTreeHMode`), and the mode now says only *the peer serves the column*: a probe (`neTreeHLoop`,
+first after 2 min, 60 s deadline — a cold block may take the peer half a minute) turns it on with one answer that
+carries the column; only a 200 **without** the column turns it off (1 h, `neTreeHNoColumn`). Latency never does.
+Before, one tree-set fetch slower than 8 s parked the whole mode for an hour and flipped every bin's state twice —
+although the peer was as slow without the column (cold block: 34 s with, > 40 s without), so a height term lost
+its tree figure for hours for a reason that had nothing to do with trees.
+
+Instead every 0.1° block's tree-set fetch is **its own detached request** (`neTreeHStart`: single flight per block,
+≤ 4 in flight, 120 s deadline, UA `…/fidx-trees`, failures blame neither "peer down" nor "no block mode"). The
+foreground block fetch (`neFidxSrtmBlockFetch` → `neTreeHAwait`) gives it the **hedge** (2.5 s), then asks the
+prebuilt set and builds with that — `bin.noTH`, filed by `neFidxGet` under the **list-less state**, so the `;th`
+key stays a miss. While the lists are **owed** (`neTreeHOwed`: fetch in flight, or the block parked after a failed
+one — 2 min doubling to 30 min; no free slot = 15 s) `neFidxPeek`/`neFidxGet` answer with that bin and queue
+nothing; when the block lands, the bins that were served meanwhile (`neTreeHWant`) are queued for a rebuild at
+once. The wait adapts: three lost races in a row → hedge 0 (lists always behind the picture) until one tree-set
+answer is fast again. A veil tile over an owed bin under a height term carries `late=N` in `X-NE-Tile`, is
+`no-store` and never enters the tile cache; the page re-asks it slowly (3 → 15 s, 40 tries) and the readout says
+`· trees …` meanwhile instead of nothing. `neFidxSrtm.thSet` marks a body that answered the tree set (a bin with
+no apex is complete, not owed); a prebuilt body never overwrites its tree-set twin (`neFidxSrtmPutMu`).
+The mode **survives a restart** (marker `data/ne_fidx/tree_h.on`, `neTreeHRestore` in main). `NE_TREE_H=0|1` pins it. While the mode is off, a bin already built **with** the lists (state `;th`) is served as is from the LRU / disk (`neFidxGetTH` in `neFidxGet` / `neFidxPeek`): a superset, nothing is read that is not there. Inflight: `ne_fidx.tree_h {on, pinned, probes, probe_ok, off_until, hedge_ms, lost_streak, won, hedged, late_landed, late_failed, in_flight, blocks_parked, bins_owed}`. Tests
+`TestNETreeHGateAsync`, `TestNETreeHCount`, `TestNEFiltApexRange`, `TestNEFidxTreeHTail`, `TestNEFidxBlockParseRagged`.
 
 ## 9a. `ht` = a tree of that height, not the tallest (2026-11-04)
 

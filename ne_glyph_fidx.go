@@ -169,6 +169,7 @@ type neFidxBin struct {
 	IJ   []int32 // 2n: i, j of cell k
 	Cols map[string][]byte
 	TH   *neTreeH         // apex height lists (nil: not in this blob / not served yet)
+	noTH bool             // built from the prebuilt peer set while the lists are owed (never encoded; neFidxGet files it under the list-less state)
 	idx  map[uint32]int32 // (i<<16|j) → k, built lazily
 }
 
@@ -461,6 +462,12 @@ func neFidxGet(i, j int) ([]byte, string, error) {
 	if b, stT := neFidxGetTH(i, j, st); b != nil {
 		return b, stT, nil
 	}
+	if neTreeHOwed(i, j) {
+		// the block's lists are on their way (or parked): a build now would only repeat the list-less bin on hand
+		if b, stP := neFidxGetNoTH(i, j, st); b != nil {
+			return b, stP, nil
+		}
+	}
 	neFidxMu.Lock()
 	if c := neFidxFlight[key]; c != nil {
 		neFidxMu.Unlock()
@@ -496,7 +503,13 @@ func neFidxGet(i, j int) ([]byte, string, error) {
 	neFidxBuildMs.Add(bin.Hdr.BuiltMs)
 	b := bin.encode("all")
 	// the state may have moved during the build (a srtm epoch learnt on the first fetch): key on what was built
-	if st2 := neFidxState(i, j); st2 != st {
+	st2 := neFidxState(i, j)
+	if bin.noTH && neTreeHMode() {
+		// built from the prebuilt set while the lists are owed: filed under the list-less state, so the `;th`
+		// key stays a miss and the bin is rebuilt when the block's lists land (ne_tree_h.go)
+		st2 = neFidxStateTHx(i, j, "")
+	}
+	if st2 != st {
 		bin.Hdr.State = st2
 		b = bin.encode("all")
 		st = st2
@@ -846,6 +859,7 @@ func neFidxBuild(i, j int, st string) (*neFidxBin, error) {
 			}
 		}
 		bin.TH = th
+		bin.noTH = th == nil && !sr.thSet && len(sr.ids) > 0
 	}
 	// Natura 2000: rasterised rings on a 25 m grid, one lookup per cell centre
 	neFidxN2K(bin, cells, ord, w, s, e, n)
@@ -1394,6 +1408,7 @@ type neFidxSrtm struct {
 	ids   []uint64
 	cols  map[string][]byte
 	th    *neTreeH // tree_h_n + tree_h when asked for and served
+	thSet bool     // the body answered the tree field set (lists present, or no apex in the bin): nothing is owed
 }
 
 func (s *neFidxSrtm) find(id uint64) int {
@@ -1418,7 +1433,7 @@ func neFidxSrtmFetch(w, s, e, n float64) *neFidxSrtm {
 	i, j := int(math.Floor(w/neFidxBinDeg+0.5)), int(math.Floor(s/neFidxBinDeg+0.5))
 	key := fmt.Sprintf("%d/%d", i, j)
 	wantTH := neTreeHMode()
-	if v, ok := neFidxSrtmBlk.get(key); ok && (!wantTH || v.th != nil || len(v.ids) == 0) {
+	if v, ok := neFidxSrtmBlk.get(key); ok && (!wantTH || v.thSet || len(v.ids) == 0 || neTreeHOwed(i, j)) {
 		neFidxSrtmBlkHits.Add(1)
 		return v
 	}
@@ -1431,11 +1446,7 @@ func neFidxSrtmFetch(w, s, e, n float64) *neFidxSrtm {
 	url := fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&fields=%s", peers().ObsAPI+"/api/v1/cells", w, s, e, n, neTreeHFields())
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("User-Agent", "umfeld-at/fidx (+"+publicURL()+")")
-	t0 := time.Now()
 	resp, err := neFidxClient.Do(req)
-	if treeSet && (err != nil || time.Since(t0) > neTreeHSlow) {
-		neTreeHSlowFetch(time.Since(t0), err)
-	}
 	if err != nil {
 		neFidxSrtmDown.set(time.Now())
 		return nil
@@ -1455,6 +1466,7 @@ func neFidxSrtmFetch(w, s, e, n float64) *neFidxSrtm {
 	}
 	out := neFidxSrtmParse(body, resp.Header.Get("X-Cells-Epoch"))
 	if out != nil {
+		out.thSet = treeSet && (out.th != nil || len(out.ids) == 0)
 		neFidxSrtmBlk.put(key, out)
 	}
 	return out
@@ -1605,10 +1617,52 @@ func neFidxSrtmBlockFetch(i, j int) bool {
 		neFidxSrtmBlkMu.Unlock()
 		wg.Done()
 	}()
-	w, s := float64(bi)*0.1, float64(bj)*0.1
 	neTreeHLastBlk.Store(bkey)
-	treeSet := neTreeHMode()
-	url := fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&block=1&fields=%s", peers().ObsAPI+"/api/v1/cells", w, s, w+0.1, s+0.1, neTreeHFields())
+	if neTreeHMode() {
+		// the tree set runs detached; the foreground gives it the hedge, then goes on with the prebuilt set
+		if neTreeHAwait(bi, bj) {
+			return true
+		}
+		if neFidxSrtmBlk.has(fmt.Sprintf("%d/%d", i, j)) {
+			return true // the prebuilt block is parsed already: the lists are owed, nothing else to fetch
+		}
+	}
+	ok, _ := neFidxSrtmBlockGet(bi, bj, false)
+	return ok
+}
+
+// neFidxSrtmBlockGet — one block body into neFidxSrtmBlk. tree = with the apex
+// lists (the detached fetch of ne_tree_h.go: its own long deadline, and a
+// failure blames nothing but the block — neither "peer down" nor "no block
+// mode"); noCol = a 200 whose bins carry cells but no lists.
+func neFidxSrtmBlockGet(bi, bj int, tree bool) (ok, noCol bool) {
+	w, s := float64(bi)*0.1, float64(bj)*0.1
+	flds, cl, ua := neFidxSrtmFlds, neFidxClient, "umfeld-at/fidx"
+	if tree {
+		flds, cl, ua = neFidxSrtmFlds+","+neTreeHField, neTreeHClient, "umfeld-at/fidx-trees"
+	}
+	url := fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&block=1&fields=%s", peers().ObsAPI+"/api/v1/cells", w, s, w+0.1, s+0.1, flds)
+	down := func() {
+		if !tree {
+			neFidxSrtmDown.set(time.Now())
+		}
+	}
+	noBlock := func() {
+		if !tree {
+			neFidxSrtmNoBlock.set(time.Now())
+		}
+	}
+	put := func(k string, v *neFidxSrtm) {
+		v.thSet = tree
+		neFidxSrtmPutMu.Lock()
+		defer neFidxSrtmPutMu.Unlock()
+		if !tree {
+			if old, ok := neFidxSrtmBlk.get(k); ok && old.thSet && old.gen == v.gen {
+				return // the tree set won the race after all: never put the list-less twin over it
+			}
+		}
+		neFidxSrtmBlk.put(k, v)
+	}
 	t0 := time.Now()
 	for attempt := 0; attempt < 2; attempt++ {
 		if attempt == 1 {
@@ -1616,34 +1670,22 @@ func neFidxSrtmBlockFetch(i, j int) bool {
 			neFidxSrtmBlkFallback.Add(1)
 		}
 		req, _ := http.NewRequest("GET", url, nil)
-		req.Header.Set("User-Agent", "umfeld-at/fidx (+"+publicURL()+")")
-		t1 := time.Now()
-		resp, err := neFidxClient.Do(req)
-		if treeSet && (err != nil || time.Since(t1) > neTreeHSlow) {
-			// the peer is still building that field set: drop to the prebuilt set for an hour and ask again now
-			neTreeHSlowFetch(time.Since(t1), err)
-			if err != nil {
-				url = fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&block=1&fields=%s", peers().ObsAPI+"/api/v1/cells", w, s, w+0.1, s+0.1, neFidxSrtmFlds)
-				treeSet = false
-				req, _ = http.NewRequest("GET", url, nil)
-				req.Header.Set("User-Agent", "umfeld-at/fidx (+"+publicURL()+")")
-				resp, err = neFidxClient.Do(req)
-			}
-		}
+		req.Header.Set("User-Agent", ua+" (+"+publicURL()+")")
+		resp, err := cl.Do(req)
 		if err != nil {
-			neFidxSrtmDown.set(time.Now())
-			return false
+			down()
+			return false, false
 		}
 		neFidxSrtmBlkFetches.Add(1)
 		ep, gen := resp.Header.Get("X-Cells-Epoch"), resp.Header.Get("X-Cells-Gen")
-		empty := func() bool {
+		empty := func() (bool, bool) {
 			neFidxSrtmEpochStore(ep)
 			for a := 0; a < 4; a++ {
 				for b := 0; b < 4; b++ {
-					neFidxSrtmBlk.put(fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+b), &neFidxSrtm{epoch: ep, gen: gen, cols: map[string][]byte{}})
+					put(fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+b), &neFidxSrtm{epoch: ep, gen: gen, cols: map[string][]byte{}})
 				}
 			}
-			return true
+			return true, false
 		}
 		switch resp.StatusCode {
 		case 200:
@@ -1652,24 +1694,24 @@ func neFidxSrtmBlockFetch(i, j int) bool {
 			body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 			resp.Body.Close()
 			if strings.Contains(strings.ToLower(string(body)), "block") {
-				neFidxSrtmNoBlock.set(time.Now())
-				return false
+				noBlock()
+				return false, false
 			}
 			return empty()
 		case 400, 405:
 			resp.Body.Close()
-			neFidxSrtmNoBlock.set(time.Now())
-			return false
+			noBlock()
+			return false, false
 		default:
 			resp.Body.Close()
-			neFidxSrtmDown.set(time.Now())
-			return false
+			down()
+			return false, false
 		}
 		body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
 		resp.Body.Close()
 		if err != nil || len(body) < 8 || string(body[:4]) != "NEXB" {
-			neFidxSrtmNoBlock.set(time.Now())
-			return false
+			noBlock()
+			return false, false
 		}
 		bins, ver, ok := neFidxBlockParse(body, ep, bi, bj)
 		if !ok {
@@ -1677,28 +1719,41 @@ func neFidxSrtmBlockFetch(i, j int) bool {
 				log.Printf("fidx srtm block %d/%d: v2 id checksum mismatch → ids=1", bi, bj)
 				continue
 			}
-			return false
+			return false, false
+		}
+		if tree {
+			for _, v := range bins {
+				if len(v.ids) > 0 && v.th == nil {
+					return false, true // the peer answered the tree set without the column
+				}
+			}
 		}
 		seen := map[string]bool{}
 		for k, v := range bins {
 			seen[k] = true
 			v.gen = gen
-			neFidxSrtmBlk.put(k, v)
+			put(k, v)
 		}
 		// bins the header does not list hold no cells
 		for a := 0; a < 4; a++ {
 			for b := 0; b < 4; b++ {
 				if k := fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+b); !seen[k] {
-					neFidxSrtmBlk.put(k, &neFidxSrtm{epoch: ep, gen: gen, cols: map[string][]byte{}})
+					put(k, &neFidxSrtm{epoch: ep, gen: gen, cols: map[string][]byte{}})
 				}
 			}
 		}
 		neFidxSrtmEpochStore(ep)
-		log.Printf("fidx srtm block %d/%d: v%d %d bins %d KB %.0f ms gen=%s", bi, bj, ver, len(bins), len(body)>>10, float64(time.Since(t0).Milliseconds()), gen)
-		return true
+		what := ""
+		if tree {
+			what = " +tree_h"
+		}
+		log.Printf("fidx srtm block %d/%d%s: v%d %d bins %d KB %.0f ms gen=%s", bi, bj, what, ver, len(bins), len(body)>>10, float64(time.Since(t0).Milliseconds()), gen)
+		return true, false
 	}
-	return false
+	return false, false
 }
+
+var neFidxSrtmPutMu sync.Mutex // put-if-not-better across the tree-set and the prebuilt body of one block
 
 // neFidxBlockParse — one NEXB body → bins (key "i/j"). Two forms (docs/ne-filter.md §8.1):
 //
@@ -2246,33 +2301,48 @@ func neFidxPoolStats() map[string]interface{} {
 // the build (stamp = the request's time) and returns ok=false. A bin outside
 // Austria or one whose build failed lately is ok with nil bytes (nothing to paint, nothing pending).
 func neFidxPeek(i, j int, stamp int64) ([]byte, string, bool) {
+	b, st, ok, _ := neFidxPeekL(i, j, stamp)
+	return b, st, ok
+}
+
+// neFidxPeekL — neFidxPeek + late: the bin on hand was built without the apex
+// lists and they are owed (queued, on their way from the peer, or parked) — a
+// picture that reads the lists must not be cached on it.
+func neFidxPeekL(i, j int, stamp int64) ([]byte, string, bool, bool) {
 	if bw, bs, be, bn := neFidxBox(i, j); be < 9.4 || bw > 17.3 || bn < 46.3 || bs > 49.1 {
-		return nil, "", true
+		return nil, "", true, false
 	}
 	neFidxPoolMu.Lock()
 	failed := time.Since(neFidxPoolFail[[2]int{i, j}]) < 5*time.Minute
 	neFidxPoolMu.Unlock()
 	if failed {
-		return nil, "", true
+		return nil, "", true, false
 	}
 	st := neFidxState(i, j)
 	key := fmt.Sprintf("%d/%d/%s", i, j, st)
 	if b, ok := neFidxLRU.get(key); ok {
-		return b, st, true
+		return b, st, true, false
 	}
 	if b := neFidxDiskRead(st, i, j); b != nil {
 		neFidxDiskHits.Add(1)
 		neFidxLRU.put(key, b)
-		return b, st, true
+		return b, st, true, false
 	}
 	if b, stT := neFidxGetTH(i, j, st); b != nil {
-		return b, stT, true
+		return b, stT, true, false
+	}
+	if neTreeHOwed(i, j) {
+		if b, stP := neFidxGetNoTH(i, j, st); b != nil {
+			neTreeHWantNote(i, j)
+			return b, stP, true, true // nothing to build until the block's lists land (they queue the rebuild themselves)
+		}
 	}
 	neFidxQueue(i, j, stamp)
 	if b, stP := neFidxGetNoTH(i, j, st); b != nil {
-		return b, stP, true // stale-while-revalidate: the whole-cell bin paints now, the apex lists land on the next poll
+		neTreeHWantNote(i, j)
+		return b, stP, true, true // stale-while-revalidate: the whole-cell bin paints now, the apex lists land on the next poll
 	}
-	return nil, st, false
+	return nil, st, false, false
 }
 
 // neFidxGetNoTH — tree-height mode just came on: the bin built WITHOUT the apex

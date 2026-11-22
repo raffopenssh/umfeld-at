@@ -256,11 +256,15 @@ func neGlyphFltRenderVec(g *neGlyphTileGeom, w, s, e, n float64, expr *neFiltExp
 	cx0, cy0 := neGlyphProj(w, n)
 	cx1, cy1 := neGlyphProj(e, s)
 	stamp := time.Now().UnixNano()
+	_, _, lists := neFiltApexRange(expr)
 	vec := &neFltVec{edges: make(map[[2]neFltVecPt]int, 4096)}
 	for bi := bi0; bi <= bi1; bi++ {
 		for bj := bj0; bj <= bj1; bj++ {
 			m.bins++
-			raw, _, ok := neFidxPeek(bi, bj, stamp)
+			raw, _, ok, late := neFidxPeekL(bi, bj, stamp)
+			if late && lists {
+				m.late++ // the bin's apex lists are owed: the height term reads the tallest-tree floor here, the tile is not kept
+			}
 			if !ok {
 				m.pending++
 				neFltVecSample(vec, g, bi, bj, expr, x0, y0, x1, y1, cx0, cy0, cx1, cy1, m)

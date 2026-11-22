@@ -175,29 +175,87 @@ func (c *neTreeCounter) at(k int) (n int, exact bool) {
 	return 0, false
 }
 
-// ── the mode gate ────────────────────────────────────────────────────────────
+// ── the gate: capability + asynchronous lists ───────────────────────────────
+//
+// The mode says only "the peer serves the column" (a probe, or the marker of
+// the last run). Latency never switches it: a slow tree-set answer used to park
+// the whole mode for an hour and flip every bin's state twice, although the
+// peer was just as slow without the column (cold block: 34 s with, > 40 s
+// without, 2026-11-22). Now every block's tree-set fetch is its own detached
+// request (neTreeHStart): the foreground waits for it for neTreeHHedge, then
+// goes on with the prebuilt set, and the lists land when the peer has them —
+// the bins built meanwhile are stored under the list-less state and rebuilt
+// the moment the block arrives. Blame is per block (backoff after a failed
+// tree-set fetch), and the wait itself adapts: after three lost races in a row
+// the foreground does not wait at all until a tree-set answer is fast again.
 
 const (
-	neTreeHField   = "tree_h"
-	neTreeHProbeDL = 6 * time.Second // a prebuilt block answers in well under a second
-	neTreeHSlow    = 8 * time.Second // a tree-set fetch slower than this in service → off
-	neTreeHOffFor  = time.Hour
-	neTreeHProbeIv = time.Hour
+	neTreeHField    = "tree_h"
+	neTreeHProbeDL  = 60 * time.Second  // capability, not speed: a cold block may take the peer half a minute
+	neTreeHLateDL   = 120 * time.Second // a detached tree-set fetch may take this long
+	neTreeHLateMax  = 4                 // detached tree-set fetches in flight
+	neTreeHBackMin  = 2 * time.Minute   // per-block backoff after a failed tree-set fetch, doubling …
+	neTreeHBackMax  = 30 * time.Minute  // … up to this
+	neTreeHBusyWait = 15 * time.Second  // no free slot: the block's lists are owed, ask again then
+	neTreeHOffFor   = time.Hour         // the peer answered without the column: off, probe again later
+	neTreeHProbeIv  = 15 * time.Minute
+	neTreeHMapMax   = 4096
 )
+
+type neTreeHLate struct {
+	done chan struct{}
+	ok   bool
+	t0   time.Time
+}
+
+type neTreeHBack struct {
+	until time.Time
+	n     int
+}
+
+// neTreeHHedge — foreground wait for the tree set before the prebuilt set is asked (a var: tests shorten it).
+var neTreeHHedge = 2500 * time.Millisecond
 
 var (
 	neTreeHOn       atomic.Bool
 	neTreeHOffUntil atomicTime
-	neTreeHProbeOK  atomic.Int64 // consecutive fast probes
 	neTreeHProbes   atomic.Int64
+	neTreeHProbeOK  atomic.Int64
 	neTreeHProbeMu  sync.Mutex
 	neTreeHLastBlk  atomic.Value // string "bi/bj": the last block a user fetch asked for (the probe's target)
 	neTreeHPinned   = os.Getenv("NE_TREE_H")
+
+	neTreeHMu     sync.Mutex
+	neTreeHFly    = map[string]*neTreeHLate{} // block "bi/bj" → detached tree-set fetch (≤ neTreeHLateMax)
+	neTreeHBackM  = map[string]neTreeHBack{}  // block → lists owed until (≤ neTreeHMapMax)
+	neTreeHWant   = map[[2]int]struct{}{}     // bins served without lists while owed: rebuilt when the block lands (≤ neTreeHMapMax)
+	neTreeHSem    = make(chan struct{}, neTreeHLateMax)
+	neTreeHLost   atomic.Int64 // consecutive races the tree set lost against the hedge
+	neTreeHWon    atomic.Int64 // tree set answered inside the hedge
+	neTreeHHedged atomic.Int64 // foreground went on without the lists
+	neTreeHLanded atomic.Int64 // detached fetches that brought lists after the hedge
+	neTreeHFailed atomic.Int64
+	neTreeHClient = &http.Client{Timeout: neTreeHLateDL}
+
+	// neTreeHFetch — the detached tree-set fetch of one block (ne_glyph_fidx.go: neFidxSrtmBlockGet with the
+	// tree fields, quiet). ok = the block is in the LRU with lists; noCol = a 200 without the column.
+	neTreeHFetch func(bi, bj int) (ok, noCol bool)
+	// neTreeHLandedHook — bins to rebuild once a block's lists arrived late.
+	neTreeHLandedHook func(bins [][2]int)
 )
 
+func init() {
+	neTreeHFetch = func(bi, bj int) (ok, noCol bool) { return neFidxSrtmBlockGet(bi, bj, true) }
+	neTreeHLandedHook = func(bins [][2]int) {
+		now := time.Now().UnixNano()
+		for _, b := range bins {
+			neFidxQueue(b[0], b[1], now)
+		}
+	}
+}
+
 // neTreeHMarker — the mode survives a restart: a deploy must not drop the
-// lists for the two probes (≥ 7 min) and flip every bin's state hash twice.
-// The slow-fetch guard still switches it off in service.
+// lists until the first probe and flip every bin's state hash twice.
 func neTreeHMarker() string { return filepath.Join(neFidxDiskDir, "tree_h.on") }
 
 func neTreeHRestore() {
@@ -219,7 +277,7 @@ func neTreeHPersist(on bool) {
 	os.Remove(neTreeHMarker())
 }
 
-// neTreeHMode — whether bin / sample fetches ask for the tree lists now.
+// neTreeHMode — whether the peer serves the apex lists (bins and the sample ask for them).
 func neTreeHMode() bool {
 	switch neTreeHPinned {
 	case "1":
@@ -227,7 +285,7 @@ func neTreeHMode() bool {
 	case "0":
 		return false
 	}
-	return neTreeHOn.Load() && time.Since(neTreeHOffUntil.get()) >= 0
+	return neTreeHOn.Load()
 }
 
 // neTreeHFields — the peer field list for the current mode.
@@ -238,22 +296,160 @@ func neTreeHFields() string {
 	return neFidxSrtmFlds
 }
 
-// neTreeHSlowFetch — a tree-set fetch in service took too long or failed: back off.
-func neTreeHSlowFetch(d time.Duration, err error) {
+// neTreeHNoColumn — a tree-set answer came back without the column: the peer
+// does not serve it (any more). The only thing that switches the mode off.
+func neTreeHNoColumn(what string) {
 	if neTreeHPinned != "" || !neTreeHOn.Load() {
 		return
 	}
 	neTreeHOn.Store(false)
 	neTreeHPersist(false)
-	neTreeHProbeOK.Store(0)
 	neTreeHOffUntil.set(time.Now().Add(neTreeHOffFor))
-	log.Printf("tree_h: fetch took %.1fs (%v) → whole-cell counts for %s", d.Seconds(), err, neTreeHOffFor)
+	log.Printf("tree_h: %s answered without the column → whole-cell counts, next probe in %s", what, neTreeHOffFor)
 }
 
-// neTreeHProbe — one block with the tree set under a short deadline; two fast
-// answers in a row turn the mode on. The target is the block a user last
-// needed (so the probe's body is useful: it lands in the block LRU), else a
-// random block of the country.
+// neTreeHHedgeNow — how long the foreground waits for the tree set: nothing
+// while it keeps losing (the lists then always arrive behind the picture).
+func neTreeHHedgeNow() time.Duration {
+	if neTreeHLost.Load() >= 3 {
+		return 0
+	}
+	return neTreeHHedge
+}
+
+func neTreeHBlockKey(i, j int) string { return fmt.Sprintf("%d/%d", i>>2, j>>2) }
+
+// neTreeHOwed — the lists of bin (i,j)'s block are on their way or parked: a
+// bin built now would come out without them, so the list-less bin on hand is
+// the answer and nothing is queued.
+func neTreeHOwed(i, j int) bool {
+	if !neTreeHMode() {
+		return false
+	}
+	k := neTreeHBlockKey(i, j)
+	neTreeHMu.Lock()
+	defer neTreeHMu.Unlock()
+	if neTreeHFly[k] != nil {
+		return true
+	}
+	return time.Until(neTreeHBackM[k].until) > 0
+}
+
+// neTreeHWantNote — bin (i,j) was served without lists: rebuild it when its block lands.
+func neTreeHWantNote(i, j int) {
+	neTreeHMu.Lock()
+	if len(neTreeHWant) >= neTreeHMapMax {
+		neTreeHWant = map[[2]int]struct{}{}
+	}
+	neTreeHWant[[2]int{i, j}] = struct{}{}
+	neTreeHMu.Unlock()
+}
+
+// neTreeHStart — the detached tree-set fetch of block (bi,bj): the one in
+// flight, a new one, or nil while the block is parked / no slot is free.
+func neTreeHStart(bi, bj int) *neTreeHLate {
+	k := fmt.Sprintf("%d/%d", bi, bj)
+	neTreeHMu.Lock()
+	defer neTreeHMu.Unlock()
+	if l := neTreeHFly[k]; l != nil {
+		return l
+	}
+	if time.Until(neTreeHBackM[k].until) > 0 {
+		return nil
+	}
+	if len(neTreeHBackM) >= neTreeHMapMax {
+		neTreeHBackM = map[string]neTreeHBack{}
+	}
+	select {
+	case neTreeHSem <- struct{}{}:
+	default:
+		neTreeHBackM[k] = neTreeHBack{until: time.Now().Add(neTreeHBusyWait), n: neTreeHBackM[k].n}
+		return nil
+	}
+	l := &neTreeHLate{done: make(chan struct{}), t0: time.Now()}
+	neTreeHFly[k] = l
+	go func() {
+		ok, noCol := neTreeHFetch(bi, bj)
+		<-neTreeHSem
+		d := time.Since(l.t0)
+		var bins [][2]int
+		neTreeHMu.Lock()
+		delete(neTreeHFly, k)
+		if ok {
+			delete(neTreeHBackM, k)
+			for b := range neTreeHWant {
+				if b[0]>>2 == bi && b[1]>>2 == bj {
+					bins = append(bins, b)
+					delete(neTreeHWant, b)
+				}
+			}
+		} else {
+			n := neTreeHBackM[k].n
+			back := neTreeHBackMin << uint(n)
+			if back > neTreeHBackMax || back <= 0 {
+				back = neTreeHBackMax
+			}
+			neTreeHBackM[k] = neTreeHBack{until: time.Now().Add(back), n: n + 1}
+		}
+		neTreeHMu.Unlock()
+		l.ok = ok
+		close(l.done)
+		switch {
+		case noCol:
+			neTreeHNoColumn(fmt.Sprintf("block %s", k))
+		case !ok:
+			neTreeHFailed.Add(1)
+			log.Printf("tree_h block %s: no lists after %.1fs — parked, the prebuilt set serves", k, d.Seconds())
+		case d <= neTreeHHedge:
+			neTreeHLost.Store(0)
+		default:
+			neTreeHLanded.Add(1)
+			log.Printf("tree_h block %s: lists landed after %.1fs, %d bins rebuild", k, d.Seconds(), len(bins))
+		}
+		if len(bins) > 0 {
+			neTreeHLandedHook(bins)
+		}
+	}()
+	return l
+}
+
+// neTreeHAwait — the foreground side of the race for block (bi,bj): true when
+// the tree set is in the block LRU (lists and all), false when the caller
+// should go on with the prebuilt set (the lists follow, or the block is parked).
+func neTreeHAwait(bi, bj int) bool {
+	l := neTreeHStart(bi, bj)
+	if l == nil {
+		return false
+	}
+	h := neTreeHHedgeNow()
+	if h > 0 {
+		t := time.NewTimer(h)
+		defer t.Stop()
+		select {
+		case <-l.done:
+		case <-t.C:
+		}
+	}
+	select {
+	case <-l.done:
+		if l.ok {
+			neTreeHWon.Add(1)
+			neTreeHLost.Store(0)
+		}
+		return l.ok
+	default:
+	}
+	neTreeHHedged.Add(1)
+	if h > 0 {
+		neTreeHLost.Add(1)
+	}
+	return false
+}
+
+// neTreeHProbe — capability only: one block with the tree set; an answer that
+// carries the column turns the mode on, however long the peer took. The target
+// is the block a user last needed (the body is useful: it lands in the block
+// LRU), else a random block of the country.
 func neTreeHProbe() {
 	if neTreeHPinned != "" || neTreeHMode() || peers().ObsAPI == "" {
 		return
@@ -281,11 +477,9 @@ func neTreeHProbe() {
 	if err == nil {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
 		resp.Body.Close()
-		if resp.StatusCode == 404 {
-			ok = true // no cells there: nothing to build, counts as fast
-		} else if resp.StatusCode == 200 && len(body) > 8 && string(body[:4]) == "NEXB" {
+		if resp.StatusCode == 200 && len(body) > 8 && string(body[:4]) == "NEXB" {
 			bins, _, good := neFidxBlockParse(body, resp.Header.Get("X-Cells-Epoch"), bi, bj)
-			ok = good
+			ok = good && len(bins) > 0
 			for _, b := range bins {
 				if len(b.ids) > 0 && b.th == nil {
 					ok = false // 200 without the column: the peer does not serve it (yet)
@@ -295,26 +489,23 @@ func neTreeHProbe() {
 	}
 	d := time.Since(t0)
 	if ok {
-		n := neTreeHProbeOK.Add(1)
-		log.Printf("tree_h probe %d/%d: ok in %.1fs (%d/2)", bi, bj, d.Seconds(), n)
-		if n >= 2 {
-			neTreeHOn.Store(true)
-			neTreeHPersist(true)
-			log.Printf("tree_h: on — bins rebuild with apex lists on their next use")
-		}
+		neTreeHProbeOK.Add(1)
+		neTreeHOn.Store(true)
+		neTreeHPersist(true)
+		log.Printf("tree_h probe %d/%d: column served (%.1fs) → on, bins rebuild with apex lists on their next use", bi, bj, d.Seconds())
 		return
 	}
-	neTreeHProbeOK.Store(0)
+	neTreeHLastBlk.Store("") // an empty or failing block proves nothing: another one next time
 	log.Printf("tree_h probe %d/%d: not ready (%.1fs, %v)", bi, bj, d.Seconds(), err)
 }
 
-// neTreeHLoop — the hourly probe (a second one soon after the first success so the mode flips within minutes of the peer being ready).
+// neTreeHLoop — the probe while the mode is off (a no-op while it is on).
 func neTreeHLoop() {
 	time.Sleep(2 * time.Minute)
 	for {
 		neTreeHProbe()
-		if neTreeHProbeOK.Load() == 1 {
-			time.Sleep(5 * time.Minute)
+		if !neTreeHMode() && neTreeHProbes.Load() < 4 {
+			time.Sleep(3 * time.Minute) // a cold block is built by the second ask
 			continue
 		}
 		time.Sleep(neTreeHProbeIv)
@@ -323,5 +514,15 @@ func neTreeHLoop() {
 
 // NETreeHStats — size line for /api/v1/debug/inflight.
 func NETreeHStats() map[string]interface{} {
-	return map[string]interface{}{"on": neTreeHMode(), "pinned": neTreeHPinned, "probes": neTreeHProbes.Load(), "probe_ok": neTreeHProbeOK.Load(), "off_until": neTreeHOffUntil.get().Format(time.RFC3339)}
+	neTreeHMu.Lock()
+	fly, parked, want := len(neTreeHFly), 0, len(neTreeHWant)
+	for _, b := range neTreeHBackM {
+		if time.Until(b.until) > 0 {
+			parked++
+		}
+	}
+	neTreeHMu.Unlock()
+	return map[string]interface{}{"on": neTreeHMode(), "pinned": neTreeHPinned, "probes": neTreeHProbes.Load(), "probe_ok": neTreeHProbeOK.Load(), "off_until": neTreeHOffUntil.get().Format(time.RFC3339),
+		"hedge_ms": neTreeHHedgeNow().Milliseconds(), "lost_streak": neTreeHLost.Load(), "won": neTreeHWon.Load(), "hedged": neTreeHHedged.Load(), "late_landed": neTreeHLanded.Load(), "late_failed": neTreeHFailed.Load(),
+		"in_flight": fly, "in_flight_cap": neTreeHLateMax, "blocks_parked": parked, "bins_owed": want, "map_cap": neTreeHMapMax}
 }
