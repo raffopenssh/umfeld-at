@@ -710,6 +710,11 @@ answer is fast again. A veil tile over an owed bin under a height term carries `
 `no-store` and never enters the tile cache; the page re-asks it slowly (3 → 15 s, 40 tries) and the readout says
 `· trees …` meanwhile instead of nothing. `neFidxSrtm.thSet` marks a body that answered the tree set (a bin with
 no apex is complete, not owed); a prebuilt body never overwrites its tree-set twin (`neFidxSrtmPutMu`).
+A bin that came out list-less is not rebuilt for 90 s (`neTreeHTried`) unless its block lands. List-bearing bins live
+under the state suffix `;th2` (`neFidxTHSfx`): under the old `;th` the previous gate had also filed list-less bins.
+**One total per view:** base/obs tile meta counts only cells whose centre lies in the tile box (the cell list is
+padded for the picture; counting the pad read ~2 % high beside the veil's `of N`), and with a filter on the in-view
+note reads `⏷ matching of total` from the veil tiles, the funnel (`FLTI`) marking every filtered count.
 The mode **survives a restart** (marker `data/ne_fidx/tree_h.on`, `neTreeHRestore` in main). `NE_TREE_H=0|1` pins it. While the mode is off, a bin already built **with** the lists (state `;th`) is served as is from the LRU / disk (`neFidxGetTH` in `neFidxGet` / `neFidxPeek`): a superset, nothing is read that is not there. Inflight: `ne_fidx.tree_h {on, pinned, probes, probe_ok, off_until, hedge_ms, lost_streak, won, hedged, late_landed, late_failed, in_flight, blocks_parked, bins_owed}`. Tests
 `TestNETreeHGateAsync`, `TestNETreeHCount`, `TestNEFiltApexRange`, `TestNEFidxTreeHTail`, `TestNEFidxBlockParseRagged`.
 
