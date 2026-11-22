@@ -434,10 +434,15 @@ func neFidxStateTHx(i, j int, th string) string {
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
-// neFidxStateTH — ";th" once the apex lists are asked for, so bins built without them rebuild on their next use.
+// neFidxTHSfx — the state suffix of a bin that holds its apex lists. ";th2" since 2026-11-22: under ";th" the
+// old gate also filed bins built from the prebuilt set (no lists), and nothing told them apart — a height term
+// then had no tree figure over them for good. Only complete bins are filed under this suffix now (bin.noTH).
+const neFidxTHSfx = ";th2"
+
+// neFidxStateTH — the suffix once the apex lists are asked for, so bins built without them rebuild on their next use.
 func neFidxStateTH() string {
 	if neTreeHMode() {
-		return ";th"
+		return neFidxTHSfx
 	}
 	return ""
 }
@@ -2379,7 +2384,7 @@ func neFidxGetTH(i, j int, st string) ([]byte, string) {
 	if neFidxStateTH() != "" {
 		return nil, ""
 	}
-	stT := neFidxStateTHx(i, j, ";th")
+	stT := neFidxStateTHx(i, j, neFidxTHSfx)
 	if stT == st {
 		return nil, ""
 	}
