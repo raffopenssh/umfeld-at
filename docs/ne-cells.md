@@ -108,7 +108,7 @@ TOK=<a private token>
 curl -s -H "Authorization: Bearer $TOK" localhost:8000<private>/api/v1/ne/reports | python3 -m json.tool | less
 curl -s -H "Authorization: Bearer $TOK" 'localhost:8000/contrib/api/v1/ne/revisit?limit=20' | head -c 2000   # which KGs peers should re-observe first
 #   live        = per token×observer since process start (empty after a restart — normal)
-#   on_disk     = scan of data/ne_cells/*.reports.jsonl (memo 60 s): reports, became_baseline, compared,
+#   on_disk     = scan of data/ne_cells/*.reports.jsonl (memo until the next append; readers get the last walk, never wait): reports, became_baseline, compared,
 #                 chunks_changed (vs epoch 0), chunks_changed_since_last, kgs_with_changes
 sudo journalctl -u umfeld-at --no-pager | grep '🧾 NE report' | tail      # one line per POST
 python3 - <<'PY'                                                            # per-report table from disk

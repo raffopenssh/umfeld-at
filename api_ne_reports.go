@@ -917,11 +917,12 @@ func neAppendReport(kg string, line interface{}) {
 
 var neReportsScanMemo = struct {
 	sync.Mutex
-	at    time.Time
-	dir   string // neDir the memo was built for (tests swap it)
-	dirty bool   // a report was appended since the last scan
-	data  map[string]interface{}
-	kgs   map[string]neKGReportStat // per-KG chunk-bearing report facts (api_ne_revisit.go `stale`), not in `data`
+	at      time.Time
+	dir     string // neDir the memo was built for (tests swap it)
+	dirty   bool   // a report was appended since the last scan
+	walking bool   // a walk is running (or claimed by a reader)
+	data    map[string]interface{}
+	kgs     map[string]neKGReportStat // per-KG chunk-bearing report facts (api_ne_revisit.go `stale`), not in `data`
 }{}
 
 // neReportKGStats — per-KG facts from the same walk as neScanReportFiles (no
@@ -934,23 +935,80 @@ func neReportKGStats() map[string]neKGReportStat {
 }
 
 // neScanReportFiles walks data/ne_cells/*.reports.jsonl (1 GB of JSON, ~40 s of
-// one core) — memoised until the next append (rescans ≥ 5 s apart) or the UTC
-// day turns (`daily` runs to today). No age expiry: this process is the only
-// writer of the files and every append sets dirty, so an untouched memo is
-// exact; the former 10 min expiry made each hourly peer poll a full walk.
+// one core) — memoised until the next append or the UTC day turns (`daily`
+// runs to today). No age expiry: this process is the only writer of the files
+// and every append sets dirty, so an untouched memo is exact.
+//
+// Stale-while-revalidate: a caller NEVER waits for a walk once a value exists.
+// A dirty memo is returned as it is, and one background walk is started when
+// the value is older than neReportsStaleGap. (2026-11-22: a peer posting one
+// report a minute kept the memo dirty, so every landing page read walked
+// 55 s in the request, the next one queued behind it on the memo mutex.)
+// The coverage keeper asks for the exact value (neScanReportFilesFresh), in
+// the background, at its own pace.
 func neScanReportFiles() map[string]interface{} {
 	neReportsScanMemo.Lock()
-	defer neReportsScanMemo.Unlock()
-	// fresh enough: same dir, < 60 s old, and nothing appended since — or
-	// appended but rescanned < 5 s ago (report bursts must not turn every
-	// ops/landing read into a full walk).
 	if m := &neReportsScanMemo; m.data != nil && m.dir == neDir {
-		age := time.Since(m.at)
-		sameDay := m.at.UTC().Format("2006-01-02") == time.Now().UTC().Format("2006-01-02")
-		if (!m.dirty && sameDay) || age < 5*time.Second {
-			return m.data
+		if !neReportsScanFreshLocked() && !m.walking && time.Since(m.at) >= neReportsStaleGap {
+			m.walking = true // claimed here, so a burst of readers starts one walk
+			go neReportsWalk(true)
 		}
+		data := m.data
+		m.Unlock()
+		return data
 	}
+	neReportsScanMemo.Unlock()
+	return neScanReportFilesFresh() // nothing to serve yet (start, tests)
+}
+
+// neReportsStaleGap — a dirty memo this old is rewalked in the background on
+// the next read. Twice neCoverageMinRefresh: while the landing page is watched
+// the keeper's own walk (every 5 min) keeps the memo younger than this, so a
+// reader starts a walk only when the keeper is in its idle hour (peers polling
+// revisit hints, the ops view).
+const neReportsStaleGap = 10 * time.Minute
+
+// neReportsWalkMu — one walk at a time; neReportsScanMemo's own mutex is only
+// ever held for a field read/write, never across the walk.
+var neReportsWalkMu sync.Mutex
+
+// neReportsScanFreshLocked — same dir, nothing appended since the walk began
+// and the same UTC day, or walked < 5 s ago (report bursts). Memo lock held.
+func neReportsScanFreshLocked() bool {
+	m := &neReportsScanMemo
+	if m.data == nil || m.dir != neDir {
+		return false
+	}
+	sameDay := m.at.UTC().Format("2006-01-02") == time.Now().UTC().Format("2006-01-02")
+	return (!m.dirty && sameDay) || time.Since(m.at) < 5*time.Second
+}
+
+// neScanReportFilesFresh — the exact value: walks (≤ 1 min) unless the memo is
+// fresh. Background callers only (coverage keeper), or when nothing is cached.
+func neScanReportFilesFresh() map[string]interface{} { return neReportsWalk(false) }
+
+func neReportsWalk(claimed bool) map[string]interface{} {
+	neReportsWalkMu.Lock()
+	defer neReportsWalkMu.Unlock()
+	neReportsScanMemo.Lock()
+	if neReportsScanFreshLocked() {
+		if claimed {
+			neReportsScanMemo.walking = false
+		}
+		data := neReportsScanMemo.data
+		neReportsScanMemo.Unlock()
+		return data
+	}
+	// dirty is cleared BEFORE the walk: an append during it leaves the memo
+	// dirty again (the walk may or may not have read that line).
+	neReportsScanMemo.walking, neReportsScanMemo.dirty = true, false
+	walkDir, walkAt := neDir, time.Now()
+	neReportsScanMemo.Unlock()
+	defer func() {
+		neReportsScanMemo.Lock()
+		neReportsScanMemo.walking = false
+		neReportsScanMemo.Unlock()
+	}()
 	type agg struct {
 		Reports, Compared, Changed, Unchanged, Baselines, ChangedSinceLast, ChangedSuspect int
 		KGs                                                                                map[string]bool
@@ -1064,7 +1122,9 @@ func neScanReportFiles() map[string]interface{} {
 		ks.RefBBox = daily.kgRefBBox[kg]
 		kgStats[kg] = ks
 	}
-	neReportsScanMemo.at, neReportsScanMemo.dir, neReportsScanMemo.dirty = time.Now(), neDir, false
+	neReportsScanMemo.Lock()
+	defer neReportsScanMemo.Unlock()
+	neReportsScanMemo.at, neReportsScanMemo.dir = walkAt, walkDir
 	neReportsScanMemo.kgs = kgStats
 	neReportsScanMemo.data = map[string]interface{}{"files": len(files), "lines": totalLines, "glyph": glyph, "observers": rows, "kgs_with_changes": changed, "daily": daily.rows(), "chunks_ever": func() map[string]int {
 		o, t, d, al := daily.everDepth()

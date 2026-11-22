@@ -773,7 +773,7 @@ func neCoverageStats(force bool) map[string]interface{} {
 		st := NEStoreStats()
 		chunks, _ := st["chunk_refs"].(int)
 		// Peer observations (reports on disk, memo 60 s) → weekly tracker.
-		rs := neScanReportFiles()
+		rs := neScanReportFilesFresh() // the keeper's background recompute: the exact value
 		daily, _ := rs["daily"].([]neDayStat)
 		ever, _ := rs["chunks_ever"].(map[string]int)
 		// Observed layer: "posted here" ≠ "served by the peer" (peer_ne_ready.go).
