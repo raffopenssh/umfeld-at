@@ -326,6 +326,9 @@ func neTreeHOwed(i, j int) bool {
 	if !neTreeHMode() {
 		return false
 	}
+	if time.Since(neFidxSrtmDown.get()) < 2*time.Minute {
+		return true // the peer is marked down: nothing would be fetched, a rebuild would repeat the bin on hand
+	}
 	k := neTreeHBlockKey(i, j)
 	neTreeHMu.Lock()
 	defer neTreeHMu.Unlock()

@@ -1189,7 +1189,7 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	}
 	if view == "flt" {
 		tw, ts, te, tn := neGlyphTileBox(L, i, j)
-		key += "/" + fltExpr.Canonical() + "/" + q.Get("th") + strconv.Itoa(fltHL) + "/" + neFidxBoxState(tw, ts, te, tn)
+		key += "/l1/" + fltExpr.Canonical() + "/" + q.Get("th") + strconv.Itoa(fltHL) + "/" + neFidxBoxState(tw, ts, te, tn) // l1: tiles painted over list-less bins are no longer kept (late=, 2026-11-22)
 		if fltSP > 0 {
 			key += "/v" + strconv.FormatFloat(fltSP, 'f', 2, 64)
 		}

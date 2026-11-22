@@ -860,6 +860,8 @@ func neFidxBuild(i, j int, st string) (*neFidxBin, error) {
 		}
 		bin.TH = th
 		bin.noTH = th == nil && !sr.thSet && len(sr.ids) > 0
+	} else {
+		bin.noTH = true // the peer did not answer: whatever it holds for this bin is owed, lists included
 	}
 	// Natura 2000: rasterised rings on a 25 m grid, one lookup per cell centre
 	neFidxN2K(bin, cells, ord, w, s, e, n)
