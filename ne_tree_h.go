@@ -331,6 +331,9 @@ func neTreeHOwed(i, j int) bool {
 	if time.Since(neFidxSrtmDown.get()) < 2*time.Minute {
 		return true // the peer is marked down: nothing would be fetched, a rebuild would repeat the bin on hand
 	}
+	if neFidxBuildingFor(i>>2, j>>2) > 0 {
+		return true // 503 + Retry-After: the peer is building the block, nothing is asked until then
+	}
 	k := neTreeHBlockKey(i, j)
 	neTreeHMu.Lock()
 	defer neTreeHMu.Unlock()
@@ -390,6 +393,7 @@ func neTreeHStart(bi, bj int) *neTreeHLate {
 		ok, noCol := neTreeHFetch(bi, bj)
 		<-neTreeHSem
 		d := time.Since(l.t0)
+		building := neFidxBuildingFor(bi, bj) // 503 + Retry-After: not a failure, and the wait is the peer's, not ours doubling
 		var bins [][2]int
 		neTreeHMu.Lock()
 		delete(neTreeHFly, k)
@@ -402,6 +406,8 @@ func neTreeHStart(bi, bj int) *neTreeHLate {
 					delete(neTreeHTried, b)
 				}
 			}
+		} else if building > 0 {
+			neTreeHBackM[k] = neTreeHBack{until: time.Now().Add(building), n: neTreeHBackM[k].n}
 		} else {
 			n := neTreeHBackM[k].n
 			back := neTreeHBackMin << uint(n)
@@ -416,6 +422,7 @@ func neTreeHStart(bi, bj int) *neTreeHLate {
 		switch {
 		case noCol:
 			neTreeHNoColumn(fmt.Sprintf("block %s", k))
+		case !ok && building > 0:
 		case !ok:
 			neTreeHFailed.Add(1)
 			log.Printf("tree_h block %s: no lists after %.1fs — parked, the prebuilt set serves", k, d.Seconds())

@@ -33,6 +33,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -103,13 +104,28 @@ func neFidxBlocksSave() {
 	}
 }
 
-// neFidxBlockGen — the manifest's gen of block (bi,bj); "" when unknown (no manifest, or a block the peer does not list).
-func neFidxBlockGen(bi, bj int) string {
+// neFidxBlockGenRaw — the manifest's gen of block (bi,bj); "" when unknown (no manifest, or a block the peer does not list).
+func neFidxBlockGenRaw(bi, bj int) string {
 	neFidxBlocksLoad()
 	neFidxBlocksMu.RLock()
 	g := neFidxBlocksGen[[2]int{bi, bj}]
 	neFidxBlocksMu.RUnlock()
 	return g
+}
+
+// neFidxBlockGen — the gen every state hash reads: the gen the peer SERVES for
+// the block. That is the manifest's, except while the block is being rebuilt
+// there (neFidxPend): then it is the gen of the previous-generation body we
+// were handed, so bins and tiles built from it are filed as what they are and
+// everything moves once, when the current body arrives.
+func neFidxBlockGen(bi, bj int) string {
+	neFidxPendMu.Lock()
+	p := neFidxPend[[2]int{bi, bj}]
+	neFidxPendMu.Unlock()
+	if p != nil {
+		return p.gen
+	}
+	return neFidxBlockGenRaw(bi, bj)
 }
 
 // neFidxBlockGenOfBin — the gen of the block holding bin (i,j).
@@ -144,7 +160,7 @@ func NEFidxBlocksStats() map[string]interface{} {
 	n, gen, at := len(neFidxBlocksGen), neFidxBlocksAll, neFidxBlocksAt
 	neFidxBlocksMu.RUnlock()
 	return map[string]interface{}{"blocks": n, "generation": gen, "polled_at": at, "polls": neFidxBlocksPolls.Load(),
-		"changed": neFidxBlocksChanged.Load(), "refresh_queued": neFidxBlocksRefresh.Load(), "refresh_done": neFidxBlocksRefDone.Load(), "refresh_pending": neFidxRefreshPending()}
+		"changed": neFidxBlocksChanged.Load(), "refresh_queued": neFidxBlocksRefresh.Load(), "refresh_done": neFidxBlocksRefDone.Load(), "refresh_pending": neFidxRefreshPending(), "rebuilding": neFidxPendStats()}
 }
 
 // neFidxBlocksLoop — poll the manifest; first poll right after start.
@@ -322,4 +338,214 @@ func neFidxRefreshPick() ([2]int, bool) {
 	delete(neFidxRefreshQ, pick)
 	neFidxRefreshBusy = true
 	return pick, true
+}
+
+// ── blocks the peer is rebuilding (docs/ne-filter.md §8.1b) ─────────────────
+//
+// The peer never builds inside a request. While a block is being rebuilt it
+// answers the previous generation at once (200, X-Cells-Stale: 1, X-Cells-Gen =
+// the body's gen, X-Cells-Gen-Current, Retry-After) — and its manifest already
+// lists the NEW gen. Filed under the manifest gen, such a body would pass for
+// current and never be replaced. So a stale answer makes the block *pending*:
+// its served gen stands in for the manifest's in every state hash
+// (neFidxBlockGen), the parsed body stays valid in the block LRU, and
+// neFidxPendLoop asks again when Retry-After has passed (If-None-Match: a 304
+// moves no bytes). The first current answer ends it: state moves, held bins
+// are queued for a refresh build.
+//
+// Nothing stored for a block and field set → 503 + Retry-After: the block is
+// *building* (neFidxBuilding); no request goes out for it until then, and the
+// peer as a whole is not blamed.
+
+type neFidxPendEnt struct {
+	gen   string // X-Cells-Gen of the stale body the states are keyed on
+	etag  string
+	tree  bool // gen/etag are the tree set's
+	until time.Time
+	since time.Time
+}
+
+const (
+	neFidxPendMax   = 4096
+	neFidxPendTick  = 30 * time.Second
+	neFidxPendBatch = 8 // rechecks per tick
+)
+
+var (
+	neFidxPendMu    sync.Mutex
+	neFidxPend      = map[[2]int]*neFidxPendEnt{}
+	neFidxBuilding  = map[[2]int]time.Time{} // block → no request before (503 + Retry-After)
+	neFidxPendSeen  atomic.Int64             // stale answers
+	neFidxPendDone  atomic.Int64             // pending blocks that became current
+	neFidxPend304   atomic.Int64
+	neFidxBuild503  atomic.Int64
+	neFidxPendCheck = func(bi, bj int, tree bool) { neFidxSrtmBlockGet(bi, bj, tree) }
+)
+
+// neFidxRetryAfter — the header in seconds, clamped to 30 s … 10 min; 2 min without one.
+func neFidxRetryAfter(h string) time.Duration {
+	n, err := strconv.Atoi(strings.TrimSpace(h))
+	if err != nil || n <= 0 {
+		return 2 * time.Minute
+	}
+	d := time.Duration(n) * time.Second
+	if d < 30*time.Second {
+		d = 30 * time.Second
+	}
+	if d > 10*time.Minute {
+		d = 10 * time.Minute
+	}
+	return d
+}
+
+// neFidxPendSet — a stale body of block (bi,bj) was parsed. The tree set's gen wins over the prebuilt set's
+// (should the two ever differ at the peer, the bins holding lists are the ones keyed exactly).
+func neFidxPendSet(bi, bj int, gen, etag string, tree bool, ra time.Duration) {
+	k := [2]int{bi, bj}
+	neFidxPendSeen.Add(1)
+	neFidxPendMu.Lock()
+	p := neFidxPend[k]
+	moved := false
+	switch {
+	case p == nil:
+		if len(neFidxPend) >= neFidxPendMax {
+			neFidxPend = map[[2]int]*neFidxPendEnt{}
+		}
+		neFidxPend[k] = &neFidxPendEnt{gen: gen, etag: etag, tree: tree, until: time.Now().Add(ra), since: time.Now()}
+		moved = true
+	case tree || !p.tree:
+		moved = p.gen != gen
+		p.gen, p.etag, p.tree, p.until = gen, etag, tree, time.Now().Add(ra)
+	default:
+		p.until = time.Now().Add(ra)
+	}
+	delete(neFidxBuilding, k)
+	neFidxPendMu.Unlock()
+	if moved {
+		neMVTStateMemoDrop()
+		log.Printf("fidx srtm block %d/%d: peer is rebuilding it, previous generation %s serves (manifest %s), next look in %s", bi, bj, gen, neFidxBlockGenRaw(bi, bj), ra)
+	}
+}
+
+// neFidxPendTouch — 304 on the stale body's ETag: still rebuilding.
+func neFidxPendTouch(bi, bj int, ra time.Duration) {
+	neFidxPend304.Add(1)
+	neFidxPendMu.Lock()
+	if p := neFidxPend[[2]int{bi, bj}]; p != nil {
+		p.until = time.Now().Add(ra)
+	}
+	neFidxPendMu.Unlock()
+}
+
+// neFidxPendClear — a current body of block (bi,bj) was parsed: the state moves to the manifest gen, held bins rebuild.
+func neFidxPendClear(bi, bj int) {
+	k := [2]int{bi, bj}
+	neFidxPendMu.Lock()
+	p := neFidxPend[k]
+	delete(neFidxPend, k)
+	delete(neFidxBuilding, k)
+	neFidxPendMu.Unlock()
+	if p == nil {
+		return
+	}
+	neFidxPendDone.Add(1)
+	neMVTStateMemoDrop()
+	held, q := neFidxHeldBins(), 0
+	for a := 0; a < 4; a++ {
+		for c := 0; c < 4; c++ {
+			if i, j := 4*bi+a, 4*bj+c; held[[2]int{i, j}] {
+				neFidxRefreshQueue(i, j)
+				q++
+			}
+		}
+	}
+	neFidxBlocksRefresh.Add(int64(q))
+	log.Printf("fidx srtm block %d/%d: current again after %s on the previous generation → %d held bin(s) queued for a refresh build", bi, bj, time.Since(p.since).Round(time.Second), q)
+}
+
+// neFidxPendIs — is block (bi,bj) served from its previous generation right now?
+func neFidxPendIs(bi, bj int) bool {
+	neFidxPendMu.Lock()
+	p := neFidxPend[[2]int{bi, bj}]
+	neFidxPendMu.Unlock()
+	return p != nil
+}
+
+// neFidxPendETag — the If-None-Match of a recheck (only for the field set the ETag belongs to).
+func neFidxPendETag(bi, bj int, tree bool) string {
+	neFidxPendMu.Lock()
+	defer neFidxPendMu.Unlock()
+	if p := neFidxPend[[2]int{bi, bj}]; p != nil && p.tree == tree {
+		return p.etag
+	}
+	return ""
+}
+
+// neFidxBuildingSet — 503 + Retry-After: nothing stored at the peer for this block and field set.
+func neFidxBuildingSet(bi, bj int, ra time.Duration) {
+	neFidxBuild503.Add(1)
+	neFidxPendMu.Lock()
+	if len(neFidxBuilding) >= neFidxPendMax {
+		neFidxBuilding = map[[2]int]time.Time{}
+	}
+	neFidxBuilding[[2]int{bi, bj}] = time.Now().Add(ra)
+	neFidxPendMu.Unlock()
+}
+
+// neFidxBuildingFor — how long block (bi,bj) is still not to be asked (0 = ask).
+func neFidxBuildingFor(bi, bj int) time.Duration {
+	neFidxPendMu.Lock()
+	defer neFidxPendMu.Unlock()
+	t, ok := neFidxBuilding[[2]int{bi, bj}]
+	if !ok {
+		return 0
+	}
+	if d := time.Until(t); d > 0 {
+		return d
+	}
+	delete(neFidxBuilding, [2]int{bi, bj})
+	return 0
+}
+
+// neFidxPendDue — up to max pending blocks whose Retry-After has passed, longest overdue first; each is pushed
+// one tick ahead so a slow recheck is not started twice.
+func neFidxPendDue(max int) [][2]int {
+	now := time.Now()
+	neFidxPendMu.Lock()
+	defer neFidxPendMu.Unlock()
+	var due [][2]int
+	for k, p := range neFidxPend {
+		if !p.until.After(now) {
+			due = append(due, k)
+		}
+	}
+	sort.Slice(due, func(a, b int) bool { return neFidxPend[due[a]].until.Before(neFidxPend[due[b]].until) })
+	if len(due) > max {
+		due = due[:max]
+	}
+	for _, k := range due {
+		neFidxPend[k].until = now.Add(2 * neFidxPendTick)
+	}
+	return due
+}
+
+// neFidxPendLoop — ask again for the blocks we hold in their previous generation (startBackground).
+func neFidxPendLoop() {
+	for {
+		time.Sleep(neFidxPendTick)
+		if time.Since(neFidxSrtmDown.get()) < 2*time.Minute {
+			continue
+		}
+		for _, k := range neFidxPendDue(neFidxPendBatch) {
+			neFidxPendCheck(k[0], k[1], neTreeHMode())
+		}
+	}
+}
+
+func neFidxPendStats() map[string]interface{} {
+	neFidxPendMu.Lock()
+	n, b := len(neFidxPend), len(neFidxBuilding)
+	neFidxPendMu.Unlock()
+	return map[string]interface{}{"pending": n, "building": b, "cap": neFidxPendMax, "stale_answers": neFidxPendSeen.Load(),
+		"not_modified": neFidxPend304.Load(), "became_current": neFidxPendDone.Load(), "http_503": neFidxBuild503.Load()}
 }

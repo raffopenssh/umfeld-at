@@ -478,6 +478,22 @@ the `?dbg` WHERE panel prints `gen=` (cached body) next to `manifest_gen=`. MVT 
 the manifest's `generation` too (`neMVTStateEpochs`). A peer without the manifest (404) keeps the
 epoch + 15 min TTL rule.
 
+**Blocks the peer is rebuilding (2026-11-22, `neFidxPend` in `ne_glyph_fidx_blocks.go`).** The peer
+never builds inside a request. While it rebuilds a block it answers the *previous* generation at once
+(200, `X-Cells-Stale: 1`, `X-Cells-Gen` = the body's gen, `X-Cells-Gen-Current`, `Retry-After: 120`)
+— while its manifest already lists the *new* gen (`current: 0`), and the manifest ETag does not move
+when a block becomes current. Filed under the manifest gen such a body would pass for current for
+good. So a stale answer makes the block **pending**: the served gen stands in for the manifest's in
+every state hash (`neFidxBlockGen`; `neFidxBlockGenRaw` = the manifest's), bins and veil tiles built
+before the peer's rebuild keep hitting, the parsed body stays valid in the block LRU, and
+`neFidxPendLoop` (30 s tick, ≤ 8 blocks, only ones past their `Retry-After`) asks again with
+`If-None-Match` — a 304 moves no bytes. The first current answer ends it: the state moves to the
+manifest gen once and the held bins of the block are queued for a refresh build. Pending is memory
+only (a restart rebuilds a touched bin once). `503` + `Retry-After` (nothing stored for the block and
+field set) parks that block for the given time — no request, no doubling, and neither "peer down"
+nor a failed tree-set fetch is booked. `/debug/inflight` → `ne_fidx.blocks.rebuilding`
+(`pending`, `building`, `stale_answers`, `not_modified`, `became_current`, `http_503`).
+
 What it costs them, worst case (every bin of Austria asked once): 12 k bins × one request × ~20–60 KB
 ≈ 0.3–0.7 GB egress **per epoch**, stored per release like their H3 tiles (obs peer: ≈ 8 B/cell × 273 M
 cells ≈ 2 GB raw, ~0.5 GB zstd on disk — or zero if computed from the H3B products they already keep,

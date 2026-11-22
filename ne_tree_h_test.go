@@ -233,6 +233,7 @@ func TestNETreeHGateAsync(t *testing.T) {
 	}()
 	neTreeHPinned, neTreeHHedge = "1", 40*time.Millisecond
 	neTreeHLost.Store(0)
+	neFidxSrtmDown.set(time.Time{}) // an earlier test may have left the peer marked down: everything is owed then
 	var delay atomic.Int64
 	var okV atomic.Bool
 	okV.Store(true)

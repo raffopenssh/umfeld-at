@@ -1416,6 +1416,7 @@ type neFidxSrtm struct {
 	ids   []uint64
 	cols  map[string][]byte
 	th    *neTreeH // tree_h_n + tree_h when asked for and served
+	stale bool     // the body is the block's previous generation (X-Cells-Stale; ne_glyph_fidx_blocks.go, neFidxPend)
 	thSet bool     // the body answered the tree field set (lists present, or no apex in the bin): nothing is owed
 }
 
@@ -1440,6 +1441,9 @@ func neFidxSrtmFetch(w, s, e, n float64) *neFidxSrtm {
 	}
 	i, j := int(math.Floor(w/neFidxBinDeg+0.5)), int(math.Floor(s/neFidxBinDeg+0.5))
 	key := fmt.Sprintf("%d/%d", i, j)
+	if neFidxBuildingFor(i>>2, j>>2) > 0 {
+		return nil // 503 + Retry-After: the peer has nothing stored for the block yet — no request until then
+	}
 	wantTH := neTreeHMode()
 	if v, ok := neFidxSrtmBlk.get(key); ok && (!wantTH || v.thSet || len(v.ids) == 0 || neTreeHOwed(i, j)) {
 		neFidxSrtmBlkHits.Add(1)
@@ -1449,6 +1453,9 @@ func neFidxSrtmFetch(w, s, e, n float64) *neFidxSrtm {
 		if v, ok := neFidxSrtmBlk.get(key); ok {
 			return v
 		}
+	}
+	if neFidxBuildingFor(i>>2, j>>2) > 0 {
+		return nil
 	}
 	treeSet := neTreeHMode()
 	url := fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&fields=%s", peers().ObsAPI+"/api/v1/cells", w, s, e, n, neTreeHFields())
@@ -1551,7 +1558,10 @@ func (l *neFidxSrtmBlkLRU) staleGen(k string, v *neFidxSrtm) bool {
 	if _, err := fmt.Sscanf(k, "%d/%d", &i, &j); err != nil {
 		return false
 	}
-	g := neFidxBlockGenOfBin(i, j)
+	if v.stale {
+		return !neFidxPendIs(i>>2, j>>2) // a previous-generation body is good exactly as long as the peer is rebuilding the block
+	}
+	g := neFidxBlockGenRaw(i>>2, j>>2)
 	return g != "" && g != v.gen
 }
 
@@ -1673,7 +1683,7 @@ func neFidxSrtmBlockGet(bi, bj int, tree bool) (ok, noCol bool) {
 		neFidxSrtmPutMu.Lock()
 		defer neFidxSrtmPutMu.Unlock()
 		if !tree {
-			if old, ok := neFidxSrtmBlk.get(k); ok && old.thSet && old.gen == v.gen {
+			if old, ok := neFidxSrtmBlk.get(k); ok && old.thSet && (old.gen == v.gen || v.stale) {
 				return // the tree set won the race after all: never put the list-less twin over it
 			}
 		}
@@ -1686,6 +1696,9 @@ func neFidxSrtmBlockGet(bi, bj int, tree bool) (ok, noCol bool) {
 		}
 		req, _ := http.NewRequest("GET", url, nil)
 		req.Header.Set("User-Agent", ua+" (+"+publicURL()+")")
+		if tag := neFidxPendETag(bi, bj, tree); tag != "" && attempt == 0 {
+			req.Header.Set("If-None-Match", tag) // a recheck of a block held in its previous generation
+		}
 		resp, err := cl.Do(req)
 		if err != nil {
 			down(err.Error())
@@ -1693,7 +1706,9 @@ func neFidxSrtmBlockGet(bi, bj int, tree bool) (ok, noCol bool) {
 		}
 		neFidxSrtmBlkFetches.Add(1)
 		ep, gen := resp.Header.Get("X-Cells-Epoch"), resp.Header.Get("X-Cells-Gen")
+		stale, ra := resp.Header.Get("X-Cells-Stale") == "1", neFidxRetryAfter(resp.Header.Get("Retry-After"))
 		empty := func() (bool, bool) {
+			neFidxPendClear(bi, bj)
 			neFidxSrtmEpochStore(ep)
 			for a := 0; a < 4; a++ {
 				for b := 0; b < 4; b++ {
@@ -1713,6 +1728,16 @@ func neFidxSrtmBlockGet(bi, bj int, tree bool) (ok, noCol bool) {
 				return false, false
 			}
 			return empty()
+		case 304:
+			resp.Body.Close()
+			neFidxPendTouch(bi, bj, ra) // still the previous generation: the bins on hand stand
+			return true, false
+		case 503:
+			// nothing stored for this block and field set yet; the request queued it at the peer
+			resp.Body.Close()
+			why("503 building, again in " + ra.String())
+			neFidxBuildingSet(bi, bj, ra)
+			return false, false
 		case 400, 405:
 			resp.Body.Close()
 			noBlock("HTTP " + strconv.Itoa(resp.StatusCode))
@@ -1750,21 +1775,27 @@ func neFidxSrtmBlockGet(bi, bj int, tree bool) (ok, noCol bool) {
 		seen := map[string]bool{}
 		for k, v := range bins {
 			seen[k] = true
-			v.gen = gen
+			v.gen, v.stale = gen, stale
 			put(k, v)
 		}
 		// bins the header does not list hold no cells
 		for a := 0; a < 4; a++ {
 			for b := 0; b < 4; b++ {
 				if k := fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+b); !seen[k] {
-					put(k, &neFidxSrtm{epoch: ep, gen: gen, cols: map[string][]byte{}})
+					put(k, &neFidxSrtm{epoch: ep, gen: gen, stale: stale, cols: map[string][]byte{}})
 				}
 			}
 		}
-		neFidxSrtmEpochStore(ep)
 		what := ""
 		if tree {
 			what = " +tree_h"
+		}
+		neFidxSrtmEpochStore(ep)
+		if stale {
+			neFidxPendSet(bi, bj, gen, resp.Header.Get("ETag"), tree, ra)
+			what += " (previous generation)"
+		} else {
+			neFidxPendClear(bi, bj)
 		}
 		log.Printf("fidx srtm block %d/%d%s: v%d %d bins %d KB %.0f ms gen=%s", bi, bj, what, ver, len(bins), len(body)>>10, float64(time.Since(t0).Milliseconds()), gen)
 		return true, false
