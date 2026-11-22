@@ -513,6 +513,7 @@ func neFidxGet(i, j int) ([]byte, string, error) {
 		// built from the prebuilt set while the lists are owed: filed under the list-less state, so the `;th`
 		// key stays a miss and the bin is rebuilt when the block's lists land (ne_tree_h.go)
 		st2 = neFidxStateTHx(i, j, "")
+		neTreeHTriedNote(i, j)
 	}
 	if st2 != st {
 		bin.Hdr.State = st2
@@ -1649,12 +1650,20 @@ func neFidxSrtmBlockGet(bi, bj int, tree bool) (ok, noCol bool) {
 		flds, cl, ua = neFidxSrtmFlds+","+neTreeHField, neTreeHClient, "umfeld-at/fidx-trees"
 	}
 	url := fmt.Sprintf("%s?bbox=%.3f,%.3f,%.3f,%.3f&format=bin&block=1&fields=%s", peers().ObsAPI+"/api/v1/cells", w, s, w+0.1, s+0.1, flds)
-	down := func() {
+	t0 := time.Now()
+	why := func(what string) {
+		if tree {
+			log.Printf("fidx srtm block %d/%d +tree_h: %s after %.1fs", bi, bj, what, time.Since(t0).Seconds())
+		}
+	}
+	down := func(what string) {
+		why(what)
 		if !tree {
 			neFidxSrtmDown.set(time.Now())
 		}
 	}
-	noBlock := func() {
+	noBlock := func(what string) {
+		why(what)
 		if !tree {
 			neFidxSrtmNoBlock.set(time.Now())
 		}
@@ -1670,7 +1679,6 @@ func neFidxSrtmBlockGet(bi, bj int, tree bool) (ok, noCol bool) {
 		}
 		neFidxSrtmBlk.put(k, v)
 	}
-	t0 := time.Now()
 	for attempt := 0; attempt < 2; attempt++ {
 		if attempt == 1 {
 			url += "&ids=1" // the v2 body failed its id checksum → the peer's v1 frames with ids
@@ -1680,7 +1688,7 @@ func neFidxSrtmBlockGet(bi, bj int, tree bool) (ok, noCol bool) {
 		req.Header.Set("User-Agent", ua+" (+"+publicURL()+")")
 		resp, err := cl.Do(req)
 		if err != nil {
-			down()
+			down(err.Error())
 			return false, false
 		}
 		neFidxSrtmBlkFetches.Add(1)
@@ -1701,23 +1709,27 @@ func neFidxSrtmBlockGet(bi, bj int, tree bool) (ok, noCol bool) {
 			body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 			resp.Body.Close()
 			if strings.Contains(strings.ToLower(string(body)), "block") {
-				noBlock()
+				noBlock("404 no block mode")
 				return false, false
 			}
 			return empty()
 		case 400, 405:
 			resp.Body.Close()
-			noBlock()
+			noBlock("HTTP " + strconv.Itoa(resp.StatusCode))
 			return false, false
 		default:
 			resp.Body.Close()
-			down()
+			down("HTTP " + strconv.Itoa(resp.StatusCode))
 			return false, false
 		}
 		body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
 		resp.Body.Close()
-		if err != nil || len(body) < 8 || string(body[:4]) != "NEXB" {
-			noBlock()
+		if err != nil {
+			down("body: " + err.Error()) // a body cut by the deadline is a slow peer, not a peer without block mode
+			return false, false
+		}
+		if len(body) < 8 || string(body[:4]) != "NEXB" {
+			noBlock("not a NEXB body")
 			return false, false
 		}
 		bins, ver, ok := neFidxBlockParse(body, ep, bi, bj)

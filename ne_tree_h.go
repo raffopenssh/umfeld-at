@@ -200,6 +200,7 @@ const (
 	neTreeHOffFor   = time.Hour         // the peer answered without the column: off, probe again later
 	neTreeHProbeIv  = 15 * time.Minute
 	neTreeHMapMax   = 4096
+	neTreeHRetry    = 90 * time.Second // a bin built without lists is not rebuilt sooner, unless its block lands
 )
 
 type neTreeHLate struct {
@@ -229,6 +230,7 @@ var (
 	neTreeHFly    = map[string]*neTreeHLate{} // block "bi/bj" → detached tree-set fetch (≤ neTreeHLateMax)
 	neTreeHBackM  = map[string]neTreeHBack{}  // block → lists owed until (≤ neTreeHMapMax)
 	neTreeHWant   = map[[2]int]struct{}{}     // bins served without lists while owed: rebuilt when the block lands (≤ neTreeHMapMax)
+	neTreeHTried  = map[[2]int]time.Time{}    // bin → last build that came out without lists (≤ neTreeHMapMax)
 	neTreeHSem    = make(chan struct{}, neTreeHLateMax)
 	neTreeHLost   atomic.Int64 // consecutive races the tree set lost against the hedge
 	neTreeHWon    atomic.Int64 // tree set answered inside the hedge
@@ -335,7 +337,20 @@ func neTreeHOwed(i, j int) bool {
 	if neTreeHFly[k] != nil {
 		return true
 	}
+	if time.Since(neTreeHTried[[2]int{i, j}]) < neTreeHRetry {
+		return true // this bin was just built without lists (whatever the reason): not again on every poll
+	}
 	return time.Until(neTreeHBackM[k].until) > 0
+}
+
+// neTreeHTriedNote — bin (i,j) was built and came out without lists.
+func neTreeHTriedNote(i, j int) {
+	neTreeHMu.Lock()
+	if len(neTreeHTried) >= neTreeHMapMax {
+		neTreeHTried = map[[2]int]time.Time{}
+	}
+	neTreeHTried[[2]int{i, j}] = time.Now()
+	neTreeHMu.Unlock()
 }
 
 // neTreeHWantNote — bin (i,j) was served without lists: rebuild it when its block lands.
@@ -384,6 +399,7 @@ func neTreeHStart(bi, bj int) *neTreeHLate {
 				if b[0]>>2 == bi && b[1]>>2 == bj {
 					bins = append(bins, b)
 					delete(neTreeHWant, b)
+					delete(neTreeHTried, b)
 				}
 			}
 		} else {
