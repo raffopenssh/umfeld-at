@@ -358,6 +358,19 @@ func neMVTCellAttrs(f *mvtFeature, b *neFidxBin, k int) {
 			continue
 		}
 		v := neFiltRaw(fd, c, k)
+		if fd.ID == "tn" && b.TH != nil { // the apex list: the exact count (the column is a u8) and the mean height
+			if l := b.TH.H[b.TH.Off[k]:b.TH.Off[k+1]]; len(l) > 0 || v != fd.Nodata {
+				f.i64("tn", int64(len(l)))
+				if len(l) > 0 {
+					sum := 0
+					for _, h := range l {
+						sum += int(h)
+					}
+					f.num("ht_mean", neRound(float64(sum)*0.5/float64(len(l)), 1))
+				}
+				continue
+			}
+		}
 		if v == fd.Nodata {
 			continue
 		}
@@ -447,6 +460,19 @@ type neMVTAgg struct {
 	loss        int
 	ver         [8]int
 	bin         *neFidxBin
+	tr          neTreeAgg // ne_tree_bands.go
+	thLo, thHi  int       // the filter's apex height window (thRng), raw 0.5 m
+	thRng       bool
+}
+
+// neMVTAggNew — an empty aggregate; under a filter with a height term its tree
+// figures count the apices inside the term (like the unit stats), not under the veil.
+func neMVTAggNew(expr *neFiltExpr) *neMVTAgg {
+	a := &neMVTAgg{}
+	if expr != nil && !expr.empty() && !expr.Veil {
+		a.thLo, a.thHi, a.thRng = neFiltApexRange(expr)
+	}
+	return a
 }
 
 func neMVTAggAdd(a *neMVTAgg, b *neFidxBin, k int) {
@@ -535,6 +561,13 @@ func neMVTAggAdd(a *neMVTAgg, b *neFidxBin, k int) {
 	if v := get("ver"); v >= 0 && v < 7 {
 		a.ver[v]++
 	}
+	if b.TH != nil {
+		a.tr.addList(b.TH, k, a.thLo, a.thHi, a.thRng)
+	} else if c := b.Cols["tn"]; c != nil && c[k] != 255 {
+		a.tr.addCount(int(c[k]))
+	} else if a.tr.cells > 0 || c != nil {
+		a.tr.addCount(0)
+	}
 }
 
 func neMVTMode(c []int, n int) (int, int) {
@@ -602,12 +635,20 @@ func neMVTAggAttrs(f *mvtFeature, a *neMVTAgg, areaHa float64) {
 	if a.hb > 0 {
 		f.num("hb", float64(a.hb)*0.5)
 	}
+	if a.tr.top > a.ht && !a.thRng { // the national table's tallest apex (z 9–11)
+		a.ht = a.tr.top
+	}
 	if a.ht > 0 {
 		f.num("ht", float64(a.ht)*0.5)
 	}
 	if a.h > 0 {
 		f.num("h", float64(a.h)*0.5)
 	}
+	ha := areaHa
+	if a.nAll > 0 {
+		ha = areaHa * float64(a.n) / float64(a.nAll)
+	}
+	a.tr.mvt(f, ha, a.thRng)
 	f.i64("bn", int64(a.bn))
 	if a.bcovN > 0 {
 		f.num("bcov", neRound(a.bcov/a.bcovN, 1))
@@ -708,13 +749,16 @@ func neMVTRenderNat(nat *neNat, z, x, y int, clip *[4]float64, expr *neFiltExpr)
 		return nil
 	}
 	layer := newMVTLayer(neMVTLayerName)
+	nt := neNatTreesGet() // trees per hexagon from the observed-layer peer's national table (nil-safe)
 	for _, q := range l.inBox(neMVTKeepBox(w, s, e, n, res)) {
 		p := l.IDs[q]
 		f := layer.feature(p)
 		f.str("h3", neCellHex(p))
 		f.i64("res", int64(res))
 		area, _ := h3.CellAreaM2(h3.Cell(p))
-		neMVTAggAttrs(f, l.Rows[q].agg(), area/1e4)
+		a := l.Rows[q].agg()
+		nt.fill(&a.tr, res, p)
+		neMVTAggAttrs(f, a, area/1e4)
 		bd, err := h3.Cell(p).Boundary()
 		if err != nil || len(bd) < 3 {
 			continue
@@ -763,7 +807,7 @@ func neMVTRenderSample(sp *neSamp, z, x, y int, w, s, e, n float64, res int, exp
 		}
 		a := aggs[p]
 		if a == nil {
-			a = &neMVTAgg{}
+			a = neMVTAggNew(expr)
 			aggs[p] = a
 		}
 		a.nAll += neSampK
@@ -788,6 +832,7 @@ func neMVTRenderSample(sp *neSamp, z, x, y int, w, s, e, n float64, res int, exp
 			a.o[i] *= neSampK
 		}
 		a.both, a.diff, a.bn, a.loss = a.both*neSampK, a.diff*neSampK, a.bn*neSampK, a.loss*neSampK
+		a.tr.scale(neSampK)
 		for i := range a.chg {
 			a.chg[i] *= neSampK
 		}
@@ -937,7 +982,7 @@ func neMVTRenderFromBlobs(z, x, y int, bins [][2]int, blobs [][]byte, states []s
 				}
 				a := aggs[p]
 				if a == nil {
-					a = &neMVTAgg{}
+					a = neMVTAggNew(expr)
 					aggs[p] = a
 				}
 				if filt {
@@ -990,7 +1035,7 @@ func neMVTTile(z, x, y int, inline int, clip *[4]float64, expr *neFiltExpr) (gz 
 	}
 	if neMVTZoomRes(z) <= neNatRes {
 		if nat := neNatGet(); nat != nil { // low zooms: the national table, never a bin
-			key = fmt.Sprintf("nat2/%s/%d/%d/%d", nat.State, z, x, y) // nat2: seam-free (neMVTKeepBox)
+			key = fmt.Sprintf("nat2/%s%s/%d/%d/%d", nat.State, neNatTreesGet().state(), z, x, y) // nat2: seam-free (neMVTKeepBox)
 			if clip != nil {
 				key += fmt.Sprintf("/clip%.5f,%.5f,%.5f,%.5f", clip[0], clip[1], clip[2], clip[3])
 			}
@@ -1273,6 +1318,7 @@ func handleNEMVTJSON(w http.ResponseWriter, r *http.Request) {
 		}
 		fields[f.ID] = t
 	}
+	neMVTTreeFields(fields)
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	// a caller's key travels into the tile URL (like mvt.qgs), so a TileJSON
@@ -1318,6 +1364,7 @@ func neMVTVectorLayersMeta(box [4]float64, minZ, maxZ int, expr *neFiltExpr) []b
 		}
 		fields[f.ID] = t
 	}
+	neMVTTreeFields(fields)
 	keys := make([]string, 0, len(fields))
 	for k := range fields {
 		keys = append(keys, k)

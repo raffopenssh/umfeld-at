@@ -193,7 +193,8 @@ func neCellsJSONRender(box [4]float64, res int, bins [][2]int, blobs [][]byte, s
 				}
 				a := aggs[p]
 				if a == nil {
-					a = &neMVTAgg{}
+					a = neMVTAggNew(expr)
+					a.thRng = a.thRng && !veil
 					aggs[p] = a
 				}
 				if filt {

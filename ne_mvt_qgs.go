@@ -133,19 +133,24 @@ func neQGSRules(v neQGSView, pic bool) []neQGSRule {
 		add(v.obs, "observed · "+neQGSGroupLabel[i]+" ("+g+")"+far, `"o"='`+g+`'`, neMVTMinZ, fillMax, neQGSFill("0", neQGSRGB(i), neQGSRGB(i), "0.15"))
 	}
 	add(v.obs, "not observed"+far, `"o" IS NULL`, neMVTMinZ, fillMax, neQGSFill("0", "214,210,202,200", "214,210,202,200", "0.15"))
-	// trees at the coarse levels: the wooded hexagons tinted by their tallest tree, the page's
-	// ramp and bands (neGlyphTreeRGB); from z 14 on the crowns themselves take over (layer "trees")
-	for b, lo := range []int{3, 5, 15, 25, 35} {
-		c := neGlyphTreeRGB[b]
+	// trees at the coarse levels, like the page's stand sheet (ne_glyph_tro.go): the hexagons that
+	// hold a stand (≥ neQGSTreeMinHa tree tops per ha — below that the land use shows through), tinted
+	// along the crowns' ramp by their MEAN tree height (the page's tone: the band of mean + 3.5 m).
+	// Every zoom carries tn_ha / ht_mean (ne_tree_bands.go); from z 14 on the crowns themselves take
+	// over (layer "trees")
+	for b, lo := range []int{0, 12, 22, 32} {
+		c := neGlyphTreeRGB[b+1]
 		col := fmt.Sprintf("%d,%d,%d,235", c[0], c[1], c[2])
-		name, expr := "", ""
-		if b == 4 {
-			name, expr = "trees · tallest ≥ 35 m", `"ht" >= 35`
-		} else {
-			hi := []int{5, 15, 25, 35}[b]
-			name, expr = fmt.Sprintf("trees · tallest %d–%d m", lo, hi), fmt.Sprintf(`"ht" >= %d AND "ht" < %d`, lo, hi)
+		name, expr := "", fmt.Sprintf(`"tn_ha" >= %d AND "ht_mean" >= %d`, neQGSTreeMinHa, lo)
+		switch b {
+		case 0:
+			name, expr = "trees · mean height < 12 m", fmt.Sprintf(`"tn_ha" >= %d AND "ht_mean" < 12`, neQGSTreeMinHa)
+		case 3:
+			name = "trees · mean height ≥ 32 m"
+		default:
+			name, expr = fmt.Sprintf("trees · mean height %d–%d m", lo, lo+10), expr+fmt.Sprintf(` AND "ht_mean" < %d`, lo+10)
 		}
-		add(v.trees, name+" (hexagons, far zooms)", expr, 12, 13, neQGSFill("0", col, col, "0.15"))
+		add(v.trees, name+" (hexagons, far zooms)", expr, neMVTMinZ, 13, neQGSFill("0", col, col, "0.15"))
 	}
 	add(v.change, "change · confirmed", `"chg"='conf'`, 13, neMVTMaxZ, neQGSFill("0", "194,65,12,70", "194,65,12,255", "0.5"))
 	add(v.change, "change · candidate", `"chg"='cand'`, 13, neMVTMaxZ, neQGSFill("0", "0,0,0,0", "194,65,12,150", "0.3"))
@@ -205,6 +210,9 @@ func neQGSOGRStyles(v neQGSView, maxZ int) string {
 	r.WriteString(`</rules><symbols>` + sy.String() + `</symbols></renderer-v2>`)
 	return r.String()
 }
+
+// neQGSTreeMinHa — tree tops per ha from which a far-zoom hexagon is tinted as a stand.
+const neQGSTreeMinHa = 20
 
 // neQGSTreeBands — the page's height bands (AP_COL): < 5 · 5–15 · 15–25 · 25–35 · ≥ 35 m.
 var neQGSTreeBands = [6]float64{3, 5, 15, 25, 35, 80}
@@ -436,7 +444,7 @@ func neQGSHexStyles(v neQGSView, res int) string {
 	r.WriteString(`<renderer-v2 type="RuleRenderer" symbollevels="0" forceraster="0" enableorderby="0" referencescale="-1"><rules key="{00000000-0000-4000-8000-0000000d0000}">`)
 	k := 0
 	for _, x := range neQGSRules(v, false) {
-		if x.minz > z || x.maxz < z || strings.HasPrefix(x.name, "trees · tallest") {
+		if x.minz > z || x.maxz < z || strings.HasPrefix(x.name, "trees · mean height") {
 			continue
 		}
 		chk := ""
@@ -450,6 +458,21 @@ func neQGSHexStyles(v neQGSView, res int) string {
 	}
 	r.WriteString(`</rules><symbols>` + sy.String() + `</symbols></renderer-v2>`)
 	return r.String()
+}
+
+// neQGSTreeAliases — the tree figures of an aggregate hexagon (ne_tree_bands.go).
+func neQGSTreeAliases(al func(f, n string)) {
+	al("tn", "tn · trees (LiDAR tree tops ≥ 3 m)")
+	al("tn_ha", "trees per ha")
+	al("ht", "ht · tallest tree (m)")
+	al("ht_mean", "mean tree height (m)")
+	for b, e := range neTreeBandEdgesM {
+		n := fmt.Sprintf("trees %d m and taller", e)
+		if b+1 < neTreeBands {
+			n = fmt.Sprintf("trees %d–%d m", e, neTreeBandEdgesM[b+1])
+		}
+		al("tn_"+strconv.Itoa(e), n)
+	}
 }
 
 // neQGSVeilStyle — the page's veil: its paper colour at 82 % over what the filter leaves out.
@@ -482,6 +505,7 @@ func neQGSHexExtras(res int) string {
 				al(fd.ID+"_min", fd.ID+"_min · "+fd.Label+", lower bound of the band")
 			}
 		}
+		al("ht_mean", "ht_mean · mean height of the cell's trees (m)")
 		al("cont_open", "patch runs on beyond what was counted (cont is a lower bound)")
 		al("area_m2", "cell area (m²)")
 		al("lon", "centre longitude")
@@ -493,12 +517,13 @@ func neQGSHexExtras(res int) string {
 			{"diff_pct", "declared ≠ observed (% of the cells)"}, {"chg_conf", "cells with a confirmed change"}, {"chg_cand", "cells with a candidate change"}, {"chg_pct", "changed cells (%)"}, {"sub_pct", "cells under a subsidy claim (%)"}} {
 			al(a[0], a[1])
 		}
+		neQGSTreeAliases(al)
 	}
 	al("srtm_epoch", "observed layer: epoch")
 	al("sub_year", "subsidy claims: year")
 	al("sub_release", "subsidy claims: release")
 	b.WriteString(`</aliases><previewExpression>"h3"</previewExpression>`)
-	tip := `<b>[% coalesce("d",'no declared use') %]</b> declared · <b>[% coalesce("o",'not observed') %]</b> observed[% if("chg" in ('conf','cand'), '<br/>change: ' || "chg", '') %]<br/><small>[% "h3" %]</small>`
+	tip := `<b>[% coalesce("d",'no declared use') %]</b> declared · <b>[% coalesce("o",'not observed') %]</b> observed[% if("chg" in ('conf','cand'), '<br/>change: ' || "chg", '') %][% if("tn" > 0, '<br/>' || "tn" || ' trees' || coalesce(' · mean ' || "ht_mean" || ' m', '') || coalesce(' · tallest ' || "ht" || ' m', ''), '') %]<br/><small>[% "h3" %]</small>`
 	b.WriteString(`<mapTip enabled="1">` + html.EscapeString(tip) + `</mapTip>`)
 	return b.String()
 }

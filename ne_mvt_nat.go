@@ -313,7 +313,7 @@ func neNatBuild() *neNat {
 	neNatMu.Lock()
 	neNatCur = n
 	neNatMu.Unlock()
-	neMVTLRU.dropPrefix("nat/")
+	neMVTLRU.dropPrefix("nat2/")
 	log.Printf("🗺️  national cell table built: %d KGs, %d cells, %d res-9 · %d res-8 · %d res-7 parents, %.1f s", held, cells, len(n.Lv[0].IDs), len(n.Lv[1].IDs), len(n.Lv[2].IDs), float64(n.ms)/1000)
 	return n
 }
@@ -540,7 +540,7 @@ func NENatStats() map[string]interface{} {
 // neNatTileState — what a tile from the table is keyed on ("" = no table yet).
 func neNatTileState() string {
 	if n := neNatGet(); n != nil {
-		return n.State
+		return n.State + neNatTreesGet().state()
 	}
 	return ""
 }

@@ -629,6 +629,8 @@ type neStatsAcc struct {
 	scale                                           int      // 1, or neSampK when ids are sampled cells
 	trees, treesX                                   int      // tree apices of the counted cells (inside the filter's height term when the cell has an apex list) · cells counted from a list
 	treesRng                                        bool     // the filter has a height term: trees is only right when every counted cell had a list
+	tr                                              neTreeAgg // heights of the same apices: mean, tallest, 5 m bands (ne_tree_bands.go)
+	approx                                          bool      // counted from the national 1-in-49 sample
 }
 
 func (a *neStatsAcc) mean(v [2]float64, dec int) interface{} {
@@ -776,6 +778,11 @@ func neStatsComputeOpt(u *neStatsUnit, expr *neFiltExpr, maxBins int, light bool
 				if light {
 					continue
 				}
+				if b.TH != nil {
+					acc.tr.addList(b.TH, k, tc.lo, tc.hi, tc.rng)
+				} else {
+					acc.tr.addCount(0)
+				}
 				ids = append(ids, id)
 				if filt {
 					acc.ids = append(acc.ids, id)
@@ -844,6 +851,7 @@ func neStatsSample(sp *neSamp, u *neStatsUnit, expr *neFiltExpr) (*neStatsAcc, i
 	bin := sp.asBin()
 	d, dsh, o, osh := sp.col("d"), sp.col("dsh"), sp.col("o"), sp.col("osh")
 	acc.states = []string{sp.Hdr.State}
+	acc.approx = true
 	tc := neNewTreeCounter(sp.th, sp.col("tn"), expr)
 	acc.treesRng = tc.rng
 	for _, k := range sp.rowsNear(bb[0], bb[1], bb[2], bb[3]) {
@@ -867,6 +875,11 @@ func neStatsSample(sp *neSamp, u *neStatsUnit, expr *neFiltExpr) (*neStatsAcc, i
 			acc.scale = neSampK
 		}
 		neStatsAddCols(acc, bin, k, wa)
+		if sp.th != nil {
+			acc.tr.addList(sp.th, int(k), tc.lo, tc.hi, tc.rng)
+		} else {
+			acc.tr.addCount(0)
+		}
 		if v, exact := tc.at(int(k)); exact {
 			acc.trees += v * neSampK
 			acc.treesX += neSampK
@@ -974,6 +987,14 @@ func neStatsFigures(u *neStatsUnit, acc *neStatsAcc, filt bool) map[string]inter
 	// only the apices inside it — left out when not every cell carried a list
 	if !acc.treesRng || acc.treesX == acc.match {
 		f["trees_n"] = acc.trees
+	}
+	// … and their heights, where every counted cell carried its apex list
+	if acc.approx {
+		t := acc.tr
+		t.scale(neSampK)
+		t.figures(f, acc.area, true)
+	} else {
+		acc.tr.figures(f, acc.area, false)
 	}
 	f["cells_declared_n"] = acc.declared
 	f["cells_observed_n"] = acc.observed
@@ -1704,7 +1725,7 @@ func neStatsSortedKeys(m map[string]interface{}) []string {
 		ks = append(ks, k)
 	}
 	fam := func(k string) int {
-		for i, p := range []string{"cells_n", "area_ha", "unit_", "match_", "cells_", "declared", "observed", "diff", "change", "subsidy", "natura", "structures", "terrain", "height", "canopy", "ndvi", "kg.", "gemeinde", "bezirk", "bundesland"} {
+		for i, p := range []string{"cells_n", "area_ha", "unit_", "match_", "cells_", "declared", "observed", "diff", "change", "subsidy", "natura", "structures", "terrain", "height", "canopy", "ndvi", "trees", "kg.", "gemeinde", "bezirk", "bundesland"} {
 			if strings.HasPrefix(k, p) {
 				return i
 			}
@@ -1716,9 +1737,29 @@ func neStatsSortedKeys(m map[string]interface{}) []string {
 		if fa != fb {
 			return fa < fb
 		}
+		if ta, tb := neStatsTreeRank(ks[a]), neStatsTreeRank(ks[b]); ta != tb {
+			return ta < tb
+		}
 		return ks[a] < ks[b]
 	})
 	return ks
+}
+
+// neStatsTreeRank — the tree figures read count, density, heights, then the bands from low to high.
+func neStatsTreeRank(k string) int {
+	for i, n := range []string{"trees_n", "trees.per_ha", "trees.height_mean_m", "trees.tallest_m"} {
+		if k == n {
+			return i
+		}
+	}
+	if b, ok := strings.CutPrefix(k, "trees_height_n."); ok {
+		for i, n := range neTreeBandKeys {
+			if b == n {
+				return 10 + i
+			}
+		}
+	}
+	return 99
 }
 
 func neStatsCSVCell(v interface{}) string {

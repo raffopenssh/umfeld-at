@@ -25,7 +25,9 @@ URL). Anonymous use works too.
 Zooms 9–11 (res 7–9) are read from a **national table** — every res-9 cell of
 Austria folded once from the declared/observed product and the change log,
 refreshed a few times a day. They answer instantly anywhere and carry the
-declared, observed, diff and change aggregates. Zooms 12–15 come from the
+declared, observed, diff and change aggregates — and the **trees** of every
+hexagon (count, density, tallest, mean height, 5 m height bands), taken once per
+generation from {OBS_NAME}'s national table. Zooms 12–15 come from the
 detailed index of the area (built on first use, kept) and add the peer columns:
 subsidy, LiDAR, Natura 2000. So an *overview* archive can span the whole country;
 a *fine* archive is one area at a time.
@@ -48,13 +50,35 @@ Layer id is `cells`. Every feature carries `h3` (string) and `res`.
 Natura 2000 flag/type, `chg` change (confirmed/candidate), `cont`/`cont_open`
 contribution counters, `het`, `edge`, `nutz`, `rd`/`rd_min` road distance,
 `wat`/`wat_min` water distance, plus epochs `srtm_epoch`, `sub_year`,
-`sub_release`. Field meanings and units match the filter grammar in
+`sub_release`. Trees: `tn` tree tops (LiDAR apices ≥ 3 m) in the cell, `ht` the
+tallest and `ht_mean` their mean height (m). Field meanings and units match the filter grammar in
 `/api/v1/docs/ne.md` and the unit-stats envelope (`/api/v1/docs/stats-envelope.md`).
 
 **aggregates (z 9–13)** — `n` cells (`n_all`, `match_pct`, `approx`, `sample` with `f=`, see below), `area_ha`, `d` dominant declared group +
 `d_pct`, `d_known_pct`, one `d_<group>_pct` per group, `o` dominant observed +
 `o_pct`, `o_known_pct`, `diff_pct` (declared ≠ observed), `chg_conf`, `chg_cand`,
 `chg_pct`, `sub_pct`, and the same epochs.
+
+**trees, at every zoom** — one figure set from the country down to the cell,
+the same apices throughout ({OBS_NAME}'s LiDAR tree tops ≥ 3 m; the national
+sum equals its `/trees/stats`):
+
+| attribute | meaning |
+|---|---|
+| `tn` | tree tops in the hexagon (z 14+: in the cell) |
+| `tn_ha` | per hectare of the hexagon (aggregates) |
+| `ht` | tallest tree, m |
+| `ht_mean` | mean tree height, m — exact from z 12; at z 9–11 from the band counts (± 0.3 m) |
+| `tn_3` `tn_5` `tn_10` … `tn_50` `tn_55` | tree tops per height band: 3–5 m, 5–10 m, then 5 m steps, `tn_55` = 55 m and taller; a band without a tree is absent (aggregates) |
+
+The bands add up to `tn`. At z 9–11 count, tallest and bands are {OBS_NAME}'s
+own figures, hexagon for hexagon; from z 12 (and under a filter) count, tallest
+and mean are exact and a band can be off by ~1 %: the height lists come in 0.5 m
+steps, so tree tops exactly on a band edge are split 1/3 below · 2/3 above. Under a filter with a height term (`ht=30..`) the
+aggregates count only the tree tops inside it, like the unit stats. Where an
+area's height lists have not arrived yet (z 12+, minutes after first use) a
+hexagon carries `tn` and `ht` only. A share of trees ≥ 30 m in QGIS:
+`("tn_30"+"tn_35"+"tn_40"+"tn_45"+"tn_50"+"tn_55") / "tn"` with `coalesce(…,0)` around each band.
 
 ## Filtered layers — the map's veil in QGIS
 
@@ -112,7 +136,8 @@ basemaps (basemap.at, OpenStreetMap) are asked directly. Top to bottom:
   for the identify tool ⓘ**: click a hexagon, every attribute. It also draws
   the outlines — *change · confirmed / candidate* (z ≥ 13; *in the area* on
   aggregates below), *declared ≠ observed*, *subsidy cells · class* (off) — the
-  *trees · tallest* tint of the wooded hexagons at zoom 12–13, and the group
+  *trees · mean height* tint of the stocked hexagons (≥ 20 tree tops per ha) at
+  zoom 9–13, in the crowns' colours like the map's far-out sheet, and the group
   fills (*declared · group* by `d`, *observed · group* by `o`). While the
   pictures below are in charge the fills cover the aggregates up to zoom 11
   only; with a filter they paint the matching cells at every zoom. Styles run

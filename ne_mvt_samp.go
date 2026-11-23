@@ -1442,7 +1442,7 @@ func (s *neSamp) rowsNear(w, so, e, n float64) []int {
 
 // asBin — the store seen as a bin (neStatsAddCols reads b.Cols[id][k]); n2ks differs in width and is not read there.
 func (s *neSamp) asBin() *neFidxBin {
-	return &neFidxBin{N: s.Hdr.N, Cols: s.cols, Hdr: neFidxHdr{N2K: s.Hdr.N2K}}
+	return &neFidxBin{N: s.Hdr.N, Cols: s.cols, TH: s.th, Hdr: neFidxHdr{N2K: s.Hdr.N2K}}
 }
 
 // ── national figures from the sample (docs/ne-filter.md §8 step 4) ─────────
