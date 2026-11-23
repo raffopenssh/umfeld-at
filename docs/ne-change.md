@@ -790,10 +790,22 @@ it), `epoch` = first day with a changed digest (`neChangeEpochDay`, memo 30 min)
 already read as a gradient, and the scale settles by itself at one year. Confirmed cells age by
 `LastAt`, candidates by `AnyAt`; the chg tile key carries the day when the window is open.
 
-**Strip (`/* ── time` in `ne_glyph.go`, `.glyph-time`).** Level 0 passes · 1 days of a pass · 2 calendar
-across passes (unit d/w/m/q by span, ≤ 400 bins); hairline track, dot = √confirmed, fill = share, dashed
-= open pass + ETA; drag scrubs a range; `;t=` in the hash; keys `< > , .` step, space plays. **Play**
-runs at level 2 day by day, window growing from the first bin, head marker + date label; per step only
+**Strip (`/* ── time` in `ne_glyph.go`, `.glyph-time`) — ONE timeline (2026-11-23).** The calendar of
+detection days is the only axis; the former levels (passes · days of a pass · calendar) are gone. Bins =
+the finest unit (d/w/m/q) the *measured* strip width holds at `TL_PX` 4 px per bin (`tlStripW`, re-laid by
+a ResizeObserver), always spanning the whole history in scope, so the axis never moves. Each bin is a
+bar: confirmed solid, candidate pale on top, height √(cells). Axis labels are chosen greedily to fit
+(`tlLabs`: first date, month starts, Mondays…), never clipped. **A pass is a filter chip** in the head
+row (`.tl-pk`, `tlPass`; underline = share of the land compared, shown when ≥ 2 passes hold change):
+it sets `k1..k2` of the window and keeps the dates; with a pass but no dates the bins of its detection
+span are the marked ones (`tl.span`). Head row = window as a date span (`.tl-tl`, change hue when set,
+year dropped ≤ 640 px) + `×` (`.tl-all`, clears) + scope + chips + `‹ ›` (hidden ≤ 480 px); the play
+button sits left of the track like a media scrubber. Tap a bar = that bin (again = let go of the dates),
+drag = range / slide / head; `;t=` grammar unchanged; keys `< > , .` step (from "all": first / last bin
+with change), space plays, Esc clears. Readout: counts · area · pass note, two fixed lines on a phone.
+The page never overflows sideways on a phone (bins have no min-width). A cold server (`stats_refreshing`
+stub, served `no-store`) keeps the loading line and is asked again every 1.5 s. **Play**
+runs day by day, window growing from the first bin, head marker + date label; per step only
 the overview paths move (`tlPaint` additive, `tlAgeSync`), tiles/card/legend catch up on pause/stop
 (`tl.play.dirty → tlCatchUp`); the teaser never runs while playing. **The play waits for the tiles**
 (`tlWait`, 2026-11-04): while full res has tiles in flight (`hi.left`, the `hiView` debounce, filter

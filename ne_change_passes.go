@@ -642,6 +642,14 @@ func handleNEGlyphPasses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := StatsMemo("ne_passes", 5*time.Minute, q.Get("refresh") == "1" && isPrivateTier(r), nePassNational)
+	if _, ok := out["passes"]; !ok {
+		// first compute still running (just restarted): the stub must not sit
+		// in a browser or proxy cache for 5 min — the page asks again
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Retry-After", "2")
+		writeJSON(w, 200, out)
+		return
+	}
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	writeJSON(w, 200, out)
 }
