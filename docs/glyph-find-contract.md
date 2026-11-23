@@ -63,6 +63,24 @@ Response (compact JSON, `writeJSON`-style, `Cache-Control: public, max-age=300`,
 ```
 `sub` for a Hofname-only address: label = Hofname, sub = "plz ort". When `data/addresses.db` is absent: 200 with `results:[]` and `"unavailable":true` (the client hides the section). Licence row in `api_license.go` (`dataSourceLicenses`, id `bev_addresses`, Stichtag read from meta) + `/lizenzen` paragraph (`api_legal_pages.go`) + `llm.txt` line + `setLicenseHeaders` for the path. Register a size line on `$UMFELD_PRIVATE_PREFIX/api/v1/debug/inflight` if any cache is added (AGENTS.md inv. 10).
 
+`&numbers=1`: the first row additionally carries `numbers:[[hnr,lon,lat],…]` — the house numbers of
+its street in natural order (≤ 80, `numbers_more` beyond; `addressesNumbers`), for the box's number strip.
+
+### Editing in the box (2026-11)
+
+- **Fill instead of go** (`fill`): Tab / → on the ghost, a tap on the ghost (`.gt-g em`, phones have no
+  Tab) or the ↖ of a street row (`.fl`) put the row's name INTO the box; a street gets a trailing space,
+  ready for the number. The keyboard stays up.
+- **Number strip** (`numsHTML`, `li.hn`): the first address row's street lists its house numbers under
+  it — a tap goes there (`numItem`); on an address row the current number is marked.
+- **Context** (`fc`, `fcOn`, `rqKey`): a filled or edited text is searched with `c=` at the place it came
+  from (no `bbox`) while it still starts with that street — "…-Straße 7" stays in the town picked.
+- **Inline edit** (`selEdit` in `openSearch`): opening the box over a selection brings its text back —
+  an address with the caret behind it, a KG / admin unit / name selected (typing replaces). While text
+  is typed the tags step aside (`.ty`). × over a typed text empties the text first, then clears.
+- **One member of a combined selection** is edited by a tap on its tag (`edM`): the pick replaces it.
+- Phones: the open box is one line across the bar, the list hangs directly under it.
+
 ## 2. Outline collections — Bundesland · Bezirk · Gemeinde · Natura 2000 (`ne_glyph_admin.go`)
 
 Anything with a name and a polygon can be selected in the find box exactly like a KG: the white

@@ -406,9 +406,13 @@ type addrHit struct {
 	Approx    bool    `json:"approx,omitempty"` // a correction of what was typed (typo, dropped PLZ or word)
 	Full      bool    `json:"full,omitempty"`   // the text names the whole street
 	Src       string  `json:"src,omitempty"`    // "osm": a named OSM road no BEV street covers (ODbL)
-	rank      float64
-	exact     bool
-	skz       int64
+	// Numbers: every house number of the street as [hnr, lon, lat], natural order — only on the
+	// first row (its street), when numbers=1 was asked (the find box's number strip).
+	Numbers     [][3]interface{} `json:"numbers,omitempty"`
+	NumbersMore bool             `json:"numbers_more,omitempty"`
+	rank        float64
+	exact       bool
+	skz         int64
 }
 
 // addrTokens splits q into words and number tokens ("12", "12a", "12/3",
@@ -669,7 +673,40 @@ func addressesSearch(db *sql.DB, q string, bbox *[4]float64, c *[2]float64, limi
 	return out, approx, nil
 }
 
-// handleV1AddressesSearch — GET /api/v1/addresses/search?q=&bbox=&c=&limit=
+// addressesNumbers — the house numbers of one street in natural order, at most max.
+func addressesNumbers(db *sql.DB, skz int64, max int) (out [][3]interface{}, more bool, err error) {
+	rows, err := db.Query(`SELECT hnr, lon, lat FROM adr WHERE skz = ? AND hnr <> '' LIMIT 2000`, skz)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+	type n struct {
+		h        string
+		lon, lat int64
+	}
+	var ns []n
+	seen := map[string]bool{}
+	for rows.Next() {
+		var x n
+		if err := rows.Scan(&x.h, &x.lon, &x.lat); err != nil {
+			return nil, false, err
+		}
+		if k := strings.ToLower(x.h); !seen[k] {
+			seen[k] = true
+			ns = append(ns, x)
+		}
+	}
+	sort.Slice(ns, func(i, j int) bool { return hnrLess(ns[i].h, ns[j].h) })
+	if len(ns) > max {
+		ns, more = ns[:max], true
+	}
+	for _, x := range ns {
+		out = append(out, [3]interface{}{x.h, math.Round(float64(x.lon)/10) / 1e5, math.Round(float64(x.lat)/10) / 1e5})
+	}
+	return out, more, rows.Err()
+}
+
+// handleV1AddressesSearch — GET /api/v1/addresses/search?q=&bbox=&c=&limit=&numbers=1
 func handleV1AddressesSearch(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
@@ -737,6 +774,11 @@ func handleV1AddressesSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		if hits == nil {
 			hits = []addrHit{}
+		}
+		if r.URL.Query().Get("numbers") == "1" && len(hits) > 0 && hits[0].Src == "" && hits[0].skz != 0 {
+			if ns, more, err := addressesNumbers(db, hits[0].skz, 80); err == nil {
+				hits[0].Numbers, hits[0].NumbersMore = ns, more
+			}
 		}
 		resp["results"] = hits
 		if approx {

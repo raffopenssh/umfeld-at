@@ -269,7 +269,7 @@ GET /api/v1/toponyms/near?lon=&lat=[&radius=500][&layer=siedlung,ried][&f_code=]
 GET /api/v1/toponyms/search?q=Lignitzalpe[&layer=&kg=&gemeinde=&district=&state=&near=lon,lat&radius=&bbox=&min_score=]
     Fuzzy (trigram, stemmed: "Liegnitzalm" finds "Lignitzalpe"), score 1.0 exact … 0.55.
     Names repeat nationally ("Hochalm" = 1 099 rows) — constrain by area or near=.
-GET /api/v1/addresses/search?q=<text>[&bbox=w,s,e,n][&c=lon,lat][&limit=8]      BEV Adressregister (CC BY 4.0, 2.5 M addresses)
+GET /api/v1/addresses/search?q=<text>[&bbox=w,s,e,n][&c=lon,lat][&limit=8][&numbers=1]      BEV Adressregister (CC BY 4.0, 2.5 M addresses)
     Free text: street [house number] [PLZ / Ort / Gemeinde], any order, prefixes ok ("maria theres 18 inns").
     results[] kind=address|street with label, sub, street, hnr, plz, ort, gemeinde, gkz, lon, lat, in_view
     (inside bbox), dist_km (to c). Ranked: in view → exact number → nearest (without c: bigger place first).
