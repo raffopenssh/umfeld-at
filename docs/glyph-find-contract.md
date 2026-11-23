@@ -73,7 +73,7 @@ its street in natural order (≤ 80, `numbers_more` beyond; `addressesNumbers`),
   ready for the number. The keyboard stays up.
   The ghost (`ghost`) is a completion when the text is a literal prefix of the best row, else an offer
   behind an arrow ("handelmaz → Handel-Mazzetti-Gasse", typos, a number behind the street); a bare number
-  (code search) and an exact name get none. It is clipped by the box: long texts leave the ↖.
+  (code search) and an exact name get none. When the box would clip it (long text on a phone) it heads the list instead (`li.of`, sticky, `offerHTML`) — same tap.
 - **Number strip** (`numsHTML`, `li.hn`): the first address row's street lists its house numbers under
   it — a tap goes there (`numItem`); on an address row the current number is marked.
 - **Context** (`fc`, `fcOn`, `rqKey`): a filled or edited text is searched with `c=` at the place it came
