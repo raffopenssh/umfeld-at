@@ -412,6 +412,15 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   native full screen by itself when a text field takes the keyboard — find box, filter, the species search ("full screen
   collapses"). `fsToggle` does not ask for native there (`?fs` lifts it). Net for any other touch browser doing the same:
   `fullscreenchange` with a text field of the figure focused ≤ 1.5 s ago keeps `fsOn` (CSS) and sets `fsNoNat` for the session.
+- **Page translation** (2026-11-23, a phone with Chrome's auto-translate on froze at LOD 2 under `;f=ht>=30` + trees; no `?trace`
+  was running — read off the request log: ~80 veil tiles re-polled every ~6 s for 2½ min while the bins built): a translator replaces
+  every text node and translates every new one, so text rewritten with the same words is a job each time. `hx(el).h=` / `.t=`
+  (status note `tN`, filter readout `fN`) and `hiLegendNow` skip a write equal to the last one (string kept on the element — the
+  DOM cannot be compared, the translator changed it; every writer of `tN`/`fN` goes through `hx`); `fltRepoll` skips decode, swap and
+  readout when a poll's `X-NE-Tile` counts are the standing ones. Measured with a stand-in translator (text node → `<font>`, 150 ms):
+  legend rewrites 19 → 14 per 10 s on a cold view — what is left is real progress (*N bins left*). **Not confirmed on the device.**
+  Next step if it recurs: `?trace` on that phone (the env row does not record translation yet — `html.translated-ltr/rtl`), or
+  `translate="no"` on the figure's live readouts.
 - **One script, one name per function** (`TestGlyphScriptNoDuplicateFunctions`): the legend's `trKey()` once replaced the species
   search's `trKey(s,ae)` — one chip (Fichte) whatever was typed, Enter took it. The legend's is `trKeyLine`.
 - **One raster per batch** (`hiCommit`/`hiFlush`, `hi.cq` + `hi.cq2`): a landed, decoded tile waits and the whole
