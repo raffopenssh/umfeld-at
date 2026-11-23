@@ -434,8 +434,9 @@ func NEStandsStats() map[string]interface{} {
 // ── a selection's trees: GET /api/v1/ne/glyph/trees?u=<unit token of the share link> ──
 //
 // The unit is the one /ne/glyph/area and the export answer for (neStatsUnits):
-// KG-based units (KG, Gemeinde, Bezirk, a combination of them) are the sum of
-// their KGs at the peer (one batch call, KGs are disjoint), a Land is the
+// one KG is the peer's /stats/unit?kg= figure (the export's number); several
+// KGs (Gemeinde, Bezirk, a combination) are the sum of the stand index's
+// per-KG hexagon sets (one batch call, a partition — no cell twice), a Land is the
 // peer's state=, a Natura 2000 site is its outline. Answer: {trees, hexes,
 // tallest_m, mean_height_m, edges_m[], bands[]} — the height distribution the
 // card draws. 404 = a unit without one (h3, box, a combination holding a site).
@@ -482,6 +483,29 @@ func neStandsSummary(ctx context.Context, query string, body interface{}) ([]neS
 		return nil, nil, 502, err
 	}
 	return doc.Areas, doc.Edges, 200, nil
+}
+
+// neStandsKG — one KG's trees from the peer's /stats/unit?kg= (memoised with the export's peer answers).
+func neStandsKG(kg string) ([]neStandsArea, []float64, int, error) {
+	m, msg := neStatsPeerFetch(neStatsPeers()[0], "kg="+kg+"&keys=trees", "")
+	f, _ := m["figures"].(map[string]interface{})
+	n, ok := f["trees_n"].(float64)
+	if !ok {
+		if msg == "" {
+			msg = "no tree figures"
+		}
+		return nil, nil, 502, fmt.Errorf("%s", msg)
+	}
+	a := neStandsArea{Trees: int64(n), Bands: make([]int64, neTreeBands)}
+	a.Mean, _ = f["trees.height_mean_m"].(float64)
+	a.Tallest.M, _ = f["trees.tallest_m"].(float64)
+	edges := make([]float64, neTreeBands)
+	for b := range edges {
+		edges[b] = float64(neTreeBandEdgesM[b])
+		v, _ := f["trees_height_n."+neTreeBandKeys[b]].(float64)
+		a.Bands[b] = int64(v)
+	}
+	return []neStandsArea{a}, edges, 200, nil
 }
 
 // neStandsPolygons — even-odd rings → GeoJSON MultiPolygon coordinates: a ring
@@ -565,7 +589,9 @@ func neStandsUnit(w http.ResponseWriter, r *http.Request, sn *neStandsSnap, u st
 			un := units[0]
 			switch {
 			case len(un.kgs) == 1:
-				areas, edges, code, err = neStandsSummary(ctx, "?kg="+un.kgs[0], nil)
+				// one KG: the peer's unit figure (every cell the KG has a share in) — the number
+				// the export's row carries; /summary?kg= counts whole hexagons assigned to the KG
+				areas, edges, code, err = neStandsKG(un.kgs[0])
 			case len(un.kgs) > 1 && len(un.kgs) <= 500:
 				as := make([]map[string]string, len(un.kgs))
 				for i, kg := range un.kgs {

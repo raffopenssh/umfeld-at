@@ -155,24 +155,31 @@ func TestNENatTrees(t *testing.T) {
 	}
 	sortU64(ids)
 	n := len(ids)
-	idc, top, hh := make([]byte, 8*n), make([]byte, n), make([]byte, 2*neTreeBands*n)
+	idc, tr, top, hs, hh := make([]byte, 8*n), make([]byte, 4*n), make([]byte, n), make([]byte, 4*n), make([]byte, 2*neTreeBands*n)
 	var prev uint64
 	for k, id := range ids {
 		binary.LittleEndian.PutUint64(idc[8*k:], id-prev)
 		prev = id
-		top[k] = byte(40 + k)
 		if k == 3 { // a hexagon without a tree: no row
-			top[k] = 255
 			continue
 		}
+		top[k] = byte(4 * (40 + k)) // 0.25 m steps
+		binary.LittleEndian.PutUint32(tr[4*k:], uint32(10*(k+1)+5))
+		binary.LittleEndian.PutUint32(hs[4*k:], uint32(10*(k+1)*49+5*71)) // 12.25 m and 17.75 m apices
 		binary.LittleEndian.PutUint16(hh[2*(k*neTreeBands+2):], uint16(10*(k+1)))
 		binary.LittleEndian.PutUint16(hh[2*(k*neTreeBands+3):], 5)
 	}
-	hdr, _ := json.Marshal(map[string]interface{}{"n": n, "res": 9, "gen": "g1", "epoch": "2026-10", "ids": "delta_u64",
-		"tree_hh_bands": []string{"3-5", "5-10", "10-15", "15-20", "20-25", "25-30", "30-35", "35-40", "40-45", "45-50", "50-55", "55+"},
-		"columns": []map[string]interface{}{{"name": "id", "dtype": "u64", "bytes": len(idc)}, {"name": "canopy_h_top", "dtype": "u8", "bytes": n}, {"name": "tree_hh", "dtype": "u16", "bytes": len(hh), "shape": []int{12}}}})
+	col := func(name, dt string, b []byte, scale float64) map[string]interface{} {
+		c := map[string]interface{}{"name": name, "dtype": dt, "bytes": len(b)}
+		if scale != 0 {
+			c["scale"] = scale
+		}
+		return c
+	}
+	hdr, _ := json.Marshal(map[string]interface{}{"kind": "tree_hexes", "n": n, "res": 9, "gen": "g1", "ids": "delta_u64", "bands": neTreeBandKeys,
+		"columns": []map[string]interface{}{col("id", "u64", idc, 0), col("trees", "u32", tr, 0), col("tallest", "u8", top, 0.25), col("h_sum", "u32", hs, 0.25), col("bands", "u16", hh, 0)}})
 	body := append([]byte("NEX1"), binary.LittleEndian.AppendUint32(nil, uint32(len(hdr)))...)
-	body = append(append(append(append(body, hdr...), idc...), top...), hh...)
+	body = append(append(append(append(append(append(body, hdr...), idc...), tr...), top...), hs...), hh...)
 	rows, h, err := neNatTreesParse(body)
 	if err != nil || len(rows) != 3 || h.Trees != 10+20+30+15 || h.Gen != "g1" {
 		t.Fatalf("parse: %v, %d rows, %+v", err, len(rows), h)
@@ -187,10 +194,11 @@ func TestNENatTrees(t *testing.T) {
 	}
 	var a neTreeAgg
 	nt.fill(&a, 9, ids[1])
-	if a.n != 25 || a.bands[2] != 20 || a.bands[3] != 5 || a.top != 41 || !a.est {
+	if a.n != 25 || a.bands[2] != 20 || a.bands[3] != 5 || a.top != 4*41 || a.topM() != 41 || !a.est {
 		t.Fatalf("res 9 %+v", a)
 	}
-	if m, ok := a.meanM(); !ok || neRound(m, 2) != neRound((20*neTreeBandCentM[2]+5*neTreeBandCentM[3])/25, 2) {
+	if m, ok := a.meanM(); !ok || m != 13.4 { // (20 × 12.25 + 5 × 17.75) / 25 = 13.35 → half up
+
 		t.Fatalf("mean %v", m)
 	}
 	a = neTreeAgg{}
@@ -205,7 +213,7 @@ func TestNENatTrees(t *testing.T) {
 		a = neTreeAgg{}
 		p, _ := c12.Parent(res)
 		nt.fill(&a, res, uint64(p))
-		if a.n != 75 || a.bands[2] != 60 || a.bands[3] != 15 || a.top != 42 {
+		if a.n != 75 || a.bands[2] != 60 || a.bands[3] != 15 || a.top != 4*42 || a.sum != 60*49+15*71 {
 			t.Fatalf("res %d %+v", res, a)
 		}
 	}
@@ -214,5 +222,30 @@ func TestNENatTrees(t *testing.T) {
 	nilT.fill(&a, 9, ids[0])
 	if a.est || nilT.state() != "" {
 		t.Fatal("no table: no figure")
+	}
+}
+
+// The peer's tree figures replace ours for the same cells; a KG list does not sum trees_n.
+func TestNEStatsPeerTrees(t *testing.T) {
+	e := &neStatsEnvelope{Coverage: map[string]interface{}{}, Figures: map[string]interface{}{"area_ha": 100.0, "trees_n": 7, "trees.tallest_m": 30.5, "trees_height_n.3_5": int64(7), "ndvi.mean": 0.5}}
+	pe := map[string]interface{}{"figures": map[string]interface{}{"trees_n": 250.0, "trees_owned_n": 240.0, "trees.height_mean_m": 19.4, "trees.tallest_m": 30.25, "trees_height_n.5_10": 250.0, "cover_ha.wald": 3.0}}
+	neStatsPeerTrees(e, pe)
+	f := e.Figures
+	if f["trees_n"] != 250.0 || f["trees_owned_n"] != 240.0 || f["trees.tallest_m"] != 30.25 || f["trees.per_ha"] != 2.5 || f["trees_height_n.3_5"] != nil || f["trees_height_n.5_10"] != 250.0 || f["cover_ha.wald"] != nil || f["ndvi.mean"] != 0.5 {
+		t.Fatalf("figures %v", f)
+	}
+	old := map[string]interface{}{"figures": map[string]interface{}{"trees_n": 9.0}} // a peer without the height figures: ours stand
+	neStatsPeerTrees(e, old)
+	if f["trees_n"] != 250.0 {
+		t.Fatalf("taken from a peer without heights: %v", f)
+	}
+	if neStatsAdditive("trees_n") || neStatsAdditive("trees_height_n.3_5") || !neStatsAdditive("trees_owned_n") {
+		t.Fatal("KG sums: trees_owned_n only")
+	}
+	if w, ok := neStatsTreeWindow(neFiltParse("ht>=30")); !ok || w != "&min_height=30" {
+		t.Fatalf("window %q %v", w, ok)
+	}
+	if w, ok := neStatsTreeWindow(nil); !ok || w != "" {
+		t.Fatalf("no window %q %v", w, ok)
 	}
 }

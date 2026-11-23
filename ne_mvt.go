@@ -635,10 +635,9 @@ func neMVTAggAttrs(f *mvtFeature, a *neMVTAgg, areaHa float64) {
 	if a.hb > 0 {
 		f.num("hb", float64(a.hb)*0.5)
 	}
-	if a.tr.top > a.ht && !a.thRng { // the national table's tallest apex (z 9–11)
-		a.ht = a.tr.top
-	}
-	if a.ht > 0 {
+	if a.tr.est && a.tr.top > 0 && !a.thRng { // the national table's tallest apex (z 9–11), 0.25 m steps
+		f.num("ht", a.tr.topM())
+	} else if a.ht > 0 {
 		f.num("ht", float64(a.ht)*0.5)
 	}
 	if a.h > 0 {

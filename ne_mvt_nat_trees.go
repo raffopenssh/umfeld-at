@@ -1,18 +1,19 @@
 // ne_mvt_nat_trees.go — the trees of the cell tiles' low zooms (z 9–11, res
-// 7–9, no filter): apices per 5 m height band and the tallest apex per
-// hexagon, from the observed-layer peer's national table
-// (/api/v1/cells/national?res=9&fields=tree_n,canopy_h_top,tree_hh — the same
-// apices as its stand index and the bins' apex lists, sums equal apex for
-// apex). Res 8 and 7 are folded here.
+// 7–9, no filter): apices per 5 m height band, the tallest apex and the sum
+// of the apex heights per hexagon, from the observed-layer peer's stand index
+// in one body (/api/v1/trees/hexes?res=9&format=bin — the peer's own exact
+// figures: the bands, the tallest and the mean equal its /stats/unit?h3=).
+// Res 8 and 7 are folded here (sums add, the tallest is the max).
 //
-// One fetch per peer generation (≈ 10 MB gzip, the peer rebuilds at most
-// daily): a ~1 KB meta probe every neNatTreesEvery says whether the gen
-// moved. The folded table is a file (data/ne_mvt/nat_trees.bin, ≈ 50 MB,
+// One fetch per peer generation (≈ 12 MB gzip, the peer rebuilds at most
+// daily): a conditional GET (If-None-Match) every neNatTreesEvery, 304 while
+// the gen stands. The folded table is a file (data/ne_mvt/nat_trees.bin, ≈ 60 MB,
 // rebuildable — delete freely) mapped read-only: no heap, pages come and go
 // with the tiles that read them. Size line: debug/inflight → ne_mvt_nat_trees.
 //
-//	"NNT1" | u32 header_len | header JSON | pad to 8 |
-//	per level (res 9, 8, 7): n × u64 ids ascending | n × 52 B rows (12 × u32 bands, u32 tallest raw 0.5 m)
+//	"NNT2" | u32 header_len | header JSON | pad to 8 |
+//	per level (res 9, 8, 7): n × u64 ids ascending |
+//	  n × 60 B rows (12 × u32 bands, u32 tallest × 0.25 m, u64 Σ heights × 0.25 m)
 package main
 
 import (
@@ -26,6 +27,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -34,15 +36,15 @@ import (
 )
 
 const (
-	neNatTreesMagic = "NNT1"
-	neNatTreesRow   = 4*neTreeBands + 4
+	neNatTreesMagic = "NNT2"
+	neNatTreesRow   = 4*neTreeBands + 4 + 8
 	neNatTreesEvery = 3 * time.Hour
-	neNatTreesMax   = 96 << 20 // the peer's body, inflated
+	neNatTreesMax   = 128 << 20 // the peer's body, inflated
 )
 
 type neNatTreesHdr struct {
 	Gen   string `json:"gen"`
-	Epoch string `json:"epoch"`
+	ETag  string `json:"etag,omitempty"`
 	Built string `json:"built_at"`
 	N     [3]int `json:"n"` // rows at res 9, 8, 7
 	Trees int64  `json:"trees"`
@@ -63,7 +65,7 @@ var neNatTreesState struct {
 	fetches         int
 }
 
-var neNatTreesBase = func() string { return peers().ObsAPI + "/api/v1/cells/national" } // var: tests point it at a stub
+var neNatTreesBase = func() string { return peers().ObsAPI + "/api/v1/trees/hexes" } // var: tests point it at a stub
 
 func neNatTreesPath() string { return filepath.Join(nePMTDir, "nat_trees.bin") }
 
@@ -97,6 +99,7 @@ func (t *neNatTrees) fill(a *neTreeAgg, res int, id uint64) {
 		a.n += c
 	}
 	a.top = int(binary.LittleEndian.Uint32(r[4*neTreeBands:]))
+	a.sum = int64(binary.LittleEndian.Uint64(r[4*neTreeBands+4:]))
 }
 
 // neNatTreesOpen — map a file written by neNatTreesWrite.
@@ -139,27 +142,34 @@ func neNatTreesOpen(path string) (*neNatTrees, error) {
 	return t, nil
 }
 
-func neNatTreesFold(src map[uint64]*[neTreeBands + 1]uint32, res int) map[uint64]*[neTreeBands + 1]uint32 {
-	out := make(map[uint64]*[neTreeBands + 1]uint32, len(src)/6+1)
+// neNatTreesRec — one hexagon: apices per band, the tallest and Σ heights in 0.25 m.
+type neNatTreesRec struct {
+	bands [neTreeBands]uint32
+	top   uint32
+	hsum  uint64
+}
+
+func neNatTreesFold(src map[uint64]*neNatTreesRec, res int) map[uint64]*neNatTreesRec {
+	out := make(map[uint64]*neNatTreesRec, len(src)/6+1)
 	for id, r := range src {
 		p := neH3ParentFast(id, res)
 		a := out[p]
 		if a == nil {
-			a = &[neTreeBands + 1]uint32{}
+			a = &neNatTreesRec{}
 			out[p] = a
 		}
 		for b := 0; b < neTreeBands; b++ {
-			a[b] += r[b]
+			a.bands[b] += r.bands[b]
 		}
-		if r[neTreeBands] > a[neTreeBands] {
-			a[neTreeBands] = r[neTreeBands]
-		}
+		a.hsum += r.hsum
+		a.top = max(a.top, r.top)
 	}
 	return out
 }
 
-// neNatTreesParse — the peer's NEX1 body (res 9) → rows of hexagons holding a tree.
-func neNatTreesParse(body []byte) (map[uint64]*[neTreeBands + 1]uint32, *neNatTreesHdr, error) {
+// neNatTreesParse — the peer's NEX1 body (kind tree_hexes, res 9) → rows.
+// The scales are read from the header: anything but 0.25 m is refused.
+func neNatTreesParse(body []byte) (map[uint64]*neNatTreesRec, *neNatTreesHdr, error) {
 	if len(body) < 8 || string(body[:4]) != "NEX1" {
 		return nil, nil, errors.New("not NEX1")
 	}
@@ -168,26 +178,27 @@ func neNatTreesParse(body []byte) (map[uint64]*[neTreeBands + 1]uint32, *neNatTr
 		return nil, nil, errors.New("header length")
 	}
 	var hdr struct {
+		Kind    string   `json:"kind"`
 		N       int      `json:"n"`
 		Res     int      `json:"res"`
 		Gen     string   `json:"gen"`
-		Epoch   string   `json:"epoch"`
 		Built   string   `json:"built_at"`
 		IDs     string   `json:"ids"`
-		Bands   []string `json:"tree_hh_bands"`
+		Bands   []string `json:"bands"`
 		Columns []struct {
-			Name  string `json:"name"`
-			Dtype string `json:"dtype"`
-			Bytes int    `json:"bytes"`
+			Name  string  `json:"name"`
+			Dtype string  `json:"dtype"`
+			Bytes int     `json:"bytes"`
+			Scale float64 `json:"scale"`
 		} `json:"columns"`
 	}
 	if err := json.Unmarshal(body[8:8+hl], &hdr); err != nil {
 		return nil, nil, err
 	}
-	if hdr.Res != 9 || hdr.N <= 0 || len(hdr.Bands) != neTreeBands || hdr.Bands[0] != "3-5" || hdr.Bands[neTreeBands-1] != "55+" {
-		return nil, nil, fmt.Errorf("unexpected table: res %d, n %d, bands %v", hdr.Res, hdr.N, hdr.Bands)
+	if hdr.Kind != "tree_hexes" || hdr.Res != 9 || hdr.N <= 0 || !slices.Equal(hdr.Bands, neTreeBandKeys[:]) {
+		return nil, nil, fmt.Errorf("unexpected table: kind %q, res %d, n %d, bands %v", hdr.Kind, hdr.Res, hdr.N, hdr.Bands)
 	}
-	var ids, top, hh []byte
+	var ids, trees, top, hsum, bands []byte
 	o := 8 + hl
 	for _, c := range hdr.Columns {
 		if c.Bytes < 0 || o+c.Bytes > len(body) {
@@ -198,17 +209,21 @@ func neNatTreesParse(body []byte) (map[uint64]*[neTreeBands + 1]uint32, *neNatTr
 		switch {
 		case c.Name == "id" && c.Dtype == "u64" && c.Bytes == 8*hdr.N:
 			ids = seg
-		case c.Name == "canopy_h_top" && c.Dtype == "u8" && c.Bytes == hdr.N:
+		case c.Name == "trees" && c.Dtype == "u32" && c.Bytes == 4*hdr.N:
+			trees = seg
+		case c.Name == "tallest" && c.Dtype == "u8" && c.Bytes == hdr.N && c.Scale == 0.25:
 			top = seg
-		case c.Name == "tree_hh" && c.Dtype == "u16" && c.Bytes == 2*neTreeBands*hdr.N:
-			hh = seg
+		case c.Name == "h_sum" && c.Dtype == "u32" && c.Bytes == 4*hdr.N && c.Scale == 0.25:
+			hsum = seg
+		case c.Name == "bands" && c.Dtype == "u16" && c.Bytes == 2*neTreeBands*hdr.N:
+			bands = seg
 		}
 	}
-	if ids == nil || top == nil || hh == nil {
-		return nil, nil, errors.New("id / canopy_h_top / tree_hh missing or of another type")
+	if ids == nil || trees == nil || top == nil || hsum == nil || bands == nil {
+		return nil, nil, errors.New("id / trees / tallest / h_sum / bands missing, or of another type or scale")
 	}
-	rows := make(map[uint64]*[neTreeBands + 1]uint32, hdr.N)
-	out := &neNatTreesHdr{Gen: hdr.Gen, Epoch: hdr.Epoch, Built: hdr.Built}
+	rows := make(map[uint64]*neNatTreesRec, hdr.N)
+	out := &neNatTreesHdr{Gen: hdr.Gen, Built: hdr.Built}
 	var id uint64
 	delta := hdr.IDs != "u64"
 	for k := 0; k < hdr.N; k++ {
@@ -218,17 +233,17 @@ func neNatTreesParse(body []byte) (map[uint64]*[neTreeBands + 1]uint32, *neNatTr
 		} else {
 			id = v
 		}
-		var r [neTreeBands + 1]uint32
+		r := neNatTreesRec{top: uint32(top[k]), hsum: uint64(binary.LittleEndian.Uint32(hsum[4*k:]))}
 		var n uint32
 		for b := 0; b < neTreeBands; b++ {
-			r[b] = uint32(binary.LittleEndian.Uint16(hh[2*(k*neTreeBands+b):]))
-			n += r[b]
+			r.bands[b] = uint32(binary.LittleEndian.Uint16(bands[2*(k*neTreeBands+b):]))
+			n += r.bands[b]
 		}
 		if n == 0 {
 			continue
 		}
-		if top[k] != 255 {
-			r[neTreeBands] = uint32(top[k])
+		if n != binary.LittleEndian.Uint32(trees[4*k:]) {
+			return nil, nil, fmt.Errorf("row %d: bands sum %d, trees %d", k, n, binary.LittleEndian.Uint32(trees[4*k:]))
 		}
 		rows[id] = &r
 		out.Trees += int64(n)
@@ -237,9 +252,9 @@ func neNatTreesParse(body []byte) (map[uint64]*[neTreeBands + 1]uint32, *neNatTr
 }
 
 // neNatTreesWrite — fold res 8 and 7 and write the file (tmp + rename).
-func neNatTreesWrite(path string, r9 map[uint64]*[neTreeBands + 1]uint32, hdr *neNatTreesHdr) error {
+func neNatTreesWrite(path string, r9 map[uint64]*neNatTreesRec, hdr *neNatTreesHdr) error {
 	r8 := neNatTreesFold(r9, 8)
-	levels := []map[uint64]*[neTreeBands + 1]uint32{r9, r8, neNatTreesFold(r8, 7)}
+	levels := []map[uint64]*neNatTreesRec{r9, r8, neNatTreesFold(r8, 7)}
 	for lv, m := range levels {
 		hdr.N[lv] = len(m)
 	}
@@ -270,9 +285,12 @@ func neNatTreesWrite(path string, r9 map[uint64]*[neTreeBands + 1]uint32, hdr *n
 		rows := buf[8*len(ids):]
 		for q, id := range ids {
 			binary.LittleEndian.PutUint64(buf[8*q:], id)
-			for b, v := range m[id] {
-				binary.LittleEndian.PutUint32(rows[q*neNatTreesRow+4*b:], v)
+			r, at := m[id], rows[q*neNatTreesRow:]
+			for b, v := range r.bands {
+				binary.LittleEndian.PutUint32(at[4*b:], v)
 			}
+			binary.LittleEndian.PutUint32(at[4*neTreeBands:], r.top)
+			binary.LittleEndian.PutUint64(at[4*neTreeBands+4:], r.hsum)
 		}
 		if _, err := f.Write(buf); err != nil {
 			f.Close()
@@ -297,56 +315,59 @@ func neNatTreesSwap(t *neNatTrees) {
 	}
 }
 
-func neNatTreesHTTP(ctx context.Context, query string, limit int64) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", neNatTreesBase()+query, nil)
+// neNatTreesHTTP — the national body, conditional on the ETag at hand: (nil, "", nil) = 304.
+func neNatTreesHTTP(ctx context.Context, etag string) ([]byte, string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", neNatTreesBase()+"?res=9&format=bin", nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
+	}
+	if etag != "" {
+		req.Header.Set("If-None-Match", etag)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == 304 {
+		return nil, "", nil
+	}
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("peer HTTP %d", resp.StatusCode)
+		return nil, "", fmt.Errorf("peer HTTP %d", resp.StatusCode)
 	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	b, err := io.ReadAll(io.LimitReader(resp.Body, neNatTreesMax+1))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	if int64(len(b)) > limit {
-		return nil, errors.New("answer too large")
+	if len(b) > neNatTreesMax {
+		return nil, "", errors.New("answer too large")
 	}
-	return b, nil
+	return b, resp.Header.Get("ETag"), nil
 }
 
-// neNatTreesRefresh — probe the peer's generation; fetch and fold when it moved.
+// neNatTreesRefresh — ask the peer with the ETag at hand; fold when the table moved.
 func neNatTreesRefresh() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	meta, err := neNatTreesHTTP(ctx, "?res=9&format=json", 1<<20)
-	if err != nil {
-		return err
-	}
-	var m struct {
-		Gen string `json:"gen"`
-	}
-	if json.Unmarshal(meta, &m) != nil || m.Gen == "" {
-		return errors.New("meta without gen")
-	}
-	if cur := neNatTreesGet(); cur != nil && cur.Gen == m.Gen {
-		return nil
+	etag := ""
+	cur := neNatTreesGet()
+	if cur != nil {
+		etag = cur.ETag
 	}
 	t0 := time.Now()
-	body, err := neNatTreesHTTP(ctx, "?res=9&fields=tree_n,canopy_h_top,tree_hh", neNatTreesMax)
-	if err != nil {
+	body, newTag, err := neNatTreesHTTP(ctx, etag)
+	if err != nil || body == nil {
 		return err
 	}
 	rows, hdr, err := neNatTreesParse(body)
 	if err != nil {
 		return err
 	}
-	if len(rows) < 1000 && neNatTreesGet() != nil { // a table that lost its trees is the peer's accident, not news
+	if cur != nil && cur.Gen == hdr.Gen {
+		return nil
+	}
+	hdr.ETag = newTag
+	if len(rows) < 1000 && cur != nil { // a table that lost its trees is the peer's accident, not news
 		return fmt.Errorf("only %d hexagons with trees", len(rows))
 	}
 	if err := neNatTreesWrite(neNatTreesPath(), rows, hdr); err != nil {
@@ -397,7 +418,7 @@ func NENatTreesStats() map[string]interface{} {
 	s := &neNatTreesState
 	o := map[string]interface{}{"bound": "1 file, mapped read-only (no heap)"}
 	if t := s.cur.Load(); t != nil {
-		o["gen"], o["epoch"], o["built_at"], o["trees"], o["bytes_mmap"] = t.Gen, t.Epoch, t.Built, t.Trees, len(t.data)
+		o["gen"], o["built_at"], o["trees"], o["bytes_mmap"] = t.Gen, t.Built, t.Trees, len(t.data)
 		o["res9"], o["res8"], o["res7"] = t.N[0], t.N[1], t.N[2]
 	}
 	s.mu.Lock()

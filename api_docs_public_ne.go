@@ -275,7 +275,7 @@ GET /api/v1/ne/glyph/trees[?res=8|9|10&bbox=w,s,e,n | ?u=<unit>]
                                             edges_m[], bands[]}; bands[i] = tree tops from edges_m[i] up to the next edge, the
                                             last band is open (edges 3, 5, 10, 15 … m). <unit> is the unit token of a share
                                             link, the same one /ne/stats/unit takes as share=, URL-encoded:
-                                              u=kg%3D63330          one KG
+                                              u=kg%3D63330          one KG (= trees_n of /ne/stats/unit?kg=; hexes 0)
                                               u=adm%3D6             a Land (1–9); longer adm codes = Bezirk, Gemeinde
                                               u=adm%3DAT1209000     a Natura 2000 site (its site code)
                                               u=kg%3D63330%2C63331%3Badm%3D60101

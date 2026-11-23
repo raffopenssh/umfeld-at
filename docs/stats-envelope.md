@@ -73,11 +73,16 @@ change_n.<none|candidate|confirmed>  change_ha.<same>  change.log_versions  chan
 subsidy_ha.<acker|gruenland|alm|wein|dauerkultur|gloez|sonst>  subsidy.claimed_ha .claimed_pct .bio_ha .bio_pct .known_pct   INVEKOS class × claimed share per cell
 natura2000_ha natura2000_pct  structures_n structures.cover_ha
 terrain.elev_mean_m terrain.slope_mean_deg height.p90_mean_m canopy.cover_pct ndvi.mean       area-weighted means over cells with a value
-trees_n                                              tree apices (≥ 3 m) of the counted cells; under a height term (ht=, htmax=, hc=) only the apices inside it — absent when a cell had no apex list
-trees.per_ha trees.height_mean_m trees.tallest_m     the same apices: per ha of area_ha, mean height, the tallest (not with coverage.approx: a sample has no tallest)
-trees_height_n.<3_5|5_10|10_15|…|50_55|55_up>        apices per height band (m) — the bands add up to trees_n; all four absent while a cell's apex list is missing
-                                                     count, per_ha, mean and tallest are exact; a band can be off by ~1 % against {OBS_NAME}'s own bands: the apex
-                                                     lists carry heights in 0.5 m steps, so apices exactly on a band edge are split 1/3 below · 2/3 above
+trees_n                                              tree apices (≥ 3 m) of the counted cells, each cell whole; under a height term (ht=, htmax=, hc=) only the apices inside it
+trees.per_ha trees.height_mean_m trees.tallest_m     the same apices: per ha of area_ha, mean height (1 decimal), the tallest (0.25 m steps; not with coverage.approx)
+trees_height_n.<3_5|5_10|10_15|…|50_55|55_up>        apices per height band (lo ≤ h < hi m) — the bands add up to trees_n
+trees_owned_n                                        kg units: the apices of the cells this KG owns (a border cell belongs to ONE KG) — the count that adds up over KGs
+                                                     kg= / h3= / bbox= units and every f= unit carry {OBS_NAME}'s own figures for the very same cells (exact heights;
+                                                     coverage.trees names the source) — identical to srtm.trees*. A KG's trees_n counts border cells in every KG
+                                                     touching them: sum trees_owned_n, not trees_n, over KGs. Other units (Gemeinde, Bezirk, site, combined) and any
+                                                     unit while the peer is not asked or down: counted here from the cells' apex lists (0.5 m steps — count, mean and
+                                                     tallest to that step, a band up to ~1 % off, absent while a cell's list is missing); srtm.trees_owned_n is then
+                                                     the peer's sum over the KGs
 kg.dominant kg.n kg.name gemeinde.code gemeinde.name bezirk.name bundesland.name             where the unit sits (h3 / bbox / Natura: the dominant KG)
 ```
 Every per-cell number comes from the filter index bins (`/api/v1/ne/glyph/fidx`) joined with the cells'

@@ -1357,7 +1357,7 @@ func neStatsCellsBody(ids []uint64) []byte {
 // NEI1 body. A peer that does not take cell lists yet answers 404/405/415 →
 // a plain "not available" with the reason, never a whole-unit figure
 // passed off as filtered.
-func neStatsPeerFetchCells(p neStatsPeer, c *neStatsCells, year string) (map[string]interface{}, string) {
+func neStatsPeerFetchCells(p neStatsPeer, c *neStatsCells, year, win string) (map[string]interface{}, string) {
 	if c == nil || c.n == 0 {
 		return nil, "no matching cells"
 	}
@@ -1367,6 +1367,9 @@ func neStatsPeerFetchCells(p neStatsPeer, c *neStatsCells, year string) (map[str
 	}
 	if year != "" && p.id == "sub" {
 		u += "&year=" + url.QueryEscape(year)
+	}
+	if p.id == "srtm" {
+		u += win
 	}
 	sum := sha256.Sum256(c.body)
 	key := "peer/" + u + "#" + hex.EncodeToString(sum[:8])
@@ -1560,6 +1563,56 @@ func neStatsPeerFetch(p neStatsPeer, q string, year string) (map[string]interfac
 	return m, ""
 }
 
+// neStatsTreeWindow — the filter's apex height window as the observed-layer
+// peer's &min_height=&max_height= (m, inclusive, on its exact heights), so its
+// tree figures count the apices ours do. ok=false: a window the peer cannot
+// express (ht=unk alone) — its tree figures are then not taken over.
+func neStatsTreeWindow(e *neFiltExpr) (string, bool) {
+	lo, hi, rng := neFiltApexRange(e)
+	if !rng {
+		return "", true
+	}
+	if lo > hi {
+		return "", false
+	}
+	q := ""
+	if lo > 6 {
+		q += "&min_height=" + strconv.FormatFloat(float64(lo)*0.5, 'f', -1, 64)
+	}
+	if hi < 254 {
+		q += "&max_height=" + strconv.FormatFloat(float64(hi)*0.5, 'f', -1, 64)
+	}
+	return q, true
+}
+
+// neStatsPeerTrees — the tree figures of our envelope become the observed-layer
+// peer's, when its envelope covers exactly our cells (a kg / h3 / bbox unit, or
+// the cell list of a filtered one): count, mean, tallest and bands from its
+// exact apex heights (0.25 m) instead of our 0.5 m lists. trees.per_ha stays
+// per ha of OUR area_ha. Without the peer's figures ours stand.
+func neStatsPeerTrees(e *neStatsEnvelope, pe map[string]interface{}) {
+	pf, _ := pe["figures"].(map[string]interface{})
+	n, ok := pf["trees_n"].(float64)
+	if _, has := pf["trees.height_mean_m"]; !ok || !has {
+		return
+	}
+	for k := range e.Figures {
+		if k == "trees_n" || strings.HasPrefix(k, "trees.") || strings.HasPrefix(k, "trees_height_n.") {
+			delete(e.Figures, k)
+		}
+	}
+	approx, _ := e.Coverage["approx"].(bool)
+	for k, v := range pf {
+		if k == "trees_n" || k == "trees_owned_n" || k == "trees.height_mean_m" || strings.HasPrefix(k, "trees_height_n.") || (k == "trees.tallest_m" && !approx) {
+			e.Figures[k] = v
+		}
+	}
+	if a, _ := e.Figures["area_ha"].(float64); a > 0 {
+		e.Figures["trees.per_ha"] = neRound(n/a, 1)
+	}
+	e.Coverage["trees"] = neStatsPeers()[0].service
+}
+
 // neStatsPeerUnits — a peer's answer may be one envelope or {units:[…]} (kg
 // lists); return the envelopes by unit key.
 func neStatsPeerUnits(m map[string]interface{}) []map[string]interface{} {
@@ -1632,6 +1685,11 @@ func neStatsPeerSum(us []map[string]interface{}, key interface{}) map[string]int
 }
 
 func neStatsAdditive(k string) bool {
+	// a KG's trees_n counts its border cells whole, in every KG touching them: no sum
+	// over KGs; trees_owned_n is the count that adds up
+	if k == "trees_n" || strings.HasPrefix(k, "trees_height_n.") {
+		return false
+	}
 	if strings.HasSuffix(k, "_pct") || strings.HasSuffix(k, "_year") || strings.HasSuffix(k, "_m") || strings.HasSuffix(k, "_deg") || strings.Contains(k, ".mean") || strings.HasPrefix(k, "top_") || strings.HasPrefix(k, "gemeinde.") || strings.HasPrefix(k, "kg.") || k == "year" || k == "prev_year" {
 		return false
 	}
@@ -1747,7 +1805,7 @@ func neStatsSortedKeys(m map[string]interface{}) []string {
 
 // neStatsTreeRank — the tree figures read count, density, heights, then the bands from low to high.
 func neStatsTreeRank(k string) int {
-	for i, n := range []string{"trees_n", "trees.per_ha", "trees.height_mean_m", "trees.tallest_m"} {
+	for i, n := range []string{"trees_n", "trees_owned_n", "trees.per_ha", "trees.height_mean_m", "trees.tallest_m"} {
 		if k == n {
 			return i
 		}
@@ -1823,6 +1881,7 @@ func handleNEStatsUnit(w http.ResponseWriter, r *http.Request, gateID string) {
 	}
 	keys := splitCSV(q.Get("keys"))
 	year := q.Get("year")
+	win, winOK := neStatsTreeWindow(expr)
 
 	// peers first (network), ours meanwhile
 	type peerRes struct {
@@ -1846,7 +1905,7 @@ func handleNEStatsUnit(w http.ResponseWriter, r *http.Request, gateID string) {
 				var m map[string]interface{}
 				var err string
 				if filt { // a filtered unit = its matching cells: the peers get the list, never the whole unit
-					m, err = neStatsPeerFetchCells(p, cells, year)
+					m, err = neStatsPeerFetchCells(p, cells, year, win)
 				} else {
 					m, err = neStatsPeerFetch(p, pq, year)
 				}
@@ -1896,6 +1955,8 @@ func handleNEStatsUnit(w http.ResponseWriter, r *http.Request, gateID string) {
 		pick := pr.env
 		if us := neStatsPeerUnits(pr.env); len(us) > 1 { // kg lists (Gemeinde) → sum the additive figures
 			pick = neStatsPeerSum(us, e.Unit["key"])
+		} else if pr.peer.id == "srtm" && winOK && len(us) == 1 && (filt || units[pr.uid].kind == "kg" || units[pr.uid].kind == "h3" || units[pr.uid].kind == "bbox") {
+			neStatsPeerTrees(e, us[0]) // the same cells at the peer: its tree figures are ours
 		}
 		e.Peers[pr.peer.service] = pick
 	}
