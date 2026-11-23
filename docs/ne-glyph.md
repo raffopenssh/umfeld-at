@@ -903,6 +903,16 @@ H3 res-10 hexagon holding ≥ 1 LiDAR apex ≥ 3 m, rolled up exactly to coarser
   resolution off) in the chip `.glyph-trn` that wears the note's clothes in the note's corner (*trees · 547 891 818 in
   Austria · tallest 60 m*; ≤ 640 px without the `.w0` words), in the legend block `troBlock` (via `treeBlock`; the legend exists in the overview while
   the trees are on, `troFar()`, like the subsidy legend), and per res-7 cell as the card row `troDotLine`.
+- **Filter on** (2026-11-23): every in-view tree figure reads like the cells beside it — funnel, what passes, of all in
+  view (`troFlt` = the filter row's own tree figure, `fltTreeS0`/`fvTreeS0`): chip *🌲 ⧩ ≈ 2.7 M of 548 M* (the icon is
+  the word), note *· ⧩ 21 k of 2.3 M trees*, legend block *⧩ 21 k of 2 270 773 trees*. One copy: while the chip or the
+  note carries it the filter row hides its `.dt` span (`troDup` → `.glyph-filt.tvd`) and the legend's filter line drops
+  its trees. No filter figure yet → the plain count stands.
+- **Under the veil**: with full-resolution tiles the sheet is placed inside `.hi` right before `.ov-flt` (`troPlace`),
+  so the veil (and the res-9 sample sheet) covers it like every fill. In the overview the veil lives inside the dots /
+  faces the sheet covers, so its share per res-7 hexagon is folded into the sheet's weight (`troVl`, `TRO_V` .8 at
+  'nothing matches'; box hexagons take their res-7 parent's share via `near`); `troVeil` (from `fvSync`) repaints when
+  the expression or its answer changes (`tro.vk`).
 - **Selection row** (`troUnitRow`, KG and area cards): `trees ▂▅▇▅▂ 3–53 m · mean 19.4 m · 142 634 trees` — the height
   distribution of the unit as a sparkline (`troSpark`: tree tops per metre of height per band, title names the
   fullest band), independent of the toggle. `GET /api/v1/ne/glyph/trees?u=<unit token>` (`neStandsUnit`): KG-based
