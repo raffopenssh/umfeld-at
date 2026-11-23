@@ -911,6 +911,8 @@ H3 res-10 hexagon holding ≥ 1 LiDAR apex ≥ 3 m, rolled up exactly to coarser
 - **Landing page sentence** (`publicTreesSentence`, `treesSpark`): the national count + the same sparkline, rendered
   server-side from the snapshot; without one (first seconds after a restart, peer down) the sentence stands without
   figures. The link `#trees` switches the layer on.
-- Check: `/#trees` → sheet + chip *547 … trees · Austria*; `#kg=63330;full;trees;z=12` → res-8 sheet over the coarse
+- **Frame on demand**: the res-7 sheet is painted on `cells[]`, which the page loads lazily; `troSync` calls `get()` itself
+  (`tro.cg`) — a bare toggle on a phone (no hover, no share link) otherwise waits at *loading trees* until the map is touched.
+- Check: `/#trees` → sheet + chip (also: plain `/`, tap the trees icon without touching the map → sheet < 1 s) *547 … trees · Austria*; `#kg=63330;full;trees;z=12` → res-8 sheet over the coarse
   tiles, legend *whole view · trees*; `z=40` → res 9/10 sheet, no `tree/` tile; `z=115` → crowns, no `.tro path`; card row on a KG, a Gemeinde,
   `adm=6`, a Natura 2000 site.
