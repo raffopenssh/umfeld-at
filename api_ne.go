@@ -271,6 +271,8 @@ func handleNE(w http.ResponseWriter, r *http.Request) {
 		handleNEGlyphAdminOutline(w, r)
 	case rest == "glyph/sub":
 		handleNEGlyphSub(w, r)
+	case rest == "glyph/trees":
+		handleNEGlyphTrees(w, r)
 	case rest == "glyph/fnat":
 		handleNEGlyphFnat(w, r)
 	case rest == "glyph/fidx":

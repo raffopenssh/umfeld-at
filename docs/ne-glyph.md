@@ -79,7 +79,7 @@ bar, hash, legend, card order, tile wants) is derived — `neGlyph.state()` retu
 | ↳ change **under a filter** | with a veil on (`v-flt` / res-9 sheet) `chgZ()` (`ne_glyph_filt.go`) lifts `ov-chg`+`ov-dif` above `ov-flt`, like the tree rings, under a drop-shadow halo; only when the expression asks about change itself (`fltUsesChg`, `chg=…`) is the tile asked with `f=<expr>` and paints only the matching cells (server: `ne_glyph_flt_match.go`, the fidx bin's own mask; a pending bin shows its cells and the tile is `no-store`) — a tree/slope filter leaves every mark. Marks are grown to ~5 screen px with a dark 1-px rim like a tree ring (`neChgGrow`, `neGlyphIdxChgHalo`, nearest-mark colour): always at LOD 2 (a res-12 cell is 2 tile px there), at LOD 0/1 only while downscaled (`hl=` = the veil's `fltHL`, tile px per screen px > 1). Tile key `chg/<k>[~win][~f<expr>][~h<hl>]` (`chgKey`). Hillshade `ov-relo` sits right over `ov-obs`, under every overlay. **No window = full tone** — ageing (`tlAge`, `neGlyphAge`) applies only inside a window / while the strip plays. | same |
 | ↳ loading hint | `hiStatus` → `hiLeftBy()`: `loading · declared 12 · change 27 · relief 4 · photo 3 …` — every tile view in flight (`hi.tiles` with `!ok`) plus the relief/ortho queues; `relStatus`/`otStatus` refresh it. | same |
 | **subsidy** `;subsidy` · `s` | ✓ O (res-7 dots/faces) · 2·0·1 Schläge as drawn (`sub`, fill dimmed .8), the same tile rules as the profile at every LOD (auto-on, under-LOD cull, eviction, fail-soft; never `off`). **With change: variant `subc`** (new / redrawn / gone vs 2024) | ✓ same rules; `ov-obs` dims like the base does (.8) |
-| **trees** `;trees` · `t` | ✓ 0·1 only (`off` below 110×) — crown rings topmost · *was: forced the observed view* | ✓ 0·1 only |
+| **trees** `;trees` · `t` | ✓ every zoom — crown rings topmost at 0·1, the wooded-cell sheet at LOD 2 from `HI_TREE`, farther out (and with full resolution off) the **stand sheet** (§Trees far out) · *was: forced the observed view* | ✓ same |
 | **relief** `;relief` · `r` | ✓ 2·0·1 (full res only; weight eases to ½ past 300×) — hillshade blended over every fill, under the trees | ✓ same |
 | **diff** `;diff` · `;diff=raw` · key `d` | ✓ 0·1 only (`off` below 110×) — magenta marks where the register and the LiDAR disagree about the same cell (ne-change.md §6d, the three corroborated kinds; `=raw` lifts the corroboration): solid *structures declared · none in the LiDAR*, chequer *structures in the LiDAR · none declared*, ring *declared forest · currently no trees*; `ov-dif` over the base at **.4** (like change); legend head = lidar epoch as an age | ✓ same over `ov-obs` at .4 |
 | **time** `;t=` · keys `< >` space | ✓ with change at every LOD — the strip under the view bar (one calendar timeline of bars, pass chips filter it, play button left of the track — ne-change.md §6e), chg tiles/paths windowed and **aged** (fresh hue → ash, floor .18, scale = min(history, 1 y)); play = day-by-day at level 2, paths only, tiles/card/legend catch up on pause (ne-change.md §6e) | ✓ same over `ov-obs` |
@@ -861,3 +861,42 @@ The `v=tree` bitmap is **opaque**; its tiles sit in one `g.sh` per LOD group und
 sheet's opacity (`.843` = `neGlyphTreeSheetAlpha`). With the alpha in the pixels the 1-px bleed ring two neighbours share
 composited twice — a pale stripe along every tile seam, 3+ screen px at LOD 2. Clipping the ring instead leaves an
 anti-aliased dark hairline. Crown marks (`.ap`) are siblings of `g.sh`. Tile key `/o`, URL `&o=1` (cache bust).
+
+## Trees far out — the stand sheet (`ne_glyph_tro.go`, `ne_tree_stands.go`, 2026-11-23)
+
+Contract of record: the observed-layer peer's `llm.txt` section *Trees* (`/trees/summary`, `/trees/hexes`: one row per
+H3 res-10 hexagon holding ≥ 1 LiDAR apex ≥ 3 m, rolled up exactly to coarser H3). The trees toggle is never `off`
+(`avail().trees`); what it shows follows the zoom:
+
+| where | what | from |
+|---|---|---|
+| LOD 0·1 | every crown as a ring | peer `/trees/bbox` (unchanged) |
+| LOD 2, ≥ `HI_TREE` (35×) | wooded-cell sheet `v=tree` | our tiles (unchanged) |
+| everything else — `troVis()`: trees on and (full resolution off or < 35×) | **stand sheet** `g.tro`: one hexagon per H3 cell, one green, opacity = tree tops per ha (`troBucket`, `TRO_D`=260/ha = full ink, 8 steps) | `/api/v1/ne/glyph/trees` |
+
+- **Resolution by box** (`troBox`): the view's lon/lat box snapped to 0.1° → res 9 if ≤ `TRO_A9` 0.2 deg², else snapped
+  to 0.25° → res 8 if ≤ `TRO_A8` 1.4 deg², else the national res-7 table (aligned with `cells[]`, painted with
+  `faceD`). The server enforces the same areas (`neStandsMaxDeg2r8/9`, keeps a box under the peer's 20 000 hexagons).
+  Res 9 shares the res-7 orientation (edge / 7), res 8 is turned 19.1° (edge / √7). A box still loading leaves the
+  previous sheet standing (the viewBox scales it); the res-7 table is the fallback and is always fetched.
+- **Server** (`ne_tree_stands.go`): one national snapshot (res-7 arrays + `total{trees, hexes, tallest_m,
+  mean_height_m, ge_30m, ge_40m, edges_m, bands}`), fetched in `startBackground`, refreshed when older than 1 h with the
+  peer's ETag (304 = free), never on the request path beyond `neStandsWait` 4 s; boxes (binary `NTH1`) and unit
+  answers sit in the tile LRU keyed by the peer's `gen`. Line `ne_tree_stands` on `debug/inflight`.
+- **Count** (`troSum`): the hexagons whose centre is in view; the whole frame in view = the index's own total. Shown in
+  the **in-view note** (`troNote`, spliced into `ivNote`: *in view · declared · 52 k cells · 3.1 M trees* — at every
+  zoom while the trees are on, from `troSum` far out, `treeSum`/`apSum` closer), where there is no note (full
+  resolution off) in the chip `.glyph-trn` that wears the note's clothes in the note's corner (*trees · 547 891 818 in
+  Austria · tallest 60 m*; ≤ 640 px without the `.w0` words), in the legend block `troBlock` (via `treeBlock`; the legend exists in the overview while
+  the trees are on, `troFar()`, like the subsidy legend), and per res-7 cell as the card row `troDotLine`.
+- **Selection row** (`troUnitRow`, KG and area cards): `trees ▂▅▇▅▂ 3–53 m · mean 19.4 m · 142 634 trees` — the height
+  distribution of the unit as a sparkline (`troSpark`: tree tops per metre of height per band, title names the
+  fullest band), independent of the toggle. `GET /api/v1/ne/glyph/trees?u=<unit token>` (`neStandsUnit`): KG-based
+  units = one batch call summed over their KGs, a Land = the peer's `state=`, a Natura 2000 site = its outline
+  (`neStandsPolygons`: even-odd rings → polygons with holes); h3 / box / combinations holding a site → 404, no row.
+- **Landing page sentence** (`publicTreesSentence`, `treesSpark`): the national count + the same sparkline, rendered
+  server-side from the snapshot; without one (first seconds after a restart, peer down) the sentence stands without
+  figures. The link `#trees` switches the layer on.
+- Check: `/#trees` → sheet + chip *547 … trees · Austria*; `#kg=63330;full;trees;z=12` → res-8 sheet over the coarse
+  tiles, legend *whole view · trees*; `z=40` → the `v=tree` tiles, no `.tro path`; card row on a KG, a Gemeinde,
+  `adm=6`, a Natura 2000 site.

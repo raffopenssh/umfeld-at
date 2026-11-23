@@ -7,7 +7,10 @@
 package main
 
 import (
+	"fmt"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -449,7 +452,7 @@ const publicDocsHTMLTemplate = `<!doctype html><html lang="en"><head><meta chars
 <style>{CSS}</style></head><body>
 <h1>umfeld-at — context layers around a place in Austria <span class="stage" title="{STAGE} — {STAGE_NOTE}">{STAGE}</span></h1>
 {GLYPH}<p>Austria as H3 cells. The map is the service: declared land use from the BEV cadastre, digested by
-peers; the use that LiDAR and satellite observe; and the change between digests, cell by cell. Around it,
+peers; the use that LiDAR and satellite observe; and the change between digests, cell by cell.{TREES} Around it,
 the context of any point — municipality, land price, Natura 2000, OpenStreetMap, place names, law references.
 JSON, CORS, no key. Source: <a href="https://github.com/raffopenssh/umfeld-at">github.com/raffopenssh/umfeld-at</a> (MIT).</p>
 <p><strong>Cadastre stays client-side.</strong> Parcels, footprints and land use come from the official BEV
@@ -511,7 +514,7 @@ BEV, AMA, BML, EEA, UNEP-WCMC, OpenStreetMap, basemap.at or the Bundeskanzleramt
 // (publicNEHTMLSection lives in the ban-checked api_docs_public_ne.go).
 func publicDocsHTMLText() string {
 	r := strings.NewReplacer("{NE}", publicNEHTMLSection, "{SEO}", seoHeadMeta, "{CSS}", monoDocsCSS+neGlyphCSS+neFilterRefCSS, "{FILTER_REF}", neFilterRefHTML(), "{STAGE_NOTE}", serviceStageNote, "{STAGE}", serviceStage)
-	return neSpliceCoverage(r.Replace(publicDocsHTMLTemplate))
+	return neSpliceCoverage(strings.Replace(r.Replace(publicDocsHTMLTemplate), "{TREES}", publicTreesSentence(), 1))
 }
 
 // servePublicLLM / servePublicDocs — used by the docs handlers when the request
@@ -544,4 +547,79 @@ func handlePublicRoot(w http.ResponseWriter, r *http.Request) {
 func init() {
 	handleV1Docs = servePublicDocs
 	handleV1DocsLLM = servePublicLLM
+}
+
+// publicTreesSentence — the landing page's line about the tree layer, with the
+// national count of the observed-layer peer's stand index once it is at hand
+// (ne_tree_stands.go; never waits for the peer).
+func publicTreesSentence() string {
+	const link = `<a href="#trees" title="switch the trees on in the map above">`
+	sn := neStandsGet()
+	if sn == nil || sn.Total.Trees <= 0 {
+		return ` And the trees: every LiDAR tree top with its height, counted by {OBS_NAME} — ` + link + `on the map</a> at every zoom.`
+	}
+	t := sn.Total
+	return fmt.Sprintf(` And the trees: %s LiDAR tree tops with their heights%s, counted by {OBS_NAME} — %son the map</a> at every zoom.`,
+		groupThousands(t.Trees), treesSpark(t), link)
+}
+
+// groupThousands — 547891818 → "547 891 818" (narrow no-break spaces).
+func groupThousands(n int64) string {
+	s := strconv.FormatInt(n, 10)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "\u202f" + s[i:]
+	}
+	return s
+}
+
+// treesSpark — the national height distribution as an inline sparkline: one
+// hairline bar per height band (tree tops per metre of height, so the narrow
+// first band reads right), in the text colour, with the range beside it.
+func treesSpark(t neStandsTotal) string {
+	n := len(t.Bands)
+	if n < 2 || len(t.EdgesM) != n {
+		return ""
+	}
+	d := make([]float64, n)
+	var max float64
+	for i := range d {
+		w := 5.0
+		if i+1 < n {
+			w = t.EdgesM[i+1] - t.EdgesM[i]
+		}
+		if w <= 0 {
+			return ""
+		}
+		d[i] = float64(t.Bands[i]) / w
+		if d[i] > max {
+			max = d[i]
+		}
+	}
+	if max <= 0 {
+		return ""
+	}
+	const bw, gap, h = 3.0, 1.0, 12.0
+	var b strings.Builder
+	fmt.Fprintf(&b, ` <svg class="trspark" preserveAspectRatio="none" viewBox="0 0 %.0f %.0f" role="img" aria-label="trees by height, %.0f to %.0f m"><title>trees by height · %.0f m bands from %.0f m · most are %.0f–%.0f m</title>`,
+		float64(n)*(bw+gap)-gap, h, t.EdgesM[0], t.TallestM, t.EdgesM[2]-t.EdgesM[1], t.EdgesM[0], treesSparkPeak(t, d, 0), treesSparkPeak(t, d, 1))
+	for i, v := range d {
+		bh := math.Max(0.6, v/max*h)
+		fmt.Fprintf(&b, `<rect x="%.0f" y="%.1f" width="%.0f" height="%.1f"/>`, float64(i)*(bw+gap), h-bh, bw, bh)
+	}
+	fmt.Fprintf(&b, `</svg> <span class="trspark-r">%.0f–%.0f m</span>`, t.EdgesM[0], t.TallestM)
+	return b.String()
+}
+
+// treesSparkPeak — lower (k=0) / upper (k=1) edge of the fullest band.
+func treesSparkPeak(t neStandsTotal, d []float64, k int) float64 {
+	p := 0
+	for i := range d {
+		if d[i] > d[p] {
+			p = i
+		}
+	}
+	if p+k < len(t.EdgesM) {
+		return t.EdgesM[p+k]
+	}
+	return t.TallestM
 }

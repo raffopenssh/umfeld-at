@@ -260,6 +260,15 @@ GET /api/v1/ne/stats/unit?kg=|h3=|bbox=|adm=|pt=|share=[&f=][&format=json|flat|c
                                             sub.<key> merged in; csv = header + one row per unit (=IMPORTDATA / Power Query); keys= prefix
                                             filter. Same cells as /ne/filter (exact centres and areas); kg= and h3= agree with srtm cell
                                             for cell. ETag, 10 min cache; first call on a cold area builds the bins (seconds).
+GET /api/v1/ne/glyph/trees[?res=8|9&bbox=w,s,e,n]
+                                            the trees away from full resolution, from {OBS_NAME}'s national stand index (LiDAR
+                                            tree tops >= 3 m per H3 hexagon; CC BY 4.0). No parameter: {gen, cell_ha, total{trees,
+                                            hexes, tallest_m, mean_height_m, ge_30m, ge_40m}, trees[], tallest_m[], mean_m[]} —
+                                            one entry per cells[] entry of /ne/glyph (res 7); ETag = gen. With res= and bbox=
+                                            (res 8: <= 1.4 deg2, res 9: <= 0.2 deg2): binary "NTH1" · n u32 · res u32 · cell_ha f32
+                                            · trees u32[n] · lon u16[n] · lat u16[n] · tallest_m u8[n] · mean u8[n] (0.25 m);
+                                            lon = 9 + u/65535*9, lat = 46 + u/65535*4. For your own areas ask {OBS_NAME} directly
+                                            (/api/v1/trees/summary | stands | hexes).
 GET /api/v1/ne/glyph/fnat?f=<expr>[&res=9&bbox=w,s,e,n]
                                             the filter away from full resolution → {f, canon, words, exact, sample?, coarse[]
                                             (fields folded), skipped[] (terms with no answer here), ignored[], cells, match,

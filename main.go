@@ -200,6 +200,7 @@ func main() {
 // machine they would otherwise compete with init for the cores and stretch
 // every restart.
 func startBackground() {
+	go neStandsGet()                                     // trees far out: the observed-layer peer's national stand index, one snapshot, refreshed hourly on demand (ne_tree_stands.go)
 	go neTreeHLoop()                                     // hourly probe: ask the observed-layer peer for apex height lists once it serves them prebuilt (ne_tree_h.go)
 	go neObsCompleteLoop()                               // observed layer vs declared view per KG (ne_obs_complete.go; /ne/revisit kind obs_missing)
 	go func() { neFidxPurgeEmpty(); neFidxWarmLoop() }() // filter index: prebuild the bins behind recent near tiles (ne_glyph_fidx.go)
