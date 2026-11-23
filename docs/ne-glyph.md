@@ -419,8 +419,9 @@ status still "loading…". Three things made the paint heavy and unbounded; each
   DOM cannot be compared, the translator changed it; every writer of `tN`/`fN` goes through `hx`); `fltRepoll` skips decode, swap and
   readout when a poll's `X-NE-Tile` counts are the standing ones. Measured with a stand-in translator (text node → `<font>`, 150 ms):
   legend rewrites 19 → 14 per 10 s on a cold view — what is left is real progress (*N bins left*). **Not confirmed on the device.**
-  Next step if it recurs: `?trace` on that phone (the env row does not record translation yet — `html.translated-ltr/rtl`), or
-  `translate="no"` on the figure's live readouts.
+  Same day: `translate="no"` on the three live readouts — status note `.gt-n`, filter readout `.gf-n`, in-view legend `.lg12`
+  (they stay English under a translator; everything else is still translated). Keep it on any new readout that is rewritten while
+  tiles load. If it recurs: `?trace` on that phone (the env row does not record translation yet — `html.translated-ltr/rtl`).
 - **One script, one name per function** (`TestGlyphScriptNoDuplicateFunctions`): the legend's `trKey()` once replaced the species
   search's `trKey(s,ae)` — one chip (Fichte) whatever was typed, Enter took it. The legend's is `trKeyLine`.
 - **One raster per batch** (`hiCommit`/`hiFlush`, `hi.cq` + `hi.cq2`): a landed, decoded tile waits and the whole
