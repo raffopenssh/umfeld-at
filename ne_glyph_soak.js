@@ -288,7 +288,7 @@ async function layersOf(X, P, s, e) {
     if (e.roads && s.full) want(P + ' roads tiles = base', rd.length === base.length && rd.every(t => t.ok), { rd: rd.length, base: base.length });
     want(P + ' trees', !!s.trees === !!e.trees, s.trees);
     if (e.trees && s.full && s.lod !== 2) want(P + ' apex tiles = base', ap.length === base.length && ap.every(t => t.ok), { ap: ap.length, base: base.length });
-    if (e.trees && s.full && s.lod === 2) { const tt = on.filter(t => t.v === 'tree'), far = !!document.querySelector('svg.glyph .tro path') /* below HI_TREE the stand sheet stands in (ne_glyph_tro.go) */; want(P + (far ? ' no tree tile under HI_TREE' : ' tree tiles = base at lod 2'), far ? tt.length === 0 : tt.length === base.length && tt.every(t => t.ok), { tree: tt.length, base: base.length }); }
+    if (e.trees && s.full && s.lod === 2) { const tt = on.filter(t => t.v === 'tree'), far = !!document.querySelector('svg.glyph .tro path') /* all of LOD 2 is the stand sheet (ne_glyph_tro.go); the v=tree tiles are retired */; want(P + ' stand sheet at lod 2, no tree tile', far && tt.length === 0, { tree: tt.length, sheet: far }); }
     want(P + ' relief', !!s.relief === !!e.relief, s.relief);
     want(P + ' ortho', !!s.ortho === !!e.ortho, s.ortho);
     if (e.ortho && s.full) want(P + ' ortho tiles on screen', document.querySelectorAll('svg.glyph .hi .ov-ortho image').length > 0, s.orthoZ);

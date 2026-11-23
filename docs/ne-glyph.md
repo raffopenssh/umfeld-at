@@ -79,7 +79,7 @@ bar, hash, legend, card order, tile wants) is derived — `neGlyph.state()` retu
 | ↳ change **under a filter** | with a veil on (`v-flt` / res-9 sheet) `chgZ()` (`ne_glyph_filt.go`) lifts `ov-chg`+`ov-dif` above `ov-flt`, like the tree rings, under a drop-shadow halo; only when the expression asks about change itself (`fltUsesChg`, `chg=…`) is the tile asked with `f=<expr>` and paints only the matching cells (server: `ne_glyph_flt_match.go`, the fidx bin's own mask; a pending bin shows its cells and the tile is `no-store`) — a tree/slope filter leaves every mark. Marks are grown to ~5 screen px with a dark 1-px rim like a tree ring (`neChgGrow`, `neGlyphIdxChgHalo`, nearest-mark colour): always at LOD 2 (a res-12 cell is 2 tile px there), at LOD 0/1 only while downscaled (`hl=` = the veil's `fltHL`, tile px per screen px > 1). Tile key `chg/<k>[~win][~f<expr>][~h<hl>]` (`chgKey`). Hillshade `ov-relo` sits right over `ov-obs`, under every overlay. **No window = full tone** — ageing (`tlAge`, `neGlyphAge`) applies only inside a window / while the strip plays. | same |
 | ↳ loading hint | `hiStatus` → `hiLeftBy()`: `loading · declared 12 · change 27 · relief 4 · photo 3 …` — every tile view in flight (`hi.tiles` with `!ok`) plus the relief/ortho queues; `relStatus`/`otStatus` refresh it. | same |
 | **subsidy** `;subsidy` · `s` | ✓ O (res-7 dots/faces) · 2·0·1 Schläge as drawn (`sub`, fill dimmed .8), the same tile rules as the profile at every LOD (auto-on, under-LOD cull, eviction, fail-soft; never `off`). **With change: variant `subc`** (new / redrawn / gone vs 2024) | ✓ same rules; `ov-obs` dims like the base does (.8) |
-| **trees** `;trees` · `t` | ✓ every zoom — crown rings topmost at 0·1, the wooded-cell sheet at LOD 2 from `HI_TREE`, farther out (and with full resolution off) the **stand sheet** (§Trees far out) · *was: forced the observed view* | ✓ same |
+| **trees** `;trees` · `t` | ✓ every zoom — crown rings topmost at 0·1, everywhere else (all of LOD 2, full resolution off) the **stand sheet** (§Trees far out) · *was: forced the observed view* | ✓ same |
 | **relief** `;relief` · `r` | ✓ 2·0·1 (full res only; weight eases to ½ past 300×) — hillshade blended over every fill, under the trees | ✓ same |
 | **diff** `;diff` · `;diff=raw` · key `d` | ✓ 0·1 only (`off` below 110×) — magenta marks where the register and the LiDAR disagree about the same cell (ne-change.md §6d, the three corroborated kinds; `=raw` lifts the corroboration): solid *structures declared · none in the LiDAR*, chequer *structures in the LiDAR · none declared*, ring *declared forest · currently no trees*; `ov-dif` over the base at **.4** (like change); legend head = lidar epoch as an age | ✓ same over `ov-obs` at .4 |
 | **time** `;t=` · keys `< >` space | ✓ with change at every LOD — the strip under the view bar (one calendar timeline of bars, pass chips filter it, play button left of the track — ne-change.md §6e), chg tiles/paths windowed and **aged** (fresh hue → ash, floor .18, scale = min(history, 1 y)); play = day-by-day at level 2, paths only, tiles/card/legend catch up on pause (ne-change.md §6e) | ✓ same over `ov-obs` |
@@ -818,7 +818,7 @@ budget is held against) and restores it after: eviction is exercised in eight st
 `settled()` also waits for the load fold (`state().mem.fold`, the card unfolds 450 ms after the last
 piece), the decode queue and a pending `pin` lands when its cell doc answers — poll `state().pin`
 / the hash for `h3=` rather than sleeping. The legend's *trees* block follows `state().avail.trees`
-(trees toggled on below `HI_TREE` have no block yet).
+(far out and at LOD 2 it is the stand sheet's block, `troBlock`).
 
 ### Agent toolkit — verify a glyph change without a screenshot
 
@@ -871,17 +871,31 @@ H3 res-10 hexagon holding ≥ 1 LiDAR apex ≥ 3 m, rolled up exactly to coarser
 | where | what | from |
 |---|---|---|
 | LOD 0·1 | every crown as a ring | peer `/trees/bbox` (unchanged) |
-| LOD 2, ≥ `HI_TREE` (35×) | wooded-cell sheet `v=tree` | our tiles (unchanged) |
-| everything else — `troVis()`: trees on and (full resolution off or < 35×) | **stand sheet** `g.tro`: one hexagon per H3 cell, one green, opacity = tree tops per ha (`troBucket`, `TRO_D`=260/ha = full ink, 8 steps) | `/api/v1/ne/glyph/trees` |
+| everything else — `troVis()`: trees on and (full resolution off or LOD 2) | **stand sheet** `g.tro`: one hexagon per H3 cell in the crowns' own ramp | `/api/v1/ne/glyph/trees` |
 
-- **Resolution by box** (`troBox`): the view's lon/lat box snapped to 0.1° → res 9 if ≤ `TRO_A9` 0.2 deg², else snapped
-  to 0.25° → res 8 if ≤ `TRO_A8` 1.4 deg², else the national res-7 table (aligned with `cells[]`, painted with
-  `faceD`). The server enforces the same areas (`neStandsMaxDeg2r8/9`, keeps a box under the peer's 20 000 hexagons).
-  Res 9 shares the res-7 orientation (edge / 7), res 8 is turned 19.1° (edge / √7). A box still loading leaves the
+- **One source, no seam** (2026-11-23): the `v=tree` tiles that used to take 35×–110× are no longer asked by the page
+  (`HI_TREE` = 1e9; the tile view itself still exists for the QGIS style). They were painted from our observed rows,
+  which hold trees only where an observer has posted them — whole tiles came back empty beside a full index, so sheet
+  and count broke at 35×. The index and the crowns are the same apices at the peer, so the sheet now runs to the
+  hand-over at `HI_LOD0`.
+- **Ink** (`troTone`, `troCol`, `troBucket`): colour = `AP_COL` (the crown rings' and the scale's ramp) at the
+  hexagon's mean height + `TRO_H` 3.5 m, in `TRO_C` 8 steps; weight = `TRO_A` .843 × the share of its res-12 cells
+  that hold a tree, 1 − e^(−tops per ha / `TRO_D` 65), 8 steps. Both constants were measured against fully observed
+  `v=tree` tiles (share of wooded cells, mean band of a cell's tallest tree). Same colours in both schemes.
+- **Resolution by box** (`troBox`): the view's lon/lat box snapped to 0.05° → res 10 if ≤ `TRO_A10` 0.035 deg², else
+  0.1° → res 9 if ≤ `TRO_A9` 0.2 deg², else 0.25° → res 8 if ≤ `TRO_A8` 1.4 deg², else the national res-7 table
+  (aligned with `cells[]`, painted with `faceD`). The server enforces the same areas (`neStandsMaxDeg2r8/9/10`, keeps a
+  box under the peer's 20 000 hexagons). Res 9 shares the res-7 orientation (edge / 7), res 8 and 10 are turned 19.1°
+  (edge / √7, / 7√7). Box blob = `NTH2`: centres quantised inside the frame its header names (sub-metre; `NTH1` used
+  the national frame, 10 m steps — the page still reads a cached one). A box still loading leaves the
   previous sheet standing (the viewBox scales it); the res-7 table is the fallback and is always fetched.
+- **Corner slot**: the status note `.gt-n` and the count chip `.glyph-trn` are one slot. While the note speaks
+  (`n` without `iv`) the chip is away; a `MutationObserver` on the note's class calls `troChip`. The chip leaves in
+  .2 s and arrives .22 s after the note has gone (never two texts through each other), at the note's measured
+  bottom edge and height. With a chip waiting the settled note (`n cells · 1.1 s`) stays 2.2 s instead of 4.5 s.
 - **Server** (`ne_tree_stands.go`): one national snapshot (res-7 arrays + `total{trees, hexes, tallest_m,
   mean_height_m, ge_30m, ge_40m, edges_m, bands}`), fetched in `startBackground`, refreshed when older than 1 h with the
-  peer's ETag (304 = free), never on the request path beyond `neStandsWait` 4 s; boxes (binary `NTH1`) and unit
+  peer's ETag (304 = free), never on the request path beyond `neStandsWait` 4 s; boxes (binary `NTH2`) and unit
   answers sit in the tile LRU keyed by the peer's `gen`. Line `ne_tree_stands` on `debug/inflight`.
 - **Count** (`troSum`): the hexagons whose centre is in view; the whole frame in view = the index's own total. Shown in
   the **in-view note** (`troNote`, spliced into `ivNote`: *in view · declared · 52 k cells · 3.1 M trees* — at every
@@ -898,5 +912,5 @@ H3 res-10 hexagon holding ≥ 1 LiDAR apex ≥ 3 m, rolled up exactly to coarser
   server-side from the snapshot; without one (first seconds after a restart, peer down) the sentence stands without
   figures. The link `#trees` switches the layer on.
 - Check: `/#trees` → sheet + chip *547 … trees · Austria*; `#kg=63330;full;trees;z=12` → res-8 sheet over the coarse
-  tiles, legend *whole view · trees*; `z=40` → the `v=tree` tiles, no `.tro path`; card row on a KG, a Gemeinde,
+  tiles, legend *whole view · trees*; `z=40` → res 9/10 sheet, no `tree/` tile; `z=115` → crowns, no `.tro path`; card row on a KG, a Gemeinde,
   `adm=6`, a Natura 2000 site.

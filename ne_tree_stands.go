@@ -5,7 +5,7 @@
 //
 //	GET /api/v1/ne/glyph/trees                    national: {total{…}, trees[], tallest_m[], mean_m[]}
 //	                                              one entry per cells[] entry of /ne/glyph (res 7)
-//	GET /api/v1/ne/glyph/trees?res=8|9&bbox=…     binary: the hexagons of the box with their centres
+//	GET /api/v1/ne/glyph/trees?res=8|9|10&bbox=…  binary: the hexagons of the box with their centres
 //
 // The national table is one bounded snapshot (≤ one row per frame cell,
 // ~120 KB), refreshed in the background when older than an hour with the
@@ -39,8 +39,9 @@ const (
 	neStandsWait  = 4 * time.Second  // a request's patience with a cold table
 	// neStandsMaxDeg2 — the widest box per resolution (deg²; 1 deg² ≈ 8 300 km² here): keeps a box
 	// under the peer's 20 000 hexagons. The page picks the resolution by the same numbers (TRO_A).
-	neStandsMaxDeg2r8 = 1.4
-	neStandsMaxDeg2r9 = 0.2
+	neStandsMaxDeg2r8  = 1.4
+	neStandsMaxDeg2r9  = 0.2
+	neStandsMaxDeg2r10 = 0.035 // the index's own resolution (~1.5 ha): the sheet up to where the crowns take over
 )
 
 // neStandsTotal — the national figures (the landing page's sentence, the legend far out).
@@ -258,11 +259,13 @@ func neStandsHexHa(id uint64) float64 {
 	return m2 / 1e4
 }
 
-// neStandsBox — the hexagons of a box at res 8 or 9 as one blob (little endian):
+// neStandsBox — the hexagons of a box at res 8, 9 or 10 as one blob (little endian):
 //
-//	"NTH1" · n u32 · res u32 · cell_ha f32 · trees u32[n] · lon u16[n] · lat u16[n] · tallest_m u8[n] · mean u8[n] (0.25 m)
+//	"NTH2" · n u32 · res u32 · cell_ha f32 · w s e n f32 · trees u32[n] · lon u16[n] · lat u16[n] · tallest_m u8[n] · mean u8[n] (0.25 m)
 //
-// lon = 9 + u/65535·9, lat = 46 + u/65535·4 (the frame of /ne/glyph/fnat?res=9).
+// lon = w + u/65535·(e−w), lat = s + u/65535·(n−s): the centres are quantised inside the frame the
+// header names — the asked box grown to hold every centre — so a res-10 hexagon (66 m edge) sits
+// within a metre of its place (NTH1 used the national frame: 10 m steps, seams between hexagons).
 func neStandsBox(ctx context.Context, res int, w, s, e, n float64) ([]byte, int, error) {
 	resp, err := neStandsPeerGet(ctx, fmt.Sprintf("/hexes?res=%d&bbox=%.3f,%.3f,%.3f,%.3f", res, w, s, e, n), "")
 	if err != nil {
@@ -290,10 +293,9 @@ func neStandsBox(ctx context.Context, res int, w, s, e, n float64) ([]byte, int,
 		tall, mean uint8
 	}
 	rows := make([]row, 0, len(c.H3))
+	lls := make([]h3.LatLng, 0, len(c.H3))
+	idx := make([]int, 0, len(c.H3))
 	var ha float64
-	q := func(v, lo, span float64) uint16 {
-		return uint16(math.Round(math.Max(0, math.Min(1, (v-lo)/span)) * 65535))
-	}
 	for i, hs := range c.H3 {
 		id, err := strconv.ParseUint(hs, 16, 64)
 		if err != nil || !h3.Cell(id).IsValid() {
@@ -303,22 +305,37 @@ func neStandsBox(ctx context.Context, res int, w, s, e, n float64) ([]byte, int,
 		if ha == 0 {
 			ha = neStandsHexHa(id)
 		}
-		rows = append(rows, row{q(ll.Lng, 9, 9), q(ll.Lat, 46, 4), uint32(c.Trees[i]),
+		// the frame holds every centre (the peer may answer hexagons that only touch the box)
+		w, s, e, n = math.Min(w, ll.Lng), math.Min(s, ll.Lat), math.Max(e, ll.Lng), math.Max(n, ll.Lat)
+		lls, idx = append(lls, ll), append(idx, i)
+	}
+	// the header carries the frame as f32: quantise against exactly what the reader will see
+	fw, fs, fe, fn := float64(float32(w)), float64(float32(s)), float64(float32(e)), float64(float32(n))
+	q := func(v, lo, hi float64) uint16 {
+		return uint16(math.Round(math.Max(0, math.Min(1, (v-lo)/(hi-lo))) * 65535))
+	}
+	for j, ll := range lls {
+		i := idx[j]
+		rows = append(rows, row{q(ll.Lng, fw, fe), q(ll.Lat, fs, fn), uint32(c.Trees[i]),
 			uint8(math.Min(255, math.Round(c.Tallest[i]))), uint8(math.Min(255, math.Round(c.Mean[i]*4)))})
 	}
 	k := len(rows)
-	out := make([]byte, 16+10*k)
-	copy(out, "NTH1")
+	const hd = 32
+	out := make([]byte, hd+10*k)
+	copy(out, "NTH2")
 	le := binary.LittleEndian
 	le.PutUint32(out[4:], uint32(k))
 	le.PutUint32(out[8:], uint32(res))
 	le.PutUint32(out[12:], math.Float32bits(float32(ha)))
+	for i, v := range [4]float64{w, s, e, n} {
+		le.PutUint32(out[16+4*i:], math.Float32bits(float32(v)))
+	}
 	for i, r := range rows {
-		le.PutUint32(out[16+4*i:], r.trees)
-		le.PutUint16(out[16+4*k+2*i:], r.lon)
-		le.PutUint16(out[16+6*k+2*i:], r.lat)
-		out[16+8*k+i] = r.tall
-		out[16+9*k+i] = r.mean
+		le.PutUint32(out[hd+4*i:], r.trees)
+		le.PutUint16(out[hd+4*k+2*i:], r.lon)
+		le.PutUint16(out[hd+6*k+2*i:], r.lat)
+		out[hd+8*k+i] = r.tall
+		out[hd+9*k+i] = r.mean
 	}
 	return out, 200, nil
 }
@@ -353,25 +370,28 @@ func handleNEGlyphTrees(w http.ResponseWriter, r *http.Request) {
 	res, _ := strconv.Atoi(q.Get("res"))
 	var b [4]float64
 	p := strings.Split(q.Get("bbox"), ",")
-	ok := len(p) == 4 && (res == 8 || res == 9)
+	ok := len(p) == 4 && res >= 8 && res <= 10
 	for i := 0; ok && i < 4; i++ {
 		v, err := strconv.ParseFloat(strings.TrimSpace(p[i]), 64)
 		ok = err == nil && !math.IsNaN(v) && !math.IsInf(v, 0)
 		b[i] = math.Round(v*1000) / 1000
 	}
 	if !ok || b[0] >= b[2] || b[1] >= b[3] {
-		apiError(w, "res=8|9 and bbox=w,s,e,n are required together (no parameter = the national res-7 table)", 400)
+		apiError(w, "res=8|9|10 and bbox=w,s,e,n are required together (no parameter = the national res-7 table)", 400)
 		return
 	}
 	max := neStandsMaxDeg2r8
-	if res == 9 {
+	switch res {
+	case 9:
 		max = neStandsMaxDeg2r9
+	case 10:
+		max = neStandsMaxDeg2r10
 	}
 	if (b[2]-b[0])*(b[3]-b[1]) > max+1e-9 {
-		apiError(w, fmt.Sprintf("bbox too large for res=%d (≤ %.1f deg²); use a lower res", res, max), 413)
+		apiError(w, fmt.Sprintf("bbox too large for res=%d (≤ %g deg²); use a lower res", res, max), 413)
 		return
 	}
-	key := fmt.Sprintf("trh/%s/%d/%.3f,%.3f,%.3f,%.3f", sn.Gen, res, b[0], b[1], b[2], b[3])
+	key := fmt.Sprintf("trh2/%s/%d/%.3f,%.3f,%.3f,%.3f", sn.Gen, res, b[0], b[1], b[2], b[3])
 	out, hit := neGlyphTileLRU.get(key)
 	if !hit {
 		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
