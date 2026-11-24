@@ -33,6 +33,7 @@ func TestNEDifKind(t *testing.T) {
 		r[lay.crown] = 200
 		return r
 	}
+	cb := func(r []byte, crown, bldN byte) []byte { r[lay.crown], r[lay.bldN] = crown, bldN; return r }
 	forest := []byte{0, 0, 0, 0, 255, 0, 0, 0, 0}
 	grass := []byte{0, 0, 0, 255, 0, 0, 0, 0, 0}
 	built := []byte{200, 0, 0, 55, 0, 0, 0, 0, 0}
@@ -47,7 +48,13 @@ func TestNEDifKind(t *testing.T) {
 		{"edge", lu(100, 255, forest...), obs(grass, 0, 0, 0), false, "edge", neDifKindNone},
 		{"declared built, none seen", lu(255, 255, built...), obs(grass, 0, 0, 0), false, "", neDifKindDeclared},
 		{"seen built, undeclared, no rise", lu(255, 255, grass...), obs(built, 0, 0, 0), false, "", neDifKindNone},
-		{"seen built, undeclared, rise", lu(255, 255, grass...), obs(built, 12, 0, 0), false, "", neDifKindAppeared},
+		{"seen built, undeclared, rise", lu(255, 255, grass...), cb(obs(built, 12, 0, 0), 0, 0), false, "", neDifKindAppeared},
+		{"rise under canopy, no building counted", lu(255, 255, grass...), cb(obs(built, 12, 0, 0), 64, 0), false, "", neDifKindNone},
+		{"rise under canopy, building counted", lu(255, 255, grass...), cb(obs(built, 12, 0, 0), 200, 1), false, "", neDifKindAppeared},
+		{"rise, crown just under 25 %", lu(255, 255, grass...), cb(obs(built, 12, 0, 0), 63, 0), false, "", neDifKindAppeared},
+		{"rise, crown unknown", lu(255, 255, grass...), cb(obs(built, 12, 0, 0), 255, 0), false, "", neDifKindAppeared},
+		{"rise under canopy, count unknown", lu(255, 255, grass...), cb(obs(built, 12, 0, 0), 200, 255), false, "", neDifKindAppeared},
+		{"rise under canopy, raw", lu(255, 255, grass...), cb(obs(built, 12, 0, 0), 200, 0), true, "", neDifKindAppeared},
 		{"seen built, undeclared, raw", lu(255, 255, grass...), obs(built, 0, 0, 0), true, "", neDifKindAppeared},
 		{"forest open, no evidence", lu(255, 255, forest...), obs(grass, 0, 0, 0), false, "", neDifKindNone},
 		{"forest open, loss year", lu(255, 255, forest...), obs(grass, 0, 19, 0), false, "", neDifKindCut},

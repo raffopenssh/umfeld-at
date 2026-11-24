@@ -771,7 +771,13 @@ Effects: kind 2 needs a re-flown cell; kind 3 falls back to the Hansen loss year
 `dh` / `dtm` are nodata there (baked into fidx bins v5 and the national sample; a flight-year change at the
 peer arrives with a new block generation, which rebuilds the bin); the card shows `dh_m` and the cell's own
 two years only where measured. In re-flown cells a rise ≥ 2 m is tree growth in 55 % of cells under canopy —
-it never stands without the observed structure cover. The figures in the table above predate the gate
+it never stands without the observed structure cover. **Canopy guard (2026-11-24):** the cover is not
+enough either, `dh` is a cell average and a cell that is part roof, part growing trees passes on the growth.
+A rise under `crown_frac` ≥ 25 % therefore counts only where `obs_bld_n` ≥ 1. Measured over all 7 850 KGs:
+3 158 kind-2 cells before → 2 513 after; the 645 dropped have median crown 37 %, 3 apices. Rejected:
+`obs_bld_n ≥ 1` alone (480 remain — the count sits in one cell of a roof, 85 % of cells with ≥ 20 % cover
+hold 0) and `crown < 25 %` alone (2 377 — loses 136 roofs under canopy). 255 on either field = guard not
+applicable (none seen today); `raw` lifts it; tile key marker `/k2c`. The figures in the table above predate the gate
 (the script reads the raw row). Triage: `debug/inflight` → `ne_als_gate`.
 
 **DIFF kinds later resolved by a confirmed CHANGE** (145 KGs with confirmed cells and an obs layer,

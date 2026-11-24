@@ -132,7 +132,8 @@ GET /api/v1/ne/glyph/tile?lod=0|1|2&i=&j=[&v=obs|tree|chg|dif|rd|sub|subc][&raw=
                                             SAME cell, today — not change. One hue (magenta), the mark is the kind: solid =
                                             structures declared, none in the LiDAR (declared ≥ 20 %, observed cover < 5 %);
                                             chequer = structures in the LiDAR, none declared (observed ≥ 20 %, declared < 5 %,
-                                            nDSM rise ≥ 2 m between the two flights — only in cells scanned twice); ring = declared forest, currently no trees
+                                            nDSM rise ≥ 2 m between the two flights — only in cells scanned twice; under a crown
+                                            cover ≥ 25 % only where the flight also counted a building, the rise there is tree growth otherwise); ring = declared forest, currently no trees
                                             (declared forest ≥ ½, observed grass/crop/alpine/building land/other ≥ ½, a Hansen loss
                                             year or an nDSM drop ≤ −2 m, no QA'd tree apex in the cell — a cut or a young stand is
                                             forest by design, the mark says what stands there today). Only cells with status ok

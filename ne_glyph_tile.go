@@ -922,6 +922,7 @@ type neObsLayoutT struct {
 	crown, flight int // crown_frac, flight_years (u8 each) or -1
 	// the diff overlay (ne_glyph_dif.go): obs_bld_cover, h_mean, dh_mean (i8 ¼ m), verdict, hansen_loss_year — or -1
 	bld, hMean, dh, verdict, hansen int
+	bldN                            int // obs_bld_n (u8, 255 = unknown) or -1 — kind 2 of the diff, canopy guard
 }
 
 // neObsLayout — walks the python struct format ("<Q9sBBB…") beside fields[]
@@ -930,7 +931,7 @@ func neObsLayout(fields []string, record string) *neObsLayoutT {
 	if len(fields) == 0 || record == "" {
 		return nil
 	}
-	lay := &neObsLayoutT{luOff: -1, treeN: -1, treeH: -1, crown: -1, flight: -1, bld: -1, hMean: -1, dh: -1, verdict: -1, hansen: -1}
+	lay := &neObsLayoutT{luOff: -1, treeN: -1, treeH: -1, crown: -1, flight: -1, bld: -1, bldN: -1, hMean: -1, dh: -1, verdict: -1, hansen: -1}
 	off, fi, i := 0, 0, 0
 	if strings.ContainsRune("<>=!@", rune(record[0])) {
 		i++
@@ -982,6 +983,8 @@ func neObsLayout(fields []string, record string) *neObsLayoutT {
 					lay.flight = off
 				case "obs_bld_cover":
 					lay.bld = off
+				case "obs_bld_n":
+					lay.bldN = off
 				case "h_mean":
 					lay.hMean = off
 				case "dh_mean":
@@ -1184,8 +1187,8 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	}
 	if view == "dif" {
 		st := neDifEpochStamp()
-		key += "/e" + strconv.FormatInt(st, 36) + "/a" + neAlsHash() // a: the re-flown table the height change is read against
-		noStore = st == 0                                            // no lidar year yet (table loading): never let a browser keep this one
+		key += "/e" + strconv.FormatInt(st, 36) + "/a" + neAlsHash() + "/k2c" // k2c: kind 2 canopy guard (2026-11-24), never a tile drawn under the rule before; a: the re-flown table the height change is read against
+		noStore = st == 0                                                     // no lidar year yet (table loading): never let a browser keep this one
 	}
 	if view == "flt" {
 		tw, ts, te, tn := neGlyphTileBox(L, i, j)

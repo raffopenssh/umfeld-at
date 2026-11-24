@@ -9,7 +9,8 @@
 // paint every cell of their kind), never the status filter.
 //
 //	1 declared_built_absent   declared structures ≥ 20 %, observed cover < 5 %      "structures declared · none in the LiDAR"
-//	2 built_undeclared ∧ rise observed cover ≥ 20 %, declared < 5 %, nDSM ≥ +2 m    "structures in the LiDAR · none declared"
+//	2 built_undeclared ∧ rise observed cover ≥ 20 %, declared < 5 %, nDSM ≥ +2 m,
+//	                          not (crown ≥ 25 % ∧ no building counted)              "structures in the LiDAR · none declared"
 //	3 forest_declared_open ∧ cut  declared forest, observed open, loss year or nDSM ≤ −2 m,
 //	                          and no QA'd tree apex in the cell                      "declared forest · currently no trees"
 //
@@ -17,7 +18,16 @@
 // elsewhere both editions hold the same scan and 0 means "not measured again".
 // Kind 2 then has no corroboration and is not drawn; kind 3 rests on the
 // Hansen loss year alone. A rise alone is tree growth in 55 % of re-flown
-// canopy cells — kind 2 always needs the observed structure cover with it.
+// canopy cells — kind 2 always needs the observed structure cover with it,
+// and the cover alone is not enough either: dh is a cell average, a cell that
+// is part roof, part growing trees passes on the growth. So a rise under
+// canopy (crown_frac ≥ 25 %) counts only where the flight also counted a
+// building in the cell (obs_bld_n ≥ 1). Measured 2026-11-24 over all KGs:
+// 3 158 kind-2 cells before, 645 dropped (median crown 37 %, 3 apices),
+// 2 513 remain. obs_bld_n alone would be wrong — it counts a footprint in one
+// cell, 85 % of cells with ≥ 20 % cover hold 0. Unknown (255, or the field
+// not in the row) on either side = guard not applicable, the cell is drawn
+// as before. raw lifts this like the rest of the corroboration.
 //
 // Kind 3 is not a finding against the register: a cut or a young stand is
 // forest in the register by design. It says what stands there today.
@@ -54,6 +64,7 @@ const (
 	neDifBldLo         = 13 // 5 % of 255
 	neDifDHRise        = 8  // +2 m in ¼-m units
 	neDifDHDrop        = -8
+	neDifCrownHi       = 64 // crown_frac ≥ 25 % (scale 254 → 63.5); 255 = unknown
 	neDifVerdictUnkn   = 6
 	neDifPeerTTL       = time.Hour // revalidated by ETag — a 304 is a few hundred bytes
 	neDifPeerRetry     = 10 * time.Minute
@@ -256,7 +267,14 @@ func neDifDom(lu []byte) (dom int, top float64) {
 func neDifKind(lu, obs []byte, lay *neObsLayoutT, raw, reflown bool) int {
 	dg, og := lu[12], obs[lay.luOff] // geb = group 0
 	if og >= neDifBldHi && dg < neDifBldLo {
-		if raw || (reflown && lay.dh >= 0 && int8(obs[lay.dh]) != -128 && int8(obs[lay.dh]) >= neDifDHRise) {
+		if raw {
+			return neDifKindAppeared
+		}
+		if reflown && lay.dh >= 0 && int8(obs[lay.dh]) != -128 && int8(obs[lay.dh]) >= neDifDHRise {
+			// canopy guard: the rise is the trees' unless a building was counted here. Both fields known, else not applicable.
+			if lay.crown >= 0 && lay.bldN >= 0 && obs[lay.crown] != 255 && obs[lay.crown] >= neDifCrownHi && obs[lay.bldN] == 0 {
+				return neDifKindNone
+			}
 			return neDifKindAppeared
 		}
 		return neDifKindNone

@@ -34,7 +34,8 @@ var publicMethodParas = []methodPara{
 		`paint them unaltered. {OBS_NAME} segments LiDAR, orthophoto and satellite series into land cover, heights and ` +
 		`single tree tops (its own method note: {OBS_METHOD}), and supplies the relief. Diff sets declared against ` +
 		`observed for the same cell today and marks only three robust cases: structures declared but under 5 percent observed ` +
-		`cover, structures observed with a height gain of 2 m or more but none declared, and declared forest that was cut ` +
+		`cover, structures observed with a height gain of 2 m or more but none declared (under a quarter or more crown cover only ` +
+		`where a building was counted, since trees grow that much), and declared forest that was cut ` +
 		`and holds no tree top. A height change exists only where a place was laser-scanned twice — about a quarter of ` +
 		`the cells, a median of 12 years apart; elsewhere it is empty rather than zero, in the filter too, and a cut is ` +
 		`then taken from the satellite loss year alone. Flights are years old (each cell knows its flight years) and a ` +
