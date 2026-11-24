@@ -32,11 +32,13 @@ var publicMethodParas = []methodPara{
 		`on the ground.`},
 	{"Observed use, trees, diff, subsidy", `These layers are made by peers on the same hexagons; we store, join and ` +
 		`paint them unaltered. {OBS_NAME} segments LiDAR, orthophoto and satellite series into land cover, heights and ` +
-		`single tree tops (its own method note is on its page), and supplies the relief. Diff sets declared against ` +
+		`single tree tops (its own method note: {OBS_METHOD}), and supplies the relief. Diff sets declared against ` +
 		`observed for the same cell today and marks only three robust cases: structures declared but under 5 percent observed ` +
 		`cover, structures observed with a height gain of 2 m or more but none declared, and declared forest that was cut ` +
-		`and holds no tree top. Flights are years old (each cell knows its flight year) and a clear-cut is forest in the ` +
-		`register by design, so a mark says where to look, not who is wrong. Subsidy shows INVEKOS Schläge (AMA) as ` +
+		`and holds no tree top. A height change exists only where a place was laser-scanned twice — about a quarter of ` +
+		`the cells, a median of 12 years apart; elsewhere it is empty rather than zero, in the filter too, and a cut is ` +
+		`then taken from the satellite loss year alone. Flights are years old (each cell knows its flight years) and a ` +
+		`clear-cut is forest in the register by design, so a mark says where to look, not who is wrong. Subsidy shows INVEKOS Schläge (AMA) as ` +
 		`farmers drew them for their claims; {SUB_NAME} rolls them onto the cells and compares each year with the one ` +
 		`before (new, redrawn, gone).`},
 	{"Filter and counts", `Every filter field is a per-cell value from the layers above, or a distance computed from ` +
@@ -60,6 +62,7 @@ func publicMethodHTML() string {
 	for _, p := range publicMethodParas {
 		t := html.EscapeString(p.Text)
 		t = strings.Replace(t, "{OBS_NAME}", `<a href="{OBS_WEB}/">{OBS_NAME}</a>`, 1)
+		t = strings.Replace(t, "{OBS_METHOD}", `<a href="{OBS_WEB}/#how-made">how it was made</a>`, 1)
 		t = strings.Replace(t, "{SUB_NAME}", `<a href="{SUB_API}/">{SUB_NAME}</a>`, 1)
 		t = strings.Replace(t, "vtcseamless", `<a href="https://github.com/raffopenssh/vtcseamless">vtcseamless</a>`, 1)
 		t = strings.Replace(t, "ne_cells", `<a href="/api/v1/docs/ne.md">ne_cells</a>`, 1)
@@ -77,7 +80,7 @@ func publicMethodText() string {
 			b.WriteByte('\n')
 		}
 		col := 0
-		for _, w := range strings.Fields(p.Head + ". " + p.Text) {
+		for _, w := range strings.Fields(p.Head + ". " + strings.Replace(p.Text, "{OBS_METHOD}", "{OBS_WEB}/api/v1/docs/method", 1)) {
 			n := len([]rune(w))
 			if col > 0 && col+1+n > 108 {
 				b.WriteByte('\n')

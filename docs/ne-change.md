@@ -760,6 +760,20 @@ vocabulary/classifier); treat acker+gruen as one class; mixed-epoch KGs (934) on
 print the lidar year next to the figure. The epoch filter is *not* a noise filter here — it is the
 label.
 
+**Re-flown gate (2026-11-24, `ne_als_gate.go`).** The row's `dh_mean` / `dtm_change` are never flagged where
+a place was not re-flown: both editions hold the same scan, the value is 0 = *not measured again* (75 % of
+cells; exactly 0 in 99.3 % of them). Every reader gates on the cell's two flight years (newest > oldest,
+both known), taken per res-10 cell from the observed-layer peer's national sample
+(`/api/v1/cells/sample?res=10&format=bin&fields=dh_m,als_year_newest,als_year_oldest`, ≈ 1.2 MB zstd per
+generation, conditional GET) and its rule document `/api/v1/cells/als` (polled every 10 min while
+`range_rule.healed` is false — the listed (oldest, newest) pairs then count as not re-flown — hourly after).
+Effects: kind 2 needs a re-flown cell; kind 3 falls back to the Hansen loss year elsewhere; the filter fields
+`dh` / `dtm` are nodata there (baked into fidx bins v5 and the national sample; a flight-year change at the
+peer arrives with a new block generation, which rebuilds the bin); the card shows `dh_m` and the cell's own
+two years only where measured. In re-flown cells a rise ≥ 2 m is tree growth in 55 % of cells under canopy —
+it never stands without the observed structure cover. The figures in the table above predate the gate
+(the script reads the raw row). Triage: `debug/inflight` → `ne_als_gate`.
+
 **DIFF kinds later resolved by a confirmed CHANGE** (145 KGs with confirmed cells and an obs layer,
 4 302 confirmed cells; before = row − `d_lu_m2`/area, after = row): resolved 870 · persisted 1 471 ·
 introduced 916 · agree both sides 1 045. What resolves is `forest_undeclared → agree` (607: the

@@ -13,6 +13,12 @@
 //	3 forest_declared_open ∧ cut  declared forest, observed open, loss year or nDSM ≤ −2 m,
 //	                          and no QA'd tree apex in the cell                      "declared forest · currently no trees"
 //
+// The nDSM change counts only in a cell that was scanned twice (ne_als_gate.go):
+// elsewhere both editions hold the same scan and 0 means "not measured again".
+// Kind 2 then has no corroboration and is not drawn; kind 3 rests on the
+// Hansen loss year alone. A rise alone is tree growth in 55 % of re-flown
+// canopy cells — kind 2 always needs the observed structure cover with it.
+//
 // Kind 3 is not a finding against the register: a cut or a young stand is
 // forest in the register by design. It says what stands there today.
 //
@@ -245,11 +251,12 @@ func neDifDom(lu []byte) (dom int, top float64) {
 }
 
 // neDifKind — the kind drawn for one cell (status already ok). raw drops the
-// corroboration of kinds 2 and 3.
-func neDifKind(lu, obs []byte, lay *neObsLayoutT, raw bool) int {
+// corroboration of kinds 2 and 3. reflown: the cell was scanned twice, so
+// its height change is a measurement.
+func neDifKind(lu, obs []byte, lay *neObsLayoutT, raw, reflown bool) int {
 	dg, og := lu[12], obs[lay.luOff] // geb = group 0
 	if og >= neDifBldHi && dg < neDifBldLo {
-		if raw || (lay.dh >= 0 && int8(obs[lay.dh]) != -128 && int8(obs[lay.dh]) >= neDifDHRise) {
+		if raw || (reflown && lay.dh >= 0 && int8(obs[lay.dh]) != -128 && int8(obs[lay.dh]) >= neDifDHRise) {
 			return neDifKindAppeared
 		}
 		return neDifKindNone
@@ -264,7 +271,7 @@ func neDifKind(lu, obs []byte, lay *neObsLayoutT, raw bool) int {
 			return neDifKindNone // trees stand there (srtm's QA'd apices): not "no trees"
 		}
 		loss := lay.hansen >= 0 && obs[lay.hansen] != 0 && obs[lay.hansen] != 255
-		drop := lay.dh >= 0 && int8(obs[lay.dh]) != -128 && int8(obs[lay.dh]) <= neDifDHDrop
+		drop := reflown && lay.dh >= 0 && int8(obs[lay.dh]) != -128 && int8(obs[lay.dh]) <= neDifDHDrop
 		if raw || loss || drop {
 			return neDifKindCut
 		}
@@ -330,6 +337,7 @@ func neGlyphDifRender(g *neGlyphTileGeom, ids []uint64, kgs []string, raw bool, 
 	if lay == nil {
 		return img
 	}
+	als := neAlsGateGet()
 	var poly [8][2]float64
 	grow := m.hl >= 1 // LOD 2 (a cell is two tile px) or downscaled: solid marks of each kind, grown with a rim like the change marks
 	for k, id := range res.ids {
@@ -342,7 +350,7 @@ func neGlyphDifRender(g *neGlyphTileGeom, ids []uint64, kgs []string, raw bool, 
 			continue
 		}
 		m.dif.cmp++
-		kind := neDifKind(lu, row, lay, raw)
+		kind := neDifKind(lu, row, lay, raw, als.is(id))
 		if kind == neDifKindNone {
 			continue
 		}
@@ -402,6 +410,8 @@ func neGlyphPicDif(id uint64, kgs map[string]uint8) map[string]interface{} {
 		return nil
 	}
 	o := map[string]interface{}{}
+	als := neAlsGateGet()
+	fo, fn, reflown := als.reflown(id)
 	dd, dt := neDifDom(lu[12:21])
 	od, ot := neDifDom(row[lay.luOff : lay.luOff+9])
 	if dd >= 0 {
@@ -415,16 +425,23 @@ func neGlyphPicDif(id uint64, kgs map[string]uint8) map[string]interface{} {
 	} else {
 		o["status"] = "ok"
 		o["agree"] = dd >= 0 && dd == od
-		if kd := neDifKind(lu, row, lay, false); kd != neDifKindNone {
+		if kd := neDifKind(lu, row, lay, false, reflown); kd != neDifKindNone {
 			o["kind"] = neDifKindName[kd]
 			o["kind_n"] = kd
 		}
-		if kd := neDifKind(lu, row, lay, true); kd != neDifKindNone {
+		if kd := neDifKind(lu, row, lay, true, reflown); kd != neDifKindNone {
 			o["kind_raw"] = neDifKindName[kd]
 		}
 	}
-	if lay.dh >= 0 && int8(row[lay.dh]) != -128 {
-		o["dh_m"] = float64(int8(row[lay.dh])) * 0.25
+	// the height change is a measurement only where the cell was scanned twice
+	if als != nil {
+		o["reflown"] = reflown
+	}
+	if reflown {
+		o["als_cell"] = map[string]interface{}{"oldest": fo, "newest": fn}
+		if lay.dh >= 0 && int8(row[lay.dh]) != -128 {
+			o["dh_m"] = float64(int8(row[lay.dh])) * 0.25
+		}
 	}
 	if lay.hansen >= 0 && row[lay.hansen] != 0 && row[lay.hansen] != 255 {
 		o["loss_year"] = 2000 + int(row[lay.hansen])

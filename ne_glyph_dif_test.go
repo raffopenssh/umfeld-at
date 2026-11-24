@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/binary"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -63,9 +65,19 @@ func TestNEDifKind(t *testing.T) {
 		if c.status != "" {
 			continue
 		}
-		if k := neDifKind(c.lu, c.o, lay, c.raw); k != c.kind {
+		if k := neDifKind(c.lu, c.o, lay, c.raw, true); k != c.kind {
 			t.Errorf("%s: kind %d, want %d", c.name, k, c.kind)
 		}
+	}
+	// one scan only: the height change is not a measurement — no rise, no drop; Hansen still counts
+	if k := neDifKind(lu(255, 255, grass...), obs(built, 12, 0, 0), lay, false, false); k != neDifKindNone {
+		t.Errorf("rise in a cell not re-flown: kind %d", k)
+	}
+	if k := neDifKind(lu(255, 255, forest...), obs(grass, -10, 0, 0), lay, false, false); k != neDifKindNone {
+		t.Errorf("drop in a cell not re-flown: kind %d", k)
+	}
+	if k := neDifKind(lu(255, 255, forest...), obs(grass, 0, 19, 0), lay, false, false); k != neDifKindCut {
+		t.Errorf("loss year in a cell not re-flown: kind %d", k)
 	}
 	o := obs(grass, 0, 0, 0)
 	o[lay.verdict] = neDifVerdictUnkn
@@ -114,5 +126,48 @@ func TestNEDifEpochETag(t *testing.T) {
 	}
 	if _, ok := neDifAlsOf("63330"); !ok || neDifEpochStamp() != stamp {
 		t.Fatalf("304 must keep the table and its stamp")
+	}
+}
+
+// TestNEAlsGate — the re-flown table from the peer's sample body: the plain
+// gate (newest > oldest, both known), the until-healed pair list, the lookup
+// by any descendant of the res-10 cell.
+func TestNEAlsGate(t *testing.T) {
+	ids := []uint64{0x8c1e15ad2c001ff, 0x8c1e15ad2c401ff, 0x8c1e15ad2c801ff, 0x8c1e15ad2cc01ff}
+	yrs := [][2]uint16{{2019, 2008}, {2012, 2012}, {2012, 2008}, {65535, 2008}} // newest, oldest
+	hdr := fmt.Sprintf(`{"n":4,"gen":"g1","ids":"delta_u64","columns":[{"name":"id","dtype":"u64","bytes":32},{"name":"dh_m","dtype":"i8","bytes":4},{"name":"als_year_newest","dtype":"u16","bytes":8},{"name":"als_year_oldest","dtype":"u16","bytes":8}]}`)
+	body := append([]byte("NEX1"), binary.LittleEndian.AppendUint32(nil, uint32(len(hdr)))...)
+	body = append(body, hdr...)
+	prev := uint64(0)
+	for _, id := range ids {
+		body = binary.LittleEndian.AppendUint64(body, id-prev)
+		prev = id
+	}
+	body = append(body, 0, 0, 0, 0)
+	for c := 0; c < 2; c++ {
+		for _, y := range yrs {
+			body = binary.LittleEndian.AppendUint16(body, y[c])
+		}
+	}
+	g, err := neAlsGateParse(body, nil)
+	if err != nil || len(g.ids) != 2 || g.rows != 3 || g.gen != "g1" {
+		t.Fatalf("plain gate: %+v %v", g, err)
+	}
+	if o, n, ok := g.reflown(ids[0]); !ok || o != 2008 || n != 2019 {
+		t.Errorf("cell 0: %d %d %v", o, n, ok)
+	}
+	if g.is(ids[1]) || !g.is(ids[2]) || g.is(ids[3]) {
+		t.Errorf("gate: same year %v, 2008→2012 %v, unknown %v", g.is(ids[1]), g.is(ids[2]), g.is(ids[3]))
+	}
+	h, err := neAlsGateParse(body, [][2]int{{2008, 2012}})
+	if err != nil || len(h.ids) != 1 || h.pairs != 1 || h.is(ids[2]) || h.hash == g.hash {
+		t.Fatalf("pair list: %+v %v", h, err)
+	}
+	var none *neAlsGateT
+	if none.is(ids[0]) {
+		t.Error("no table must answer: not re-flown")
+	}
+	if _, err := neAlsGateParse(body[:40], nil); err == nil {
+		t.Error("truncated body accepted")
 	}
 }

@@ -163,7 +163,8 @@ func neSampPeersBehind() (behind, lists bool) {
 	obsBehind := obs != "" && of(sp.Hdr.Obs, "epoch") != obs
 	sub := neSampPeerTag("sub")
 	subBehind := sub != "" && of(sp.Hdr.Sub, "release") != sub
-	return obsBehind || subBehind, obsBehind && sp.treeH() == nil && neTreeHMode()
+	alsBehind := sp.Hdr.Als == "" && neAlsGate.Load() != nil // built before the re-flown gate: one pass, by the age rule
+	return obsBehind || subBehind || alsBehind, obsBehind && sp.treeH() == nil && neTreeHMode()
 }
 
 func neNatMaybeBuild() {

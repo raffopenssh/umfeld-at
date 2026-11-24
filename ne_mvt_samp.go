@@ -104,7 +104,8 @@ type neSampHdr struct {
 	Ms       int64       `json:"ms"`
 	KGs      int         `json:"kgs"`
 	Cells    int         `json:"cells"`
-	THLen    int         `json:"th_len"` // bytes of apex height lists in the tail (-1: no lists — the peer's sample had none)
+	Als      string      `json:"als,omitempty"` // "1": dh / dtm gated by the re-flown table (ne_als_gate.go)
+	THLen    int         `json:"th_len"`        // bytes of apex height lists in the tail (-1: no lists — the peer's sample had none)
 }
 
 // neSamp — the live store: slices into one anonymous mapping.
@@ -474,6 +475,7 @@ type neSampBuilder struct {
 	cells  int
 	t0     time.Time
 	failed error
+	als    *neAlsGateT // re-flown table of this pass (nil: none — dh / dtm stay nodata)
 }
 
 func neSampBegin() *neSampBuilder {
@@ -483,7 +485,7 @@ func neSampBegin() *neSampBuilder {
 	if err != nil {
 		return &neSampBuilder{failed: err}
 	}
-	return &neSampBuilder{f: f, w: bufio.NewWriterSize(f, 1<<20), path: p, out: neSampPath(), rec: make([]byte, neSampRec), idx: map[uint64]int32{}, t0: time.Now()}
+	return &neSampBuilder{f: f, w: bufio.NewWriterSize(f, 1<<20), path: p, out: neSampPath(), rec: make([]byte, neSampRec), idx: map[uint64]int32{}, t0: time.Now(), als: neAlsGateGet()}
 }
 
 // kg — one KG of the national pass: rows = the declared view (id-sorted,
@@ -616,6 +618,10 @@ func (b *neSampBuilder) kg(kg string, rows, obs []byte, lay *neObsLayoutT, cum m
 				for _, m := range neFidxObsMap {
 					put(m.id, ob[m.off])
 				}
+				if !b.als.is(id) {
+					put("dh", 0x80)
+					put("dtm", 0x80)
+				}
 				if ob[28] != 0 {
 					put("als", ob[28])
 				}
@@ -741,6 +747,7 @@ func (b *neSampBuilder) finish(natState string) (*neSamp, error) {
 		hdr.N2K = append(hdr.N2K, natura2000Sites[si].SiteCode)
 	}
 	state := neSampState(natState, obsMeta, subMeta, hdr.Dist)
+	hdr.Als = "1"
 	hdr.State = state
 	// the apex height lists (heap, transient): joined by id before the image is sized
 	hdr.THLen = -1

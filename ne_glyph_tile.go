@@ -1184,8 +1184,8 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 	}
 	if view == "dif" {
 		st := neDifEpochStamp()
-		key += "/e" + strconv.FormatInt(st, 36)
-		noStore = st == 0 // no lidar year yet (table loading): never let a browser keep this one
+		key += "/e" + strconv.FormatInt(st, 36) + "/a" + neAlsHash() // a: the re-flown table the height change is read against
+		noStore = st == 0                                            // no lidar year yet (table loading): never let a browser keep this one
 	}
 	if view == "flt" {
 		tw, ts, te, tn := neGlyphTileBox(L, i, j)

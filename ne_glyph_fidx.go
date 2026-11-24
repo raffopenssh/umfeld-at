@@ -60,7 +60,7 @@ import (
 )
 
 const (
-	neFidxVer      = 4 // 4: apex height list tail (ne_tree_h.go). 3: rem column (remoteness grid). 2: bins built before e8d7338 (declared view serving log-only res-9 chunks) lacked those cells and their state hash did not move
+	neFidxVer      = 5 // 5: dh / dtm are nodata where the cell was not re-flown (ne_als_gate.go). 4: apex height list tail (ne_tree_h.go). 3: rem column (remoteness grid). 2: bins built before e8d7338 (declared view serving log-only res-9 chunks) lacked those cells and their state hash did not move
 	neFidxBinDeg   = 0.025
 	neFidxHaloDeg  = 0.0005 // > one res-12 cell (≈ 16 m ≈ 0.0002°)
 	neFidxDiskCap  = 2 << 30
@@ -741,6 +741,7 @@ func neFidxBuild(i, j int, st string) (*neFidxBin, error) {
 	put16 := func(id string, q int, v uint16) { binary.LittleEndian.PutUint16(bin.Cols[id][2*q:], v) }
 	// declared · obs
 	unk := 0
+	als := neAlsGateGet()
 	for q, k := range ord {
 		c := &cells[k]
 		if len(c.lu) >= 21 {
@@ -766,6 +767,9 @@ func neFidxBuild(i, j int, st string) (*neFidxBin, error) {
 		}
 		for _, m := range neFidxObsMap {
 			bin.Cols[m.id][q] = ob[m.off]
+		}
+		if !als.is(c.id) { // one scan only: 0 there is "not measured again"
+			bin.Cols["dh"][q], bin.Cols["dtm"][q] = 0x80, 0x80
 		}
 		if ob[28] != 0 {
 			bin.Cols["als"][q] = ob[28]

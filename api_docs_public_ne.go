@@ -89,7 +89,8 @@ GET /api/v1/ne/chunk/{h3_res9}              THE primitive: all rows of one res-9
 GET /api/v1/ne/cell/{h3}                    res 12 → {cell, kgs:{kg:share}, lu:{…}, k:{…}|null, obs:{…}|null}
                                             obs ({OBS_NAME}'s observed row, CC BY 4.0): cover{geb,bau,acker,gruen,wald,wasser,
                                             verkehr,alpen,sonst} fractions (= obs_lu[9]), obs_bld_cover, obs_bld_n, h_mean/h_p90/h_max m,
-                                            tree_n, tree_h_max, crown_frac, ndvi_mean/amp, dh_mean m, flight_years[], verdict, elev_mean,
+                                            tree_n, tree_h_max, crown_frac, ndvi_mean/amp, dh_mean m (0 = not measured again
+                                            where the cell was scanned once — the filter field dh is empty there), flight_years[], verdict, elev_mean,
                                             slope_mean/p90 °, aspect_dom, roughness, tri, tpi, dtm_change, hansen_loss_year, phenology
                                             (null = not measured) + row_hex/record_bytes/fields as posted; units: srtm /api/v1/cells/dict
                                             res 10 → K record + children[]; res 9 → 302 to /chunk
@@ -131,7 +132,7 @@ GET /api/v1/ne/glyph/tile?lod=0|1|2&i=&j=[&v=obs|tree|chg|dif|rd|sub|subc][&raw=
                                             SAME cell, today — not change. One hue (magenta), the mark is the kind: solid =
                                             structures declared, none in the LiDAR (declared ≥ 20 %, observed cover < 5 %);
                                             chequer = structures in the LiDAR, none declared (observed ≥ 20 %, declared < 5 %,
-                                            nDSM rise ≥ 2 m between the two flights); ring = declared forest, currently no trees
+                                            nDSM rise ≥ 2 m between the two flights — only in cells scanned twice); ring = declared forest, currently no trees
                                             (declared forest ≥ ½, observed grass/crop/alpine/building land/other ≥ ½, a Hansen loss
                                             year or an nDSM drop ≤ −2 m, no QA'd tree apex in the cell — a cut or a young stand is
                                             forest by design, the mark says what stands there today). Only cells with status ok
@@ -435,8 +436,9 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     (res-12 cells, with the overlay on): "LiDAR sees <group> · register says <group> · flown 2022" — or
     "agree · <group>" or "not compared · <why>"; the open block names the kind with its figures (nDSM ±m between
     the flights, forest loss year, flight years of the KG). Cell doc: /ne/glyph/cell carries pic_dif {status,
-    agree, kind, kind_raw, declared{dom,dom_pct}, observed{dom,dom_pct}, dh_m, loss_year, als{kg,newest,oldest,
-    dominant_share,mixed,precision}} whenever an observed row exists.
+    agree, kind, kind_raw, declared{dom,dom_pct}, observed{dom,dom_pct}, reflown, als_cell{oldest,newest}, dh_m (both
+    only where the cell was laser-scanned twice — elsewhere no height change was measured), loss_year,
+    als{kg,newest,oldest,dominant_share,mixed,precision}} whenever an observed row exists.
     Subsidy (tractor icon, ;subsidy in the link, key s; with the change overlay on it switches to the vs-previous-year variant):
     INVEKOS claims per cell from {SUB_NAME} (AMA Schläge, CC BY 4.0, aggregated there per H3 cell).
     Without change: ochre dots / hex faces by claimed share wide out, and in full resolution every Schlag as drawn

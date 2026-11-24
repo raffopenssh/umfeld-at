@@ -219,14 +219,14 @@ A term is `{f, op, a, b}` (range) or `{f, set}` (set/flag).
 | `loss` | year | forest loss year (Hansen) | obs `hansen_loss_year` |
 | **any object** | | | |
 | `h` | m | object height p90 (`hmax` = max, `hmean`) | obs `h_p90 / h_max / h_mean` |
-| `dh` | m | nDSM change between flights | obs `dh_mean` |
+| `dh` | m | nDSM change between flights — nodata where the cell was scanned once (`ne_als_gate.go`) | obs `dh_mean` |
 | **terrain** | | | |
 | `sl` | ° | slope mean (`sl90` = p90) | obs `slope_mean / slope_p90`; ★ obs peer for cells without obs |
 | `as` | set `n ne e se s sw w nw flat` | dominant aspect | obs `aspect_dom` (★ `aspect_deg` for 16 sectors) |
 | `el` | m a.s.l. | elevation mean | obs `elev_mean` |
 | `tpi` | m | topographic position (− hollow · + ridge) | obs `tpi` |
 | `tri` / `rough` | | ruggedness / roughness | obs |
-| `dtm` | m | ground change between flights | obs `dtm_change` |
+| `dtm` | m | ground change between flights — nodata where scanned once | obs `dtm_change` |
 | `als` | year set | LiDAR flight year | obs `flight_years` |
 | **use** | | | |
 | `d` | set `geb bau acker gruen wald wasser verkehr alpen sonst` | declared dominant group (`dsh` = its share %) | declared row (log → bev → lu) |

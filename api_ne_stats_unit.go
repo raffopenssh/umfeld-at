@@ -625,10 +625,10 @@ type neStatsAcc struct {
 	bcov                                            float64
 	kgHa                                            map[string]float64
 	states                                          []string
-	ids                                             []uint64 // the matching cells (filtered units: the peers get this list)
-	scale                                           int      // 1, or neSampK when ids are sampled cells
-	trees, treesX                                   int      // tree apices of the counted cells (inside the filter's height term when the cell has an apex list) · cells counted from a list
-	treesRng                                        bool     // the filter has a height term: trees is only right when every counted cell had a list
+	ids                                             []uint64  // the matching cells (filtered units: the peers get this list)
+	scale                                           int       // 1, or neSampK when ids are sampled cells
+	trees, treesX                                   int       // tree apices of the counted cells (inside the filter's height term when the cell has an apex list) · cells counted from a list
+	treesRng                                        bool      // the filter has a height term: trees is only right when every counted cell had a list
 	tr                                              neTreeAgg // heights of the same apices: mean, tallest, 5 m bands (ne_tree_bands.go)
 	approx                                          bool      // counted from the national 1-in-49 sample
 }

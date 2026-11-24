@@ -12,6 +12,7 @@ network. Measured 2026-11-18 (atop + a 5 min CPU profile on the private tier's
 | national table + sample (`neNatMaybeBuild`) | hourly check | conditional GETs | one ~10 min pass per 6 h at most, for a moved store and for a moved peer sample alike. "Moved" survives a restart: the sample header is compared with the peer tags on disk (`neSampPeersBehind`). One exception per run: the peer sample gained apex lists and ours has none → pass at once. |
 | national tree table (`neNatTreesLoop`, `ne_mvt_nat_trees.go`) | 3 h | one conditional GET (`If-None-Match` → 304) | the table itself (`/trees/hexes?res=9&format=bin`, ≈ 12 MB gzip, 2 s, folded to `data/ne_mvt/nat_trees.bin`) only when the peer's `gen` moved — at most daily; 15 min retry after a failure |
 | KG universe / `ne_ready` recheck (`kgUniversePeerLoop`) | 20 min | ~1 kB | one-row probe of the peer envelope; the full list (0.8 MB gz) only when hash / total / served / cells generation moved, or every 6 h. |
+| re-flown gate (`neAlsGateLoop`, `ne_als_gate.go`) | 1 h (10 min while the peer's year-range fix spreads) | two conditional GETs | the sample body (≈ 1.2 MB zstd) only when its generation moved; kept on disk as zstd, parsed once per start. |
 | fidx block manifest, peer samples | 10 min / 1 h | 304s | `If-None-Match`. |
 | trees by email (`treeMailLoop`, `tree_mail.go`) | 20 s | one `stat` | `Maildir/new` is listed only when its mtime moved or a mail waits in the queue; off entirely without `TREE_MAIL_KEYS`. |
 
