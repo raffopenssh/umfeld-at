@@ -390,9 +390,13 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     line.
     My position (view-bar locate icon after roads, phones and tablets only; key l everywhere): the browser's own
     Geolocation, drawn as a pulsing dot in the found point's ink with the reported accuracy as a halo. Tap 1: watch +
-    fly to the dot — nothing is written (not in the link, not in the recent list, never sent: the server sees only the
-    tile requests of the view). Tap 2: zoom in fully and pin it as the point of the view — from then on it is pt= in the
-    link exactly like a searched address, so the view can be shared. Tap 3: off — watch cleared, point and card gone.
+    fly to the dot at the deepest zoom the fix's accuracy allows (tree crowns are tappable there) — nothing is written
+    (not in the link, not in the recent list, never sent: the server sees only the tile requests of the view). The dot
+    glides from fix to fix and the map follows: it re-centres when you near the edge, waits while a tree's card is
+    open, and stops following once you drag or pinch the map — the button then brings your position back first. The
+    screen stays awake while it is on. Tap 2: deepest zoom, pinned as the point of the view — from then on it is pt= in
+    the link exactly like a searched address, and the point keeps moving with you. Tap 3: off — watch cleared, point
+    and card gone. A phone put away pauses it; taking it out again within 30 minutes resumes without a tap.
     Outside Austria, denied or timed out → off with a hint.
     Filter (funnel icon after the find box, ;f= in the link, key f shows/hides the row, F = full screen): a chip row
     under the status line — each chip one AND group, the input adds a condition (type words, fields, members:

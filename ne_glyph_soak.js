@@ -157,7 +157,13 @@ export async function run(o) {
         s = await G.locate({ lon: ll[0], lat: ll[1], acc: 40 }); await sleep(400); const lg = document.querySelector('svg.glyph g.lc'), lb = document.querySelector('.gv-loc');
         want(P + 'locate stage 1 dot, nothing in the hash', !!lg && lg.classList.contains('on') && !lg.classList.contains('pin') && lb.getAttribute('aria-pressed') === 'true' && !/pt=|loc/.test(location.hash) && G.locate().stage === 1, { hash: location.hash, st: G.locate() });
         s = await G.locate(true); { const until = Date.now() + 8000; while (!/pt=/.test(location.hash) && Date.now() < until) await sleep(150); await G.settled(); }
-        want(P + 'locate stage 2 pinned as pt= at full resolution', lg.classList.contains('pin') && lb.classList.contains('fix') && /pt=/.test(location.hash) && /;full/.test(location.hash) && G.locate().stage === 2, { hash: location.hash, st: G.locate() });
+        want(P + 'locate stage 2 pinned as pt= at full resolution', lg.classList.contains('pin') && lb.classList.contains('fix') && /pt=/.test(location.hash) && /;full/.test(location.hash) && /,4000(;|$)/.test(location.hash) && G.locate().stage === 2, { hash: location.hash, st: G.locate() });
+        { /* the pinned position moves with the reader: the found point, the pulse ring and the link all go to the next fix together (docs/ne-glyph.md row 'my position') */
+          const h0 = location.hash, tr = e => (e && e.getAttribute('transform')) || '';
+          await G.locate({ lon: ll[0] + 0.0004, lat: ll[1] + 0.0002, acc: 8 }); await sleep(1800);
+          const pg = document.querySelector('svg.glyph g.pt.on'), at = G.locate().at;
+          want(P + 'locate pinned point moves with the fix (dot, ring, pt=)', !!pg && tr(pg) === tr(lg) && location.hash !== h0 && /pt=/.test(location.hash) && at && Math.abs(at[0] - ll[0] - 0.0004) < 2e-5 && G.locate().follow === true, { h0, hash: location.hash, pt: tr(pg), lc: tr(lg), st: G.locate() });
+        }
         want(P + 'locate never in the recent list', !JSON.stringify(localStorage).includes(ll[1].toFixed(4)), null);
         s = await G.locate(false); await sleep(400);
         want(P + 'locate failure hints nudge to GPS', /turn on GPS/.test(G.locate({ err: 1, perm: 'granted', dt: 5000 })) && /turn on GPS/.test(G.locate({ err: 1, dt: 20 })) && /tap again to ask/.test(G.locate({ err: 1, perm: 'prompt', dt: 5000 })) && /GPS/.test(G.locate({ err: 2 })) && /GPS/.test(G.locate({ err: 3 })), null);

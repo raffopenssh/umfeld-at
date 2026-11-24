@@ -120,8 +120,8 @@ Standortfreigabe ab (Geolocation-API des Geräts); ohne Antippen findet keine St
 übertragen, nicht im <code>localStorage</code> abgelegt und nicht in die Liste der letzten Suchen aufgenommen. Der Server erhält nur
 die üblichen Kachelabrufe des sichtbaren Ausschnitts (2.1), wie bei jedem Verschieben der Karte. Ein zweites Antippen zoomt auf die
 Position und setzt sie als Punkt der Ansicht – erst dann steht sie wie eine gesuchte Adresse als <code>pt=</code> in der Adresszeile
-und damit in einem von Ihnen geteilten Link; ein drittes Antippen beendet die Standortabfrage und entfernt den Punkt wieder. Ein in
-den Hintergrund gewechselter Tab beendet die Abfrage ebenfalls, solange die Position nicht als Punkt gesetzt ist.</p>
+und damit in einem von Ihnen geteilten Link. Der gesetzte Punkt wandert mit Ihnen mit; wie bei einer gesuchten Adresse fragt die Karte dafür die Zelle unter dem Punkt beim Server ab (Koordinate in der Abfrage, frühestens alle 60 m; protokolliert wie jeder Abruf nach 2.1). Ein drittes Antippen beendet die Standortabfrage und entfernt den Punkt wieder. Ein in
+den Hintergrund gewechselter Tab beendet die Abfrage ebenfalls, solange die Position nicht als Punkt gesetzt ist; kehren Sie innerhalb von 30 Minuten zurück, wird sie ohne weiteres Antippen fortgesetzt. Solange die Abfrage läuft, hält die Seite den Bildschirm wach (Wake-Lock des Browsers, sofern vorhanden).</p>
 <h2>3. Cookies und lokale Speicherung</h2>
 <p>Diese Website verwendet <strong>keine Cookies</strong> und keine Tracking- oder Analysedienste. Die interaktive Karte merkt sich
 Anzeige-Einstellungen (ein-/ausgeblendete Ebenen, Vollauflösung, die letzten zwölf Suchen und Kartenausschnitte) im <code>localStorage</code> Ihres Browsers;
