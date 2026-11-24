@@ -147,8 +147,8 @@ export async function run(o) {
         const rt = s.tiles.find(t => t.v === 'rd' && t.ok); want(P + 'roads tile meta', !!rt && 'rd' in rt.m && 'km' in rt.m && 'rdc' in rt.m, rt && rt.m); const rtk = s.tiles.find(t => t.v === 'rd' && t.ok && +t.m.km > 0.3 && (+t.m.rdc.split(',')[0] + +t.m.rdc.split(',')[1] + +t.m.rdc.split(',')[2]) > 0); if (rtk) want(P + 'roads remoteness meta (rm 0–100, rmb 4 bands)', 'rm' in rtk.m && +rtk.m.rm >= 0 && +rtk.m.rm <= 100 && (rtk.m.rmb || '').split(',').length === 4, rtk.m);
         s = await go(`#kg=${kg};full;roads;z=20`); await layers(P + 'roads/20 (coarse level: major roads, roads, rail)', s, { view: '', lod: 2, roads: true });
         want(P + 'roads button live at lod 2', !document.querySelector('.gv-rd').classList.contains('off'), document.querySelector('.gv-rd').className);
-        s = await go(`#kg=${kg};full;diff;trees;z=20`); await layers(P + 'diff+trees/20 (coarse level: grown marks, trees not yet)', s, { view: '', lod: 2, diff: true, trees: true });
-        want(P + 'trees button faded at z 20', document.querySelector('.gv-tree').classList.contains('off'), document.querySelector('.gv-tree').className);
+        s = await go(`#kg=${kg};full;diff;trees;z=20`); await layers(P + 'diff+trees/20 (coarse level: grown marks, trees as the stand sheet)', s, { view: '', lod: 2, diff: true, trees: true });
+        want(P + 'trees button live at z 20 (the stand sheet: trees at every zoom)', !document.querySelector('.gv-tree').classList.contains('off') && !!document.querySelector('svg.glyph .tro path'), document.querySelector('.gv-tree').className);
         s = await go(`#kg=${kg};full;trees;z=40`); await layers(P + 'trees/40 (coarse level from HI_TREE: the tree tiles)', s, { view: '', lod: 2, trees: true });
       }
       /* locate (the reader's position, phones/tablets; docs/ne-glyph.md row 'my position'): a fed fix draws the pulsing dot and writes nothing; the second stage pins it as the found point (pt= in the hash, full resolution); off removes the point, the selection and the card; nothing lands in localStorage */
@@ -160,15 +160,17 @@ export async function run(o) {
         want(P + 'locate stage 2 pinned as pt= at full resolution', lg.classList.contains('pin') && lb.classList.contains('fix') && /pt=/.test(location.hash) && /;full/.test(location.hash) && /,4000(;|$)/.test(location.hash) && G.locate().stage === 2, { hash: location.hash, st: G.locate() });
         { /* the pinned position moves with the reader: the found point, the pulse ring and the link all go to the next fix together (docs/ne-glyph.md row 'my position') */
           const h0 = location.hash, tr = e => (e && e.getAttribute('transform')) || '';
-          await G.locate({ lon: ll[0] + 0.0004, lat: ll[1] + 0.0002, acc: 8 }); await sleep(1800);
+          await G.locate({ lon: ll[0] + 0.0004, lat: ll[1] + 0.0002, acc: 8 }); { /* the link follows once the dot has landed: glide (≤ 1.2 s) + the follow pan (0.65 s) + the hash debounce */ const until = Date.now() + 6000; while (location.hash === h0 && Date.now() < until) await sleep(150); await sleep(300); }
           const pg = document.querySelector('svg.glyph g.pt.on'), at = G.locate().at;
           want(P + 'locate pinned point moves with the fix (dot, ring, pt=)', !!pg && tr(pg) === tr(lg) && location.hash !== h0 && /pt=/.test(location.hash) && at && Math.abs(at[0] - ll[0] - 0.0004) < 2e-5 && G.locate().follow === true, { h0, hash: location.hash, pt: tr(pg), lc: tr(lg), st: G.locate() });
         }
         want(P + 'locate sent no coordinate (the KG under the point is worked out in the browser)', !performance.getEntriesByType('resource').some(e => /glyph\/cell\?lon=|[?&](lon|lat|pt)=/.test(e.name) && e.name.includes(ll[0].toFixed(3))), null);
         want(P + 'locate frames alive at the deepest zoom', await new Promise(r => { let ok = false; requestAnimationFrame(() => { ok = true; r(true); }); setTimeout(() => ok || r(false), 2500); }), null);
+        want(P + 'locate: the pinned position is never beaconed to the share-link store', G.opnMine(location.hash) === true && G.opnShare(location.hash.slice(1)) === false && /pn=position/.test(location.hash) && G.opnMine('#pt=16.4,48.2;pn=Hauptplatz;full') === true, { hash: location.hash });
         want(P + 'locate never in the recent list', !JSON.stringify(localStorage).includes(ll[1].toFixed(4)), null);
         s = await G.locate(false); await sleep(400);
         want(P + 'locate failure hints nudge to GPS', /turn on GPS/.test(G.locate({ err: 1, perm: 'granted', dt: 5000 })) && /turn on GPS/.test(G.locate({ err: 1, dt: 20 })) && /tap again to ask/.test(G.locate({ err: 1, perm: 'prompt', dt: 5000 })) && /GPS/.test(G.locate({ err: 2 })) && /GPS/.test(G.locate({ err: 3 })), null);
+        want(P + 'a position link is not beaconed by whoever opens it; an address point is', G.opnMine('#pt=16.4,48.2;pn=position;full') === true && G.opnMine('#pt=16.4,48.2;pn=Hauptplatz%201;full') === false && G.opnMine('#kg=63330;full') === false, G.locate());
         want(P + 'locate off removes everything', !lg.classList.contains('on') && lb.getAttribute('aria-pressed') === 'false' && !/pt=|kg=|cell=/.test(location.hash) && !document.querySelector('svg.glyph g.pt.on'), { hash: location.hash });
       }
       /* filter (docs/ne-filter.md): ;f= round trip, worker bins + tiles complete, veil group shown, counts sane, chips, legend row, label input canonicalised, LOD-2 readout, clear */
