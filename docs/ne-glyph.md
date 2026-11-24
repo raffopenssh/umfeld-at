@@ -357,6 +357,31 @@ Side findings fixed with it: a share link without `;relief` left the relief queu
 entries and drove `inflight` negative; sub tiles did not return after the subsidy overview recovered
 (`subLoad` success now calls `hiView(true)`).
 
+## Weak signal — deadlines, breaker, tree outbox (2026-11-24)
+
+Field report: the page "froze" in a forest with a weak signal (photo + trees + position at the deepest zoom).
+What the trace and a throttled-network probe showed, and what holds now:
+
+| Rule | What | Where |
+|---|---|---|
+| **Deadline** | every request of the page ends: `NET_GET` 20 s / `NET_POST` 30 s for the whole answer (the body is read inside the wrapper), then it is aborted and fails like a lost network (`TypeError('timeout')`, counted `timeout` in `neGlyph.log().n`). A caller's own abort stays an `AbortError`. Before, a request on a dying link hung for minutes behind a busy button | `netGo` (`ne_glyph.go`, under `fetch`) |
+| **Breaker** | no request while there is no network: `navigator.onLine === false`, or `NB_N` 4 transport failures in a row per origin group (`netGroup`) → that group is shut for 1 s, doubling to 15 s. A request made meanwhile fails ~50 ms later without touching the network stack (counted `off`). One success closes the group; the browser's `online` event closes all and re-reads the view. A WebView host app sees every request (and every failure) on its own threads — a full view asked again on each position fix was ~100 doomed requests a second | `netShut`, `netTrip` |
+| **One repaint per burst** | a failure/success re-renders the open card once per 90 ms (`netRe`), not once per tile | `netFail`, `netOk` |
+| **Photo / relief books** | a failed square leaves `tiles` AND `order` (`mtForget`). Before, the key stayed in `order`; once the LRU was full the eviction loop threw `Cannot set properties of undefined (setting 'dead')` inside `otView`/`relView` and the view stopped updating — this is in the reporter's own trace. The layer re-asks by itself (`mtAgain`: 3 s doubling to 30 s) — no pan needed when the signal is back | `relTile`, `otTile` |
+| **Tree outbox** | every tree report is written to `localStorage` (`neg-ob`) first and sent in the background, in order, one at a time, until the relay answers. No answer within `OB_SOFT` 3 s (or offline) = **parked**: the card stops waiting (`saved` row with the reader's words + `discard`), the map shows a centre dot (dotted ring for a waiting new tree, `obMarks`), one hint. Retry after `Retry-After` or 2 s·2ⁿ ≤ 60 s, at once on `online` / tab visible / page load. The answer is applied to the card whenever it comes (`trAnswer`, unchanged); after a reload there is no card: `obLate` keeps the marks, refreshes the tile, says `N saved tree reports sent`. Limits: 300 items, 7 days, 10 answered refusals (429/5xx) deliver the refusal | `ne_glyph_outbox.go` (`outbox(io)` pure, `TestGlyphOutbox`), `trPost` |
+| **Exactly once** | each outbox item carries `X-Idem: <uuid>` on every attempt; the relay answers a repeat (same key + body) with the first final answer and finishes a keyed write even when the reader's connection is gone. An undo retried after a lost answer is one step, not two | `api_tree_report_idem.go`, `TestTreeReportIdem`, `debug/inflight` → `tree_report.idem` |
+
+Not a PWA: no service worker, no offline tile store — what is on screen stays, what is not loaded waits.
+Hooks: `neGlyph.outbox()` (`{n, parked, cur, wait}`), `neGlyph.net()` (marks + `shut` groups).
+Probe: `node scripts/glyph_net_probe.js [url] [base,offline,slow,flap]` — emulated phone, CPU ×4, a walking
+position with follow on, tree taps + chips under each network; tree POSTs are intercepted (nothing reaches the
+peer); prints the longest main-thread gap, requests, outbox drain and id reuse. Exit 0 = no gap > 1 s, no stuck
+input, nothing left in the outbox, no JS error.
+
+The Android "isn't responding" dialog of the report itself was NOT reproduced on the desktop (no main-thread
+gap > 0.3 s before or after); if it returns: `?trace` + §Field diagnostics, look for `timeout`/`off` counts
+and the `online`/`offline` rows.
+
 ## Tile cache — RAM, disk, ETag
 
 `handleNEGlyphTile` answers in this order: (1) `If-None-Match` equals the key's ETag (`"t"+sha256(key)[:16]`) → 304,

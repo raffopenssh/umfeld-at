@@ -155,7 +155,7 @@ func TreeReportStats() map[string]interface{} {
 	treeNoteState.mu.Lock()
 	notes := treeNoteState.ok
 	treeNoteState.mu.Unlock()
-	return map[string]interface{}{"keyed": treeReportKey() != "", "peer_notes": notes, "sent": b.sent, "denied_429": b.denied, "peer_status": st}
+	return map[string]interface{}{"keyed": treeReportKey() != "", "peer_notes": notes, "sent": b.sent, "denied_429": b.denied, "peer_status": st, "idem": treeIdemStats()}
 }
 
 // treeReportClean — one report item: tree layer only, our source label, no
@@ -236,6 +236,26 @@ func handleV1TreeReport(w http.ResponseWriter, r *http.Request) {
 	}
 	body, _ := json.Marshal(m)
 
+	// exactly-once (api_tree_report_idem.go): a retry of a request whose answer was
+	// lost on the way gets that answer again, the peer is not written twice
+	idem := treeIdemKey(r.Header.Get("X-Idem"), body)
+	ctx := r.Context()
+	if idem != "" {
+		e, done := treeIdemBegin(idem, treeReportWaitMax+21*time.Second)
+		if e != nil {
+			if e.ra != "" {
+				w.Header().Set("Retry-After", e.ra)
+			}
+			w.Header().Set("X-Idem-Replayed", "1")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(e.status)
+			w.Write(e.body)
+			return
+		}
+		defer done()
+		ctx = context.WithoutCancel(ctx) // a keyed write finishes whether or not the reader is still there
+	}
+
 	// the peer's pace: wait a little for a token, then say when
 	deadline := time.Now().Add(treeReportWaitMax)
 	for {
@@ -253,12 +273,17 @@ func handleV1TreeReport(w http.ResponseWriter, r *http.Request) {
 		}
 		select {
 		case <-time.After(d):
-		case <-r.Context().Done():
+		case <-ctx.Done():
 			return
 		}
 	}
 
-	status, out, ra, err := treeReportDo(r.Context(), body, "tree-report")
+	status, out, ra, err := treeReportDo(ctx, body, "tree-report")
+	if idem != "" && r.Context().Err() != nil {
+		treeIdem.mu.Lock()
+		treeIdem.detached++
+		treeIdem.mu.Unlock()
+	}
 	if err != nil {
 		apiError(w, peers().ObsName+" did not answer", http.StatusBadGateway)
 		return
@@ -276,6 +301,9 @@ func handleV1TreeReport(w http.ResponseWriter, r *http.Request) {
 	if !json.Valid(out) {
 		apiError(w, peers().ObsName+" answered "+strconv.Itoa(status), http.StatusBadGateway)
 		return
+	}
+	if idem != "" {
+		treeIdemPut(idem, status, out, ra)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

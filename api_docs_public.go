@@ -307,7 +307,8 @@ POST /api/v1/feedback        {"title": "...", "agent": "...", "category": "bug|f
 GET /api/v1/feedback?status=open
 POST /api/v1/trees/report    the map's own relay for a reader's tree report (species, height, DBH, state since the flight, add a missing tree,
                              "same tree" = a second top of the tree beside it, "its own tree" = the objection to that, a note, withdraw, undo one step, take a flag back) to {OBS_NAME} — same body and answers as its POST /api/v1/flags on the tree layer;
-                             same-origin only, nothing is stored here. Other clients: report to {OBS_NAME} directly.
+                             same-origin only, no report is stored here. Header X-Idem: <8–64 of A-Za-z0-9-> makes a retry safe: the same key + body gets the first
+                             final answer again (X-Idem-Replayed: 1; kept 24 h in memory, never a 429/5xx). Other clients: report to {OBS_NAME} directly.
                              Tree copies we hand out (mvt/ogc items, trees.geojson) carry "frame" per point (the position frame of {OBS_NAME},
                              its llm.txt#position-frames) and the time they were read (timeStamp / as_of): send "frame" with a report made from them.
 

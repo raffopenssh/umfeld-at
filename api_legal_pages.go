@@ -148,11 +148,11 @@ Nachrichten unbekannter Absender werden ungelesen verworfen und nicht beantworte
 Karte), erzeugt der Browser einmalig eine zufällige Kennung (<code>localStorage</code>-Schlüssel <code>neg-rep</code>) und sendet sie
 als <code>reporter</code> mit der Meldung. Die Meldung (Koordinaten des Baums, Art, Höhe, Durchmesser, Messzeitpunkt, optional eine Notiz)
 geht über diesen Server (<code>/api/v1/trees/report</code>), der sie unverändert und <strong>ohne Ihre IP-Adresse</strong> an {OBS_NAME}
-weiterreicht (siehe 4) und selbst nichts davon speichert; dort wird sie dauerhaft gespeichert und ist <strong>öffentlich abrufbar</strong>,
+weiterreicht (siehe 4) und sie selbst nicht dauerhaft speichert (nur die Antwort von {OBS_NAME} bleibt bis zu 24 Stunden im Arbeitsspeicher, damit eine bei schwachem Empfang wiederholte Meldung nicht doppelt gezählt wird); dort wird sie dauerhaft gespeichert und ist <strong>öffentlich abrufbar</strong>,
 als Beitrag dieses Dienstes gekennzeichnet. Die Kennung dient nur dazu, Meldungen derselben Quelle zusammenzufassen und eigene
 Meldungen zurückziehen zu können; sie enthält keine Geräte- oder Personendaten. Welche Bäume Sie gemeldet oder ergänzt haben, die
 zuletzt gewählten Arten und die Messmethode merkt sich nur Ihr Browser (<code>neg-tr</code>, <code>neg-sp</code>, <code>neg-tm</code>,
-<code>neg-trh</code>); alles lässt sich wie jeder <code>localStorage</code>-Eintrag löschen.</p>
+<code>neg-trh</code>). Meldungen, die noch nicht gesendet werden konnten (kein oder schwacher Empfang), warten ebenfalls nur in Ihrem Browser (<code>neg-ob</code>), bis sie zugestellt sind – längstens sieben Tage; alles lässt sich wie jeder <code>localStorage</code>-Eintrag löschen.</p>
 <h2>4. Drittanbieter</h2>
 <p>Die Seiten laden <strong>keine Ressourcen von Drittanbietern</strong>: keine externen Schriften (nur die Systemschriften Ihres Geräts),
 keine externen Stylesheets, Skripte oder Bilder; Kartenkacheln Dritter nur auf Ihre Wahl (Luftbild, unten). Die Flächennutzungs- und Förderdaten der Karte liefert ausschließlich dieser Server.</p>
