@@ -164,6 +164,8 @@ export async function run(o) {
           const pg = document.querySelector('svg.glyph g.pt.on'), at = G.locate().at;
           want(P + 'locate pinned point moves with the fix (dot, ring, pt=)', !!pg && tr(pg) === tr(lg) && location.hash !== h0 && /pt=/.test(location.hash) && at && Math.abs(at[0] - ll[0] - 0.0004) < 2e-5 && G.locate().follow === true, { h0, hash: location.hash, pt: tr(pg), lc: tr(lg), st: G.locate() });
         }
+        want(P + 'locate sent no coordinate (the KG under the point is worked out in the browser)', !performance.getEntriesByType('resource').some(e => /glyph\/cell\?lon=|[?&](lon|lat|pt)=/.test(e.name) && e.name.includes(ll[0].toFixed(3))), null);
+        want(P + 'locate frames alive at the deepest zoom', await new Promise(r => { let ok = false; requestAnimationFrame(() => { ok = true; r(true); }); setTimeout(() => ok || r(false), 2500); }), null);
         want(P + 'locate never in the recent list', !JSON.stringify(localStorage).includes(ll[1].toFixed(4)), null);
         s = await G.locate(false); await sleep(400);
         want(P + 'locate failure hints nudge to GPS', /turn on GPS/.test(G.locate({ err: 1, perm: 'granted', dt: 5000 })) && /turn on GPS/.test(G.locate({ err: 1, dt: 20 })) && /tap again to ask/.test(G.locate({ err: 1, perm: 'prompt', dt: 5000 })) && /GPS/.test(G.locate({ err: 2 })) && /GPS/.test(G.locate({ err: 3 })), null);

@@ -395,7 +395,8 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     glides from fix to fix and the map follows: it re-centres when you near the edge, waits while a tree's card is
     open, and stops following once you drag or pinch the map — the button then brings your position back first. The
     screen stays awake while it is on. Tap 2: deepest zoom, pinned as the point of the view — from then on it is pt= in
-    the link exactly like a searched address, and the point keeps moving with you. Tap 3: off — watch cleared, point
+    the link exactly like a searched address, and the point keeps moving with you. Still no coordinate is sent: which
+    KG a point lies in (yours or a searched address's) is worked out in the browser from KG outlines fetched by KG code. Tap 3: off — watch cleared, point
     and card gone. A phone put away pauses it; taking it out again within 30 minutes resumes without a tap.
     Outside Austria, denied or timed out → off with a hint.
     Filter (funnel icon after the find box, ;f= in the link, key f shows/hides the row, F = full screen): a chip row
@@ -474,7 +475,7 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     140 ms after the last keystroke) and names (DLM toponyms, /toponyms/search?near=). Address rows lead when
     the text carries a house number. Pick a KG or an admin unit → fly to its bbox, outline filled + stroked, white
     veil under full res; pick an address or a name → fly to the point, a dot that stays, the KG under it selected
-    (from /ne/glyph/cell?lon&lat) with the same outline. Every landing ends in full resolution when the fit is
+    (found in the browser: KG outlines by code, no coordinate sent) with the same outline. Every landing ends in full resolution when the fit is
     deep enough. "recent" = past picks (localStorage): found places, tapped cells, filters, and VIEWS — a view the
     reader stayed at for 15 s (zoomed in, nothing changed) is kept with its whole state (centre, zoom, profile,
     overlays, filter), labelled by the KG under the centre; one entry per place × zoom octave, updated in place.
