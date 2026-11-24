@@ -162,7 +162,7 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   such crown; else the nearest ring within the slop (14 px touch · 5 px mouse).
   Reader marks (`trDraw`): solid ring = named/measured/confirmed, dotted ring = in doubt,
   centre dot = yours, all at the crown's own radius (row *TREE REPORTS*). Hovered tree = `hovRing(d,true)`
-  (`.hov.tr`). Deepest zoom `HI_ZMAX` = 4000 (was 2400 until 2026-11-24: tree rings too small to tap and label on a phone).
+  (`.hov.tr`). **Which tree a tap means** (`apAtAll` → `tapOrder`, `apTap` → `tapNext`; pure half `neGlyphTapJS`, `TestGlyphTapOrder`): crowns holding the point ranked by d²/r (equal crowns → nearer centre, an understorey tree keeps its disc inside a big crown), then rings within the finger's slop (16 px touch / 5 px mouse; hit radius ≥ 10 / 7 px); overlapping crowns are a stack — a tap on the same spot (≤ 22 px on the map) takes the next (`tree 2 of 3 here · tap again for the next`), after the last nothing; a finger that is down already shows the ring its release takes (`TR.lp.pv`, `hovRing`). The hold (new tree) is untouched. Deepest zoom `HI_ZMAX` = 4000 (was 2400 until 2026-11-24: tree rings too small to tap and label on a phone).
   **Tree sprites at LOD 0 and LOD 1 — `/trees/bbox?format=columns` contract** ({OBS_NAME}, CC BY,
   CORS, no key; `APEX_Q`, `apexKey`, `apObj` next to `hiApex`): ONE call per tile at both LODs,
   `bbox=<tile>&min_height=3&format=columns&fields=lon,lat,h_m,crown_m2,species,vitality,kg_code`

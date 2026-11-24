@@ -76,7 +76,18 @@ function pressTracker(o){var ms=o.ms==null?500:o.ms,slop=o.slop==null?10:o.slop,
 
 // neGlyphTreeRepJS — runs inside the glyph IIFE (spliced after the export block); the hooks in
 // ne_glyph.go are trIngest (hiApex), trDraw (apDraw), trCard (apCard), trUnpin (apUnpin), TRP (apSend).
-const neGlyphTreeRepJS = neGlyphPressJS + neGlyphTreeMatchJS + neGlyphTreeMergedJS + `
+// neGlyphTapJS — which of several overlapping crowns a pointer means, pure (TestGlyphTapOrder).
+// tapOrder(L): L = [{d: distance pointer → centre, r: hit radius}] (same unit) → the same rows
+// ranked: crowns that hold the point first, by d²/r (equal crowns: nearer centre; a small crown
+// inside a big one keeps nearly its whole disc), ties to the smaller; then the rings within the
+// finger's slop, nearest edge first; at most 5. tapNext(n, pinned, same): the row a tap takes —
+// pinned = rank of the tree that is selected now (-1 none), same = this tap repeats the last one
+// on the spot; -1 = nothing (the stack is through, or the only tree was tapped again).
+const neGlyphTapJS = `
+function tapOrder(L){L.forEach(function(c){c.in=c.d<=c.r;c.s=c.in?c.d*c.d/c.r:c.d-c.r});L.sort(function(a,b){return a.in!==b.in?(a.in?-1:1):Math.abs(a.s-b.s)>1e-9?a.s-b.s:a.r-b.r});return L.length>5?L.slice(0,5):L}
+function tapNext(n,pinned,same){if(!n)return-1;if(pinned<0)return 0;if(same)return pinned+1<n?pinned+1:-1;return pinned>0?0:n>1?1:-1}`
+
+const neGlyphTreeRepJS = neGlyphPressJS + neGlyphTapJS + neGlyphTreeMatchJS + neGlyphTreeMergedJS + `
 /* ── tree reports (ne_glyph_treerep.go) ── */
 var TRP='/api/v1/trees/report',TR={dict:null,dictP:null,mine:{},rec:[],meth:{},sT:0,lp:null,lpAt:0,hint:0};
 try{TR.mine=JSON.parse(localStorage.getItem('neg-tr')||'{}')||{};TR.rec=JSON.parse(localStorage.getItem('neg-sp')||'[]')||[];TR.meth=JSON.parse(localStorage.getItem('neg-tm')||'{}')||{};TR.hint=+localStorage.getItem('neg-trh')||0}catch(e){}
@@ -308,13 +319,13 @@ function trDraftAt(p,force,keep,near){if(!apVis())return false;var zpx=(svg.getB
  if(e.my*zpx<0.9){showHint('zoom in closer to add a tree');return false}
  if(hi.apx&&hi.apx.a.kd===3)apUnpin(true);var nb=trNear(p[0],p[1],e.my),i=trPush(e,+ll[0].toFixed(7),+ll[1].toFixed(7),nb.h||3,3,{cid:trUUID()}),a=apObj(e,i);a.kg_code=nb.kg||'';a.e_=e;a.tr={h:nb.h,hDef:nb.h!=null,sp:null,dbh:null,cl:nb.cl,near:near||null};trDict();apPin({e:e,i:i,a:a,el:null},true);apSched();if(!keep)trAdd(a,false);dbgLog('tree draft '+ll[0].toFixed(6)+','+ll[1].toFixed(6)+' h='+nb.h);return true}
 function trUnpin(e,a){if(TR.pick===a){TR.pick=null;TR.hot=null}if(a&&a.tr)a.tr.same=null;if(trPend(a))trStepSend(a);/* a height still waiting goes out with the card */if(a&&a.kd===3&&e.c.kd[a.i]===3){e.c.kd[a.i]=9;e.c.x[a.i]=e.c.y[a.i]=1e12;delete e.u[a.i];apSched()}}
-function trLpEnd(done){var lp=TR.lp;if(!lp)return;TR.lp=null;clearTimeout(lp.t);if(lp.el){var el=lp.el;if(done){el.classList.add('done');setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el)},340)}else if(el.parentNode)el.parentNode.removeChild(el)}}
+function trLpEnd(done){var lp=TR.lp;if(!lp)return;TR.lp=null;clearTimeout(lp.t);if(lp.pv)hovRing(null);if(lp.el){var el=lp.el;if(done){el.classList.add('done');setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el)},340)}else if(el.parentNode)el.parentNode.removeChild(el)}}
 /* the hold ALWAYS adds, whatever is under the finger (time + movement decide, never the hit target): a draft at the exact pressed spot (p = the viewBox point taken at pointerdown — the map may creep under a finger inside the slop). On a tree that is already there the draft is not sent; its card offers "this one" (open that tree instead) / "second stem here". */
 function trHold(x,y,ty,p){var hit=apAt({clientX:x,clientY:y,pointerType:ty}),near=null;if(hit&&hit.a.kd===3)hit=null;if(hit){var d=Math.hypot(hit.a.x-p[0],hit.a.y-p[1])/(hit.e.my||1);near={t:{lon:hit.a.lon,lat:hit.a.lat,height_m:hit.a.height_m,dist_m:d<0.05?null:+d.toFixed(1)},h:hit}}return trDraftAt(p,false,!!near,near)}
 function trLpFire(){var lp=TR.lp;if(!lp)return;trLpEnd(true);TR.lpAt=Date.now();if(drag)drag.moved=true;/* the release that follows is not a tap */if(trHold(lp.x,lp.y,lp.ty,lp.p)&&lp.ty==='touch'&&navigator.vibrate)try{navigator.vibrate(18)}catch(x){}}
 var trPT=pressTracker({ms:500,slop:10,fire:trLpFire,cancel:function(){trLpEnd()}});
 function trLpDrop(){trPT.up();trLpEnd()}
-main.addEventListener('pointerdown',function(e){if(!e.isPrimary){trPT.down(e.pointerId,e.clientX,e.clientY,performance.now());return}/* a second finger = pinch */trLpDrop();if(e.button>0||!apVis()||keys().length!==1)return;if(!(e.target===main||e.target===svg||svg.contains(e.target)))return;var r=main.getBoundingClientRect(),el=document.createElement('div');el.className='glyph-lp';el.style.left=(e.clientX-r.left)+'px';el.style.top=(e.clientY-r.top)+'px';main.appendChild(el);trPT.down(e.pointerId,e.clientX,e.clientY,performance.now());TR.lp={x:e.clientX,y:e.clientY,ty:e.pointerType,p:at(e),el:el,t:setTimeout(function(){trPT.tick(performance.now()+1)},510)}});
+main.addEventListener('pointerdown',function(e){if(!e.isPrimary){trPT.down(e.pointerId,e.clientX,e.clientY,performance.now());return}/* a second finger = pinch */trLpDrop();if(e.button>0||!apVis()||keys().length!==1)return;if(!(e.target===main||e.target===svg||svg.contains(e.target)))return;var r=main.getBoundingClientRect(),el=document.createElement('div');el.className='glyph-lp';el.style.left=(e.clientX-r.left)+'px';el.style.top=(e.clientY-r.top)+'px';main.appendChild(el);trPT.down(e.pointerId,e.clientX,e.clientY,performance.now());TR.lp={x:e.clientX,y:e.clientY,ty:e.pointerType,p:at(e),el:el,t:setTimeout(function(){trPT.tick(performance.now()+1)},510)};/* a finger that is down shows the ring its release would take, before it lifts */if(e.pointerType!=='mouse'&&hi.on&&hi.tree&&!TR.pick){var tp=apTap(e,true);if(tp&&tp.h){var ta=tp.h.a;hovRing(circD(ta.x,ta.y,Math.max(ta.r,7/(tp.h.e.zr||1))));TR.lp.pv=true}}});
 main.addEventListener('pointermove',function(e){trPT.move(e.pointerId,e.clientX,e.clientY)});
 ['pointerup','pointercancel','blur'].forEach(function(t){window.addEventListener(t,trLpDrop,true)});main.addEventListener('lostpointercapture',trLpDrop);main.addEventListener('wheel',trLpDrop,{passive:true});
 main.addEventListener('contextmenu',function(e){if(!apVis()||!(e.target===main||e.target===svg||svg.contains(e.target)))return;e.preventDefault();trLpDrop();if(Date.now()-TR.lpAt<900)return;TR.lpAt=Date.now();trHold(e.clientX,e.clientY,'mouse',at(e))});

@@ -182,6 +182,39 @@ L=mk();L.t.tick(600);L.t.move(1,9,9);assert.strictEqual(L.t.up(1),false);assert.
 L=mk();L.t.down(1,0,0,0);L.t.tick(500);L.t.up(1);L.t.down(1,3,3,1000);L.t.tick(1500);assert.strictEqual(L.f.length,2,'a new press after release fires again');
 `
 
+// TestGlyphTapOrder — which of several overlapping crowns a tap means and how repeated taps walk
+// the stack (neGlyphTapJS).
+func TestGlyphTapOrder(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node not installed")
+	}
+	p := filepath.Join(t.TempDir(), "tap.js")
+	if err := os.WriteFile(p, []byte(neGlyphTapJS+"\n"+glyphTapHarness), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command(node, p).CombinedOutput(); err != nil {
+		t.Fatalf("tap order: %v\n%s", err, out)
+	}
+}
+
+const glyphTapHarness = `
+var assert=require('assert');
+function ids(L){return tapOrder(L).map(function(c){return c.id}).join('')}
+assert.strictEqual(ids([]),'');
+assert.strictEqual(ids([{id:'a',d:30,r:40},{id:'b',d:10,r:40}]),'ba','equal crowns: the nearer centre');
+assert.strictEqual(ids([{id:'B',d:38,r:80},{id:'s',d:8,r:10}]),'sB','understorey tree keeps its disc inside a big crown');
+assert.strictEqual(ids([{id:'B',d:5,r:80},{id:'s',d:9,r:10}]),'Bs','the big crown wins at its own centre');
+assert.strictEqual(ids([{id:'o',d:12,r:10},{id:'B',d:79,r:80}]),'Bo','a slop neighbour never beats the crown the pointer is in');
+assert.strictEqual(ids([{id:'x',d:25,r:10},{id:'y',d:14,r:10}]),'yx','outside all: nearest ring');
+assert.strictEqual(ids([{id:'p',d:0,r:20},{id:'q',d:0,r:10}]),'qp','tie: the smaller');
+assert.strictEqual(tapOrder([1,2,3,4,5,6,7].map(function(i){return{d:i,r:50}})).length,5,'at most five');
+assert.strictEqual(tapNext(0,-1,false),-1);assert.strictEqual(tapNext(3,-1,false),0,'nothing pinned: the best');
+assert.strictEqual(tapNext(1,0,false),-1,'the only tree again: unpin');assert.strictEqual(tapNext(1,0,true),-1);
+assert.strictEqual(tapNext(3,0,false),1,'best is pinned: the next');assert.strictEqual(tapNext(3,2,false),0,'fresh spot: the best');
+assert.strictEqual(tapNext(3,0,true),1);assert.strictEqual(tapNext(3,1,true),2);assert.strictEqual(tapNext(3,2,true),-1,'stack through: nothing');
+`
+
 // TestGlyphTreeMatch — the species search of the tree card (neGlyphTreeMatchJS) over the
 // observed-layer peer's dictionary rev 2 (testdata/tree_taxa_rev2.json): the inputs the peer's
 // resolver was verified with, typing order, the caller's order inside a step, the via hint.
