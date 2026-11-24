@@ -154,15 +154,19 @@ export async function run(o) {
       /* locate (the reader's position, phones/tablets; docs/ne-glyph.md row 'my position'): a fed fix draws the pulsing dot and writes nothing; the second stage pins it as the found point (pt= in the hash, full resolution); off removes the point, the selection and the card; nothing lands in localStorage */
       if (o.locate !== false) {
         s = await go(`#kg=${kg};z=20`); const ll = G.locate().center;
-        s = await G.locate({ lon: ll[0], lat: ll[1], acc: 40 }); await sleep(400); const lg = document.querySelector('svg.glyph g.lc'), lb = document.querySelector('.gv-loc');
+        s = await G.locate({ lon: ll[0], lat: ll[1], acc: 40 }); await sleep(400); const lg = document.querySelector('.glyph-main .glyph-lc'), lb = document.querySelector('.gv-loc');
         want(P + 'locate stage 1 dot, nothing in the hash', !!lg && lg.classList.contains('on') && !lg.classList.contains('pin') && lb.getAttribute('aria-pressed') === 'true' && !/pt=|loc/.test(location.hash) && G.locate().stage === 1, { hash: location.hash, st: G.locate() });
         s = await G.locate(true); { const until = Date.now() + 8000; while (!/pt=/.test(location.hash) && Date.now() < until) await sleep(150); await G.settled(); }
         want(P + 'locate stage 2 pinned as pt= at full resolution', lg.classList.contains('pin') && lb.classList.contains('fix') && /pt=/.test(location.hash) && /;full/.test(location.hash) && /,4000(;|$)/.test(location.hash) && G.locate().stage === 2, { hash: location.hash, st: G.locate() });
         { /* the pinned position moves with the reader: the found point, the pulse ring and the link all go to the next fix together (docs/ne-glyph.md row 'my position') */
-          const h0 = location.hash, tr = e => (e && e.getAttribute('transform')) || '';
+          const h0 = location.hash, tr = e => (e && e.firstChild.style.transform) || '', m0 = tr(lg);
           await G.locate({ lon: ll[0] + 0.0004, lat: ll[1] + 0.0002, acc: 8 }); { /* the link follows once the dot has landed: glide (≤ 1.2 s) + the follow pan (0.65 s) + the hash debounce */ const until = Date.now() + 6000; while (location.hash === h0 && Date.now() < until) await sleep(150); await sleep(300); }
-          const pg = document.querySelector('svg.glyph g.pt.on'), at = G.locate().at;
-          want(P + 'locate pinned point moves with the fix (dot, ring, pt=)', !!pg && tr(pg) === tr(lg) && location.hash !== h0 && /pt=/.test(location.hash) && at && Math.abs(at[0] - ll[0] - 0.0004) < 2e-5 && G.locate().follow === true, { h0, hash: location.hash, pt: tr(pg), lc: tr(lg), st: G.locate() });
+          const pg = document.querySelector('svg.glyph g.pt.on'), at = G.locate().at; /* the marker is HTML over the map (a dot moving inside the SVG repaints the sheet): the SVG point stays hidden while the position is pinned, nothing of the marker lives in the SVG */
+          want(P + 'locate pinned point moves with the fix (dot, ring, pt=)', !pg && !document.querySelector('svg.glyph g.lc') && /translate3d/.test(tr(lg)) && !lg.classList.contains('out') && location.hash !== h0 && /pt=/.test(location.hash) && at && Math.abs(at[0] - ll[0] - 0.0004) < 2e-5 && G.locate().follow === true, { h0, hash: location.hash, m0, lc: tr(lg), st: G.locate() });
+          /* compass (stage 2): a fed heading turns the beam and marks the button; nothing of it reaches the link */
+          await G.locate({ heading: 90 }); await sleep(500);
+          const bm = lg.querySelector('.lcb');
+          want(P + 'locate compass beam on a heading (stage 2 only)', G.locate().compass === true && G.locate().heading === 90 && lg.classList.contains('hd') && /rotate\(90/.test(bm.style.transform) && lb.classList.contains('hd') && !/head|compass/.test(location.hash), { st: G.locate(), tf: bm.style.transform, cl: lg.className });
         }
         want(P + 'locate sent no coordinate (the KG under the point is worked out in the browser)', !performance.getEntriesByType('resource').some(e => /glyph\/cell\?lon=|[?&](lon|lat|pt)=/.test(e.name) && e.name.includes(ll[0].toFixed(3))), null);
         want(P + 'locate frames alive at the deepest zoom', await new Promise(r => { let ok = false; requestAnimationFrame(() => { ok = true; r(true); }); setTimeout(() => ok || r(false), 2500); }), null);
