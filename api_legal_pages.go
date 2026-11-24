@@ -120,7 +120,7 @@ Standortfreigabe ab (Geolocation-API des Geräts); ohne Antippen findet keine St
 übertragen, nicht im <code>localStorage</code> abgelegt und nicht in die Liste der letzten Suchen aufgenommen. Der Server erhält nur
 die üblichen Kachelabrufe des sichtbaren Ausschnitts (2.1), wie bei jedem Verschieben der Karte. Ein zweites Antippen zoomt auf die
 Position und setzt sie als Punkt der Ansicht – erst dann steht sie wie eine gesuchte Adresse als <code>pt=</code> in der Adresszeile
-und damit in einem von Ihnen geteilten Link. Der gesetzte Punkt wandert mit Ihnen mit. Auch dann wird <strong>keine Koordinate übertragen</strong>: In welcher Katastralgemeinde der Punkt liegt, ermittelt die Karte im Browser – sie lädt dafür nur die Umrisse der in Frage kommenden Katastralgemeinden anhand ihrer Nummer (wie bei einer Suche nach diesen Gemeinden) und prüft den Punkt lokal. Ein drittes Antippen beendet die Standortabfrage und entfernt den Punkt wieder. Ein in
+und damit in einem von Ihnen geteilten Link. Der gesetzte Punkt wandert mit Ihnen mit. Auch dann wird <strong>keine Koordinate übertragen</strong>: In welcher Katastralgemeinde der Punkt liegt, ermittelt die Karte im Browser – sie lädt dafür nur die Umrisse der in Frage kommenden Katastralgemeinden anhand ihrer Nummer (wie bei einer Suche nach diesen Gemeinden) und prüft den Punkt lokal. Die Meldung geteilter Ansichten (3.) entfällt, solange die Standortabfrage läuft, und für jeden Link, der eine so gesetzte Position enthält – auch wenn ihn später jemand anderer öffnet oder weiterteilt; der Server weist eine solche Meldung zusätzlich ab. Ihre Position steht damit nur in dem Link, den Sie selbst weitergeben. Ein drittes Antippen beendet die Standortabfrage und entfernt den Punkt wieder. Ein in
 den Hintergrund gewechselter Tab beendet die Abfrage ebenfalls, solange die Position nicht als Punkt gesetzt ist; kehren Sie innerhalb von 30 Minuten zurück, wird sie ohne weiteres Antippen fortgesetzt. Solange die Abfrage läuft, hält die Seite den Bildschirm wach (Wake-Lock des Browsers, sofern vorhanden).</p>
 <h2>3. Cookies und lokale Speicherung</h2>
 <p>Diese Website verwendet <strong>keine Cookies</strong> und keine Tracking- oder Analysedienste. Die interaktive Karte merkt sich
@@ -130,7 +130,7 @@ Parameter in der Adresszeile (<code>#q=…</code>). Wenn Sie in der Karte das Li
 einmalig die geteilte Ansicht (ohne Suchbegriff und Ortsnamen) und die Liste der dafür geladenen Kartenkacheln an den Server; wird
 ein so geteilter Link direkt geöffnet, ergänzt die Karte einmalig die Kachelliste für die Geräteklasse und zählt die Öffnung. Damit
 kann der Server geteilte Ansichten nach einem Neustart vorab berechnen, sodass der Link schnell bleibt. Nur geteilte Links werden
-gespeichert; das Öffnen einer nicht geteilten Ansicht hinterlässt nichts. Gespeichert werden nur Ansicht, Kachelliste, Geräteklasse
+gespeichert; das Öffnen einer nicht geteilten Ansicht hinterlässt nichts. Ansichten mit Ihrer eigenen Position (2.6) werden weder gemeldet noch gespeichert. Gespeichert werden nur Ansicht, Kachelliste, Geräteklasse
 („Desktop“/„Touch“), Anzahl der Kopien und Öffnungen und der Tag der letzten – keine IP-Adresse, kein Browser, keine Bildschirmgröße,
 keine Uhrzeit; Einträge ohne Kopie oder Öffnung seit 30 Tagen werden verworfen. Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO (Betrieb).</p>
 <p>Baummeldungen per E-Mail (nur nach eigener Anmeldung mit einem von uns vergebenen Schlüssel, Betreff <code>subscribe …</code>):

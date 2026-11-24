@@ -396,7 +396,9 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     open, and stops following once you drag or pinch the map — the button then brings your position back first. The
     screen stays awake while it is on. Tap 2: deepest zoom, pinned as the point of the view — from then on it is pt= in
     the link exactly like a searched address, and the point keeps moving with you. Still no coordinate is sent: which
-    KG a point lies in (yours or a searched address's) is worked out in the browser from KG outlines fetched by KG code. Tap 3: off — watch cleared, point
+    KG a point lies in (yours or a searched address's) is worked out in the browser from KG outlines fetched by KG code.
+    Copying a link while your position is on, or opening / re-sharing a link that carries one (pt= with pn=position),
+    reports nothing to the server — such a view is in nobody's list of shared links, only in the link you hand on. Tap 3: off — watch cleared, point
     and card gone. A phone put away pauses it; taking it out again within 30 minutes resumes without a tap.
     Outside Austria, denied or timed out → off with a hint.
     Filter (funnel icon after the find box, ;f= in the link, key f shows/hides the row, F = full screen): a chip row

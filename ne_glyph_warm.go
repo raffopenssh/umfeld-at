@@ -149,13 +149,17 @@ func neWarmSorted() []*neWarmEntry {
 
 // neWarmCanonHash — the share hash without anything a person typed: `q=`
 // (search term), `pn=` (place name), and the operator's own tokens. Tokens are
-// kept in order; the result is bounded.
+// kept in order; the result is bounded. A link that carries a reader's own
+// pinned position (`pt=` with `pn=position`, what "my position" writes) has no
+// canonical form: "" — it is never stored, whoever shares or opens it. The page
+// does not send it in the first place (`opnMine`); this is the second lock.
 func neWarmCanonHash(h string) string {
 	h = strings.TrimLeft(strings.TrimSpace(h), "#!/")
 	if u, err := url.PathUnescape(h); err == nil && strings.Contains(h, "%3B") {
 		h = u
 	}
 	var out []string
+	hasPt, ownPos := false, false
 	for _, t := range strings.Split(h, ";") {
 		t = strings.TrimSpace(t)
 		if t == "" {
@@ -166,10 +170,20 @@ func neWarmCanonHash(h string) string {
 			k = k[:i]
 		}
 		switch k {
-		case "q", "pn", "dbg", "trace", "export":
+		case "pt":
+			hasPt = true
+		case "pn":
+			if v, err := url.QueryUnescape(t[strings.IndexByte(t, '=')+1:]); err == nil && strings.EqualFold(strings.TrimSpace(v), "position") && strings.Contains(t, "=") {
+				ownPos = true
+			}
+			continue
+		case "q", "dbg", "trace", "export":
 			continue
 		}
 		out = append(out, t)
+	}
+	if hasPt && ownPos {
+		return "" // a reader's pinned position: never stored
 	}
 	s := strings.Join(out, ";")
 	if len(s) > neWarmHashMax {

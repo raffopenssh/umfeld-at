@@ -710,6 +710,11 @@ so the first reader of a copied link waited for every tile to render again. Now:
   `copyLink` → `opnShare`): `{hash, dev: 'd'|'m' (coarse pointer), shared: true, urls}` → `POST /api/v1/ne/glyph/opened`,
   `urls` = the same-origin `/api/v1/ne/glyph/*` GETs of the last two minutes (`opn.all`, ≤ 600 kept, ≤ 500 sent — the
   tiles of the view being shared). Nothing is sent under `?warm`.
+- **Never the reader's position.** `opnMine(hash)` silences both beacons (share and open) while the locate watch is on
+  (any stage — `at=` and the tile list centre on the reader) and for any hash with `pt=` + `pn=position` (what `lcPin`
+  writes; so the recipient who opens or re-shares such a link sends nothing either). Second lock on the server:
+  `neWarmCanonHash` returns "" for such a hash → not stored, counted `rejected`. Price: a position link is never
+  pre-rendered. Soak step `locate` asserts it; keep `n:'position'` in `lcPin` or change both locks with it.
 - **Open = the refinement.** On a DIRECT open (a usable hash at load; `applyHash()` returned something; not `?trace`,
   `?dbg`, `?warm` — the operator's own loads, always add `?trace` when you open the page yourself) the page notes the glyph
   GETs of its first 25 s (≤ 500) and sends ONE beacon at 25 s or on hide, without `shared` (204, 0.2/s per IP, body ≤ 96 KB).

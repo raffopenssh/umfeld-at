@@ -10,6 +10,14 @@ func TestNEWarmCanonHash(t *testing.T) {
 	if got != "kg=63330;v=obs;full;screen" {
 		t.Fatalf("got %q", got)
 	}
+	for _, h := range []string{"#pt=16.43187,48.25288;pn=position;full;trees;at=6026,812,2400", "PT=16.4,48.2;PN=Position;full", "pt%3D16.4%2C48.2%3Bpn%3Dposition%3Bfull", "#full;pn=%70osition;pt=16.4,48.2"} {
+		if got := neWarmCanonHash(h); got != "" {
+			t.Fatalf("own position kept: %q → %q", h, got)
+		}
+	}
+	if got := neWarmCanonHash("#pt=16.4,48.2;pn=Hauptplatz%201%20%7C%20Linz;full"); got != "pt=16.4,48.2;full" {
+		t.Fatalf("address point: %q", got)
+	}
 	if neWarmCanonHash("#") != "" || neWarmCanonHash("q=x") != "" {
 		t.Fatal("empty expected")
 	}
@@ -84,6 +92,10 @@ func TestNEWarmRecordStore(t *testing.T) {
 	// an open of a link nobody shared is dropped unstored
 	if neWarmRecord("#kg=9;v=obs", "d", []string{"/api/v1/ne/glyph/kgs"}, false) || len(neWarmEntries) != 0 {
 		t.Fatal("unshared open stored")
+	}
+	// a reader's pinned position is refused, shared or opened
+	if neWarmRecord("#pt=16.4,48.2;pn=position;full", "m", []string{"/api/v1/ne/glyph/kgs"}, true) || len(neWarmEntries) != 0 {
+		t.Fatal("own position stored")
 	}
 	// the share click: urls may be empty; nothing to replay yet
 	if !neWarmRecord("#kg=1;v=obs;q=a", "d", nil, true) {
