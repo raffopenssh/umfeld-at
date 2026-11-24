@@ -31,7 +31,7 @@ func publicBaseURL(r *http.Request) string {
 }
 
 func publicLLMText(r *http.Request) string {
-	rp := strings.NewReplacer("{NE}", publicNELLMSection, "{BASE}", publicBaseURL(r), "{STAGE_NOTE}", serviceStageNote, "{STAGE}", serviceStage, "{FILTER_REF}", neFilterRefText())
+	rp := strings.NewReplacer("{NE}", publicNELLMSection, "{BASE}", publicBaseURL(r), "{STAGE_NOTE}", serviceStageNote, "{STAGE}", serviceStage, "{FILTER_REF}", neFilterRefText(), "{METHOD}", publicMethodText())
 	return neSpliceCoverage(rp.Replace(publicLLMTemplate))
 }
 
@@ -65,6 +65,9 @@ This API answers "what is AROUND this point?" for any WGS84 coordinate in Austri
   Python: https://github.com/raffopenssh/vtcseamless-py (bevdirect-serve client + ne_cells + this API).
   You then send us a point plus the parcel features you already hold (see /api/v1/context).
 
+## How the data was made
+
+{METHOD}
 ## The map — GET / (everything below is also a URL; no clicks needed)
 
   The landing page is the service. One hexagon per H3 cell, Austria at res 7 (dots) → res 12 (~300 m², the
@@ -460,6 +463,7 @@ JSON, CORS, no key. Source: <a href="https://github.com/raffopenssh/umfeld-at">g
 vector tiles (CC BY 4.0); <a href="https://github.com/raffopenssh/vtcseamless">vtcseamless</a> (MIT) stitches
 them into seamless geometries in your client. Peers digest those tiles into cells and report them here;
 this server holds no parcel.</p>
+{METHOD}
 <h2 id="map">The map</h2>
 <p>One dot per res-7 cell. Zoom in and the dots become hexagon faces, then every res-12 cell (~300 m²) in its
 dominant use. One <em>profile</em> fills the cells, any <em>overlays</em> mark on top. Every piece has an
@@ -514,7 +518,7 @@ BEV, AMA, BML, EEA, UNEP-WCMC, OpenStreetMap, basemap.at or the Bundeskanzleramt
 // publicDocsHTMLText — the landing page with the NE block spliced in
 // (publicNEHTMLSection lives in the ban-checked api_docs_public_ne.go).
 func publicDocsHTMLText() string {
-	r := strings.NewReplacer("{NE}", publicNEHTMLSection, "{SEO}", seoHeadMeta, "{CSS}", monoDocsCSS+neGlyphCSS+neFilterRefCSS, "{FILTER_REF}", neFilterRefHTML(), "{STAGE_NOTE}", serviceStageNote, "{STAGE}", serviceStage)
+	r := strings.NewReplacer("{NE}", publicNEHTMLSection, "{SEO}", seoHeadMeta, "{CSS}", monoDocsCSS+neGlyphCSS+neFilterRefCSS, "{FILTER_REF}", neFilterRefHTML(), "{METHOD}", publicMethodHTML(), "{STAGE_NOTE}", serviceStageNote, "{STAGE}", serviceStage)
 	return neSpliceCoverage(strings.Replace(r.Replace(publicDocsHTMLTemplate), "{TREES}", publicTreesSentence(), 1))
 }
 

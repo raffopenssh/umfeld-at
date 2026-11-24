@@ -164,6 +164,7 @@ Cross-cutting
 | **Trees far out** (trees toggle at every zoom: stand sheet res 7/8/9 from the observed-layer peer's stand index, corner count, card sparkline per KG/area, landing-page sentence; `/api/v1/ne/glyph/trees[?res=&bbox=|?u=]`) | `docs/ne-glyph.md` §Trees far out | `ne_tree_stands.go`, `ne_glyph_tro.go`, `api_docs_public.go` (`publicTreesSentence`) |
 | INVEKOS subsidy layer (subsidy-peer H3 + IVP1 outline contracts, `v=sub|subc` tiles, `/ne/glyph/sub`) | `docs/invekos-subsidy-layer.md` | `ne_glyph_sub.go`, `ne_glyph_subpoly.go` |
 | NE public read API (H3-keyed, tokenless, `.nex`, word ban, K bucketing) | `docs/ne-public-api.md` | `ne_store.go`, `ne_h3.go`, `api_ne_public.go`, `api_ne_vocab.go`, `api_docs_public_ne.go` |
+| **"How the data was made"** (method note per layer: one text, collapsed on `/` and a section of `llm.txt`; change the sentence when a threshold, cadence or sample rate changes) | header comment of the file | `api_docs_method.go` |
 | Tiers, tokens, peers, `/api/v1/context`, public docs | `docs/api-tiers.md` | `api_tiers.go`, `peers.go`, `api_context.go`, `api_docs_public.go` |
 | **Public fair-use gate** (per client address: requests, wire bytes, handler time, in-flight; global daily valve; `PUBLIC_GATE_*` env; 429 + Retry-After) | `docs/api-tiers.md` §Public fair-use gate | `public_gate.go`, `egress_stats.go` |
 | Impressum / Datenschutz / Lizenzen (`/impressum`, `/datenschutz`, `/lizenzen`) — keep in step with what the service really logs/stores | header comment of the file | `api_legal_pages.go`, `LICENSE` |
