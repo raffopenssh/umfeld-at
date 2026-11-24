@@ -162,7 +162,7 @@ combos at LOD 2 and 0) through `layers()`, whose expectations are read off the h
   such crown; else the nearest ring within the slop (14 px touch · 5 px mouse).
   Reader marks (`trDraw`): solid ring = named/measured/confirmed, dotted ring = in doubt,
   centre dot = yours, all at the crown's own radius (row *TREE REPORTS*). Hovered tree = `hovRing(d,true)`
-  (`.hov.tr`). Deepest zoom `HI_ZMAX` = 2400.
+  (`.hov.tr`). Deepest zoom `HI_ZMAX` = 4000 (was 2400 until 2026-11-24: tree rings too small to tap and label on a phone).
   **Tree sprites at LOD 0 and LOD 1 — `/trees/bbox?format=columns` contract** ({OBS_NAME}, CC BY,
   CORS, no key; `APEX_Q`, `apexKey`, `apObj` next to `hiApex`): ONE call per tile at both LODs,
   `bbox=<tile>&min_height=3&format=columns&fields=lon,lat,h_m,crown_m2,species,vitality,kg_code`
