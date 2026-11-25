@@ -88,6 +88,7 @@ var (
 type neFidxCall struct {
 	wg  sync.WaitGroup
 	b   []byte
+	st  string // the state the bytes were filed under (≠ the asked state when it moved during the build)
 	err error
 }
 
@@ -95,6 +96,9 @@ type neFidxCall struct {
 func NEFidxStats() map[string]interface{} {
 	m := neFidxLRU.stats()
 	m["built"] = neFidxBuilt.Load()
+	neFidxMu.Lock()
+	m["in_flight"] = len(neFidxFlight) // builds running now; bounded by the callers (0 when idle — anything else idle is a leak)
+	neFidxMu.Unlock()
 	m["build_ms_sum"] = neFidxBuildMs.Load()
 	m["disk_hits"] = neFidxDiskHits.Load()
 	m["disk_bytes"] = neFidxDiskSize()
@@ -477,15 +481,24 @@ func neFidxGet(i, j int) ([]byte, string, error) {
 	if c := neFidxFlight[key]; c != nil {
 		neFidxMu.Unlock()
 		c.wg.Wait()
+		if c.st != "" {
+			return c.b, c.st, c.err
+		}
 		return c.b, st, c.err
 	}
 	c := &neFidxCall{}
 	c.wg.Add(1)
-	neFidxFlight[key] = c
+	// the flight is filed and removed under the key it was STARTED with: `key` is re-pointed below when the
+	// state moved during the build, and a deferred delete of the moved key left the entry (and its 1 MB blob)
+	// in the map for good — every later neFidxGet of that state returned the finished call's bytes without an
+	// LRU or disk entry behind them, so neFidxPeekL kept missing and a veil tile stayed pend>0 for ever
+	// (2026-11-25: 'indexing · 44 bins left' that never moved).
+	fkey := key
+	neFidxFlight[fkey] = c
 	neFidxMu.Unlock()
 	defer func() {
 		neFidxMu.Lock()
-		delete(neFidxFlight, key)
+		delete(neFidxFlight, fkey)
 		neFidxMu.Unlock()
 		c.wg.Done()
 	}()
@@ -523,7 +536,7 @@ func neFidxGet(i, j int) ([]byte, string, error) {
 	}
 	neFidxLRU.put(key, b)
 	neFidxDiskWrite(st, i, j, b)
-	c.b = b
+	c.b, c.st = b, st
 	return b, st, nil
 }
 
