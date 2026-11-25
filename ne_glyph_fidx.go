@@ -557,7 +557,11 @@ func neFidxGet(i, j int) ([]byte, string, error) {
 	if th2 != "" {
 		blk = bin.effT
 	}
-	if blk == "" {
+	if blk == "" || neFidxBlockGenOfBin(i, j) == "" {
+		// a block the manifest does not list (beyond the border: the peer still answers a body of null rows,
+		// with a gen) has no gen in any state hash — neFidxBinBlk is "" for it. Filed under the body's gen the
+		// bin was never found again: built on every request, its veil tiles pend>0 for good (2026-11-25,
+		// 'indexing · 324 bins left' over a view that reaches across the border).
 		blk = neFidxBinBlk(i, j, th2)
 	}
 	st2 := neFidxStateBlk(i, j, th2, blk)

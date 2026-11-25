@@ -277,3 +277,28 @@ func TestFidxEffFedByBlockFetch(t *testing.T) {
 		t.Fatal("the parsed body carries its own gen and the effective one")
 	}
 }
+
+// A block the manifest does NOT list but the peer still answers (beyond the border: a body of null rows, with an
+// X-Cells-Gen). No state hash has a gen for it, so the built bin must be filed under that gen-less state — filed
+// under the body's gen it was built on every request and its veil tiles stayed pend>0 (2026-11-25, 324 bins).
+func TestFidxBlockNotInManifestBuiltOnce(t *testing.T) {
+	s := newFidxEffStage(t)
+	neFidxBlocksMu.Lock()
+	neFidxBlocksGen = map[[2]int]string{{1, 1}: "other"} // a manifest, without our block
+	neFidxBlocksMu.Unlock()
+	neFidxSrtmFetchFn = func(w, so, e, n float64) *neFidxSrtm {
+		v := &neFidxSrtm{epoch: "2026-10", gen: "gen-of-an-unlisted-block", ids: []uint64{7}, cols: map[string][]byte{"elev_mean": {1}}}
+		neFidxEffNote(s.i, s.j, v)
+		return v
+	}
+	st1 := s.get()
+	if st1 != neFidxState(s.i, s.j) {
+		t.Fatalf("bin filed under %s, the state asked for is %s", st1, neFidxState(s.i, s.j))
+	}
+	if _, _, ok := neFidxPeek(s.i, s.j, 0); !ok {
+		t.Fatal("peek misses the bin just built: its tiles would stay pending")
+	}
+	if st2 := s.get(); st2 != st1 || s.builds != 1 {
+		t.Fatalf("second get: state %s → %s, %d builds (want 1)", st1, st2, s.builds)
+	}
+}

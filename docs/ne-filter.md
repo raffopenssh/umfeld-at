@@ -543,6 +543,11 @@ state is its **effective gen**: the block gen under which the present `D` (list-
 - Inflight: `ne_fidx.eff {bins, cap, on_older_gen, regen_same, regen_moved, first_seen}` —
   `regen_same` ≫ `regen_moved` = the peer rebuilds blocks without changing our bins (what the
   churn was); `ne_fidx.in_flight` must be 0 when idle.
+- **Blocks the manifest does not list** (2026-11-25, 'indexing · 324 bins left' over a view across the border):
+  the peer answers them anyway (null rows, with an `X-Cells-Gen`). No state has a gen for such a block, so the
+  built bin is filed with `;blk=` empty — never under the body's gen (it was then built on every request and its
+  veil tiles never finished). Triage: `curl -sD- -o/dev/null '/api/v1/ne/glyph/fidx?i=&j='` twice — `built_ms` must
+  repeat. Test `TestFidxBlockNotInManifestBuiltOnce`.
 - Tests (`ne_glyph_fidx_eff_test.go`, staged build + staged peer via `neFidxBuildFn` /
   `neFidxSrtmFetchFn`): state moves mid-build and comes back (the flight leak of b1ab64d), a body
   parsed mid-build does not label the bin, four regenerations to the same bytes = one build / one file.
