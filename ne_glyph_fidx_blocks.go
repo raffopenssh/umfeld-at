@@ -54,6 +54,14 @@ var (
 	neFidxBlocksPolls   atomic.Int64
 	neFidxBlocksRefresh atomic.Int64 // bins queued for a refresh build
 	neFidxBlocksRefDone atomic.Int64
+
+	// §8.1d (2026-11-25): what the manifest says a request gets NOW
+	neFidxBlocksCh      = map[[2]int]string{} // (bi,bj) → chash of the body served for the field set neFidxBlocksFH
+	neFidxBlocksFH      string                // the manifest's `fh` + our tree mode: chashes compare only within one field set
+	neFidxBlocksServed  bool                  // the manifest carries served_gen (the pend loop is then a fallback only)
+	neFidxBlocksHeld    int                   // blocks with hold_until set at the last poll
+	neFidxBlocksSameCh  atomic.Int64          // blocks whose served gen moved with an equal chash: no pull, no state move
+	neFidxBlocksRelabel atomic.Int64          // bins carried over to the new gen by that
 )
 
 func neFidxBlocksFile() string { return filepath.Join(neFidxDiskDir, "blocks.json") }
@@ -62,7 +70,9 @@ type neFidxBlocksDisk struct {
 	Generation string            `json:"generation"`
 	ETag       string            `json:"etag"`
 	At         time.Time         `json:"at"`
-	Gen        map[string]string `json:"gen"` // "bi/bj" → gen
+	Gen        map[string]string `json:"gen"` // "bi/bj" → gen a request gets now (served_gen)
+	Ch         map[string]string `json:"ch,omitempty"`
+	FH         string            `json:"fh,omitempty"`
 }
 
 func neFidxBlocksLoad() {
@@ -84,16 +94,23 @@ func neFidxBlocksLoad() {
 		var bi, bj int
 		if _, err := fmt.Sscanf(k, "%d/%d", &bi, &bj); err == nil {
 			neFidxBlocksGen[[2]int{bi, bj}] = g
+			if c := d.Ch[k]; c != "" {
+				neFidxBlocksCh[[2]int{bi, bj}] = c
+			}
 		}
 	}
-	neFidxBlocksAll, neFidxBlocksETag = d.Generation, d.ETag
+	neFidxBlocksAll, neFidxBlocksETag, neFidxBlocksFH = d.Generation, d.ETag, d.FH
 }
 
 func neFidxBlocksSave() {
 	neFidxBlocksMu.RLock()
-	d := neFidxBlocksDisk{Generation: neFidxBlocksAll, ETag: neFidxBlocksETag, At: neFidxBlocksAt, Gen: make(map[string]string, len(neFidxBlocksGen))}
+	d := neFidxBlocksDisk{Generation: neFidxBlocksAll, ETag: neFidxBlocksETag, At: neFidxBlocksAt, Gen: make(map[string]string, len(neFidxBlocksGen)),
+		Ch: make(map[string]string, len(neFidxBlocksCh)), FH: neFidxBlocksFH}
 	for k, g := range neFidxBlocksGen {
 		d.Gen[fmt.Sprintf("%d/%d", k[0], k[1])] = g
+	}
+	for k, c := range neFidxBlocksCh {
+		d.Ch[fmt.Sprintf("%d/%d", k[0], k[1])] = c
 	}
 	neFidxBlocksMu.RUnlock()
 	b, _ := json.Marshal(d)
@@ -104,7 +121,8 @@ func neFidxBlocksSave() {
 	}
 }
 
-// neFidxBlockGenRaw — the manifest's gen of block (bi,bj); "" when unknown (no manifest, or a block the peer does not list).
+// neFidxBlockGenRaw — the gen the manifest says a request for block (bi,bj) gets now (served_gen; the target gen
+// from a peer without that column, or for a block with nothing stored); "" when unknown (no manifest, or a block the peer does not list).
 func neFidxBlockGenRaw(bi, bj int) string {
 	neFidxBlocksLoad()
 	neFidxBlocksMu.RLock()
@@ -157,9 +175,9 @@ func neFidxBoxBlockGens(w, s, e, n float64, th string) string {
 func NEFidxBlocksStats() map[string]interface{} {
 	neFidxBlocksLoad()
 	neFidxBlocksMu.RLock()
-	n, gen, at := len(neFidxBlocksGen), neFidxBlocksAll, neFidxBlocksAt
+	n, gen, at, held, served := len(neFidxBlocksGen), neFidxBlocksAll, neFidxBlocksAt, neFidxBlocksHeld, neFidxBlocksServed
 	neFidxBlocksMu.RUnlock()
-	return map[string]interface{}{"blocks": n, "generation": gen, "polled_at": at, "polls": neFidxBlocksPolls.Load(),
+	return map[string]interface{}{"blocks": n, "served_gen": served, "held_at_peer": held, "same_content": neFidxBlocksSameCh.Load(), "relabelled_bins": neFidxBlocksRelabel.Load(), "generation": gen, "polled_at": at, "polls": neFidxBlocksPolls.Load(),
 		"changed": neFidxBlocksChanged.Load(), "refresh_queued": neFidxBlocksRefresh.Load(), "refresh_done": neFidxBlocksRefDone.Load(), "refresh_pending": neFidxRefreshPending(), "rebuilding": neFidxPendStats()}
 }
 
@@ -184,7 +202,9 @@ func neFidxBlocksPoll() error {
 	if api == "" {
 		return nil
 	}
-	req, _ := http.NewRequest("GET", api+"/api/v1/cells/blocks", nil)
+	tree := neTreeHMode()
+	// asked for the field set we pull: chash is per field set (gen is not)
+	req, _ := http.NewRequest("GET", api+"/api/v1/cells/blocks?fields="+neTreeHFields(), nil)
 	req.Header.Set("User-Agent", "umfeld-at/fidx-blocks (+"+publicURL()+")")
 	neFidxBlocksMu.RLock()
 	if neFidxBlocksETag != "" {
@@ -216,10 +236,14 @@ func neFidxBlocksPoll() error {
 	var m struct {
 		Generation string `json:"generation"`
 		Epoch      string `json:"epoch"`
+		FH         string `json:"fh"`
 		Blocks     struct {
-			BI  []int    `json:"bi"`
-			BJ  []int    `json:"bj"`
-			Gen []string `json:"gen"`
+			BI     []int      `json:"bi"`
+			BJ     []int      `json:"bj"`
+			Gen    []string   `json:"gen"`
+			Served []*string  `json:"served_gen"` // what a request gets now: == gen when current, the previous one while rebuilding / held, null → 503
+			Chash  []*string  `json:"chash"`      // content hash of the body served now (this field set); null = unknown
+			Hold   []*float64 `json:"hold_until"` // debounce: epoch s the builder takes the block; null = not held
 		} `json:"blocks"`
 	}
 	if err := json.Unmarshal(body, &m); err != nil {
@@ -229,21 +253,63 @@ func neFidxBlocksPoll() error {
 		return fmt.Errorf("manifest lists %d/%d/%d blocks", len(m.Blocks.BI), len(m.Blocks.BJ), len(m.Blocks.Gen))
 	}
 	neFidxSrtmEpochStore(m.Epoch)
+	fh := m.FH
+	if tree {
+		fh += "+t"
+	}
+	n := len(m.Blocks.BI)
+	hasServed, hasCh := len(m.Blocks.Served) == n, len(m.Blocks.Chash) == n
+	type moved struct {
+		k        [2]int
+		old, now string
+	}
 	var changed [][2]int
+	var same []moved
+	held := 0
 	neFidxBlocksMu.Lock()
 	first := len(neFidxBlocksGen) == 0
-	next := make(map[[2]int]string, len(m.Blocks.BI))
-	for k := range m.Blocks.BI {
+	chCmp := hasCh && m.FH != "" && fh == neFidxBlocksFH // the chashes on record are of the same field set
+	next, nextCh := make(map[[2]int]string, n), make(map[[2]int]string, n)
+	for k := 0; k < n; k++ {
 		key := [2]int{m.Blocks.BI[k], m.Blocks.BJ[k]}
-		next[key] = m.Blocks.Gen[k]
-		if old, ok := neFidxBlocksGen[key]; !first && old != m.Blocks.Gen[k] {
-			_ = ok
-			changed = append(changed, key)
+		g := m.Blocks.Gen[k]
+		if hasServed && m.Blocks.Served[k] != nil && *m.Blocks.Served[k] != "" {
+			g = *m.Blocks.Served[k] // pull on served_gen, not on the target gen: a held block has nothing new to hand out
+		}
+		next[key] = g
+		ch := ""
+		if hasCh && m.Blocks.Chash[k] != nil {
+			ch = *m.Blocks.Chash[k]
+			nextCh[key] = ch
+		}
+		if len(m.Blocks.Hold) == n && m.Blocks.Hold[k] != nil {
+			held++
+		}
+		if old := neFidxBlocksGen[key]; !first && old != g {
+			if chCmp && old != "" && ch != "" && neFidxBlocksCh[key] == ch {
+				same = append(same, moved{key, old, g})
+			} else {
+				changed = append(changed, key)
+			}
 		}
 	}
-	neFidxBlocksGen = next
+	neFidxBlocksGen, neFidxBlocksCh, neFidxBlocksFH, neFidxBlocksServed, neFidxBlocksHeld = next, nextCh, fh, hasServed, held
 	neFidxBlocksAll, neFidxBlocksETag, neFidxBlocksAt = m.Generation, resp.Header.Get("ETag"), time.Now()
 	neFidxBlocksMu.Unlock()
+	// the manifest is newer than any stale answer on record: the served gen it lists stands
+	for _, b := range changed {
+		neFidxPendDrop(b)
+	}
+	rel := 0
+	for _, mv := range same {
+		neFidxPendDrop(mv.k)
+		rel += neFidxBlockRelabel(mv.k[0], mv.k[1], mv.old, mv.now, tree)
+	}
+	if len(same) > 0 {
+		neFidxBlocksSameCh.Add(int64(len(same)))
+		neFidxBlocksRelabel.Add(int64(rel))
+		log.Printf("fidx blocks manifest: %d block(s) on a new gen with the same content hash → no pull (%d bin(s) carried over)", len(same), rel)
+	}
 	neFidxBlocksSave()
 	neMVTStateMemoDrop()
 	if first {
@@ -254,14 +320,14 @@ func neFidxBlocksPoll() error {
 		return nil
 	}
 	neFidxBlocksChanged.Add(int64(len(changed)))
-	held := neFidxHeldBins()
+	heldBins := neFidxHeldBins()
 	q := 0
 	for _, b := range changed {
 		for a := 0; a < 4; a++ {
 			for c := 0; c < 4; c++ {
 				i, j := 4*b[0]+a, 4*b[1]+c
 				neFidxSrtmBlk.drop(fmt.Sprintf("%d/%d", i, j))
-				if held[[2]int{i, j}] {
+				if heldBins[[2]int{i, j}] {
 					neFidxRefreshQueue(i, j)
 					q++
 				}
@@ -271,6 +337,70 @@ func neFidxBlocksPoll() error {
 	neFidxBlocksRefresh.Add(int64(q))
 	log.Printf("fidx blocks manifest: generation %s, %d block(s) rebuilt at the peer → %d held bin(s) queued for a refresh build", m.Generation, len(changed), q)
 	return nil
+}
+
+// neFidxBlockRelabel — the peer serves block (bi,bj) under gen `now` with the content hash it had under `old`
+// (manifest chash, §8.1d): what we hold for `old` IS the body of `now`. The parsed bins and the content table move
+// to the new gen without a request; effective gens — and with them every state, disk file and tile — stay.
+// tree = the hash covers the apex lists (a tree-set hash covers the fixed columns too; a base-set one says nothing
+// about lists). Returns the bins carried over.
+func neFidxBlockRelabel(bi, bj int, old, now string, tree bool) int {
+	n := 0
+	neFidxEffLoad()
+	neFidxEffMu.Lock()
+	for a := 0; a < 4; a++ {
+		for c := 0; c < 4; c++ {
+			e := neFidxEff[[2]int{4*bi + a, 4*bj + c}]
+			if e == nil {
+				continue
+			}
+			hit := false
+			if e.Gen == old {
+				e.Gen, hit = now, true
+			}
+			if tree && e.GenT == old {
+				e.GenT, hit = now, true
+			}
+			if hit {
+				n++
+			}
+		}
+	}
+	if n > 0 && neFidxEffTimer == nil {
+		neFidxEffTimer = time.AfterFunc(5*time.Second, neFidxEffSave)
+	}
+	neFidxEffMu.Unlock()
+	l := neFidxSrtmBlk
+	l.mu.Lock()
+	for a := 0; a < 4; a++ {
+		for c := 0; c < 4; c++ {
+			k := fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+c)
+			e := l.m[k]
+			if e == nil || e.v == nil || e.v.gen != old {
+				continue
+			}
+			if e.v.thSet && !tree {
+				delete(l.m, k) // lists the hash does not vouch for
+				continue
+			}
+			v := *e.v // readers hold the old pointer: never write through it
+			v.gen, v.stale = now, false
+			e.v = &v
+		}
+	}
+	l.mu.Unlock()
+	return n
+}
+
+// neFidxPendDrop — forget a stale answer on record for block k without a refresh (the manifest poll decides what is pulled).
+func neFidxPendDrop(k [2]int) {
+	neFidxPendMu.Lock()
+	_, ok := neFidxPend[k]
+	delete(neFidxPend, k)
+	neFidxPendMu.Unlock()
+	if ok {
+		neFidxPendDone.Add(1)
+	}
 }
 
 // neFidxHeldBins — bins with a blob on disk (any state) or asked for in the last 24 h.
@@ -382,8 +512,13 @@ var (
 	neFidxPendCheck = func(bi, bj int, tree bool) { neFidxSrtmBlockGet(bi, bj, tree) }
 )
 
-// neFidxRetryAfter — the header in seconds, clamped to 30 s … 10 min; 2 min without one.
-func neFidxRetryAfter(h string) time.Duration {
+// neFidxHoldMax — the peer's debounce holds a stale block for at most 4 h, its builder runs every 15 min.
+const neFidxHoldMax = 4*time.Hour + 15*time.Minute
+
+// neFidxRetryAfter — the header in seconds, clamped to 30 s … 10 min; 2 min without one. hold = the answer
+// carried X-Cells-Hold: 1 (the block is debounced at the peer, Retry-After = until its builder takes it):
+// honoured up to neFidxHoldMax.
+func neFidxRetryAfter(h string, hold bool) time.Duration {
 	n, err := strconv.Atoi(strings.TrimSpace(h))
 	if err != nil || n <= 0 {
 		return 2 * time.Minute
@@ -391,6 +526,12 @@ func neFidxRetryAfter(h string) time.Duration {
 	d := time.Duration(n) * time.Second
 	if d < 30*time.Second {
 		d = 30 * time.Second
+	}
+	if hold {
+		if d > neFidxHoldMax {
+			d = neFidxHoldMax
+		}
+		return d
 	}
 	if d > 10*time.Minute {
 		d = 10 * time.Minute
@@ -533,13 +674,21 @@ func neFidxPendDue(max int) [][2]int {
 func neFidxPendLoop() {
 	for {
 		time.Sleep(neFidxPendTick)
-		if time.Since(neFidxSrtmDown.get()) < 2*time.Minute {
+		if time.Since(neFidxSrtmDown.get()) < 2*time.Minute || neFidxBlocksTellServed() {
 			continue
 		}
 		for _, k := range neFidxPendDue(neFidxPendBatch) {
 			neFidxPendCheck(k[0], k[1], neTreeHMode())
 		}
 	}
+}
+
+// neFidxBlocksTellServed — a fresh manifest with served_gen: its poll (one 304 per 10 min for ALL blocks) says
+// when a block we hold in its previous generation became current; no per-block recheck goes out.
+func neFidxBlocksTellServed() bool {
+	neFidxBlocksMu.RLock()
+	defer neFidxBlocksMu.RUnlock()
+	return neFidxBlocksServed && time.Since(neFidxBlocksAt) < 3*neFidxBlocksEvery
 }
 
 func neFidxPendStats() map[string]interface{} {

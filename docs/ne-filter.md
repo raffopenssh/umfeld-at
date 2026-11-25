@@ -494,6 +494,29 @@ field set) parks that block for the given time — no request, no doubling, and 
 nor a failed tree-set fetch is booked. `/debug/inflight` → `ne_fidx.blocks.rebuilding`
 (`pending`, `building`, `stale_answers`, `not_modified`, `became_current`, `http_503`).
 
+**Peer debounce + content hash (2026-11-25, §8.1d).** `gen` at the peer is input-keyed, not
+content-keyed; since 2026-11-25 15:40 UTC it debounces rebuilds (a stale block is rebuilt once its
+target gen stood still for 30 min, ≤ 4 h after it went stale) and lists per block `served_gen` (what a
+request gets now), `chash` (sha256[:24] of the body served for the asked field set) and `hold_until`.
+We follow:
+
+- The manifest is polled **for the field set we pull** (`?fields=` = `neTreeHFields()`; chash is per
+  field set, `fh` + tree mode is remembered so hashes of two sets are never compared).
+- `neFidxBlockGenRaw` = **`served_gen`** (target `gen` only from a peer without the column or for a
+  block with nothing stored). A held block — target moved, previous generation serves — changes
+  nothing here: no pull, no state move.
+- Served gen moved, **chash equal** to the one on record → no pull: `neFidxBlockRelabel` moves the
+  content table (`Gen`/`GenT`) and the parsed bins (as copies) to the new gen; effective gens, states,
+  disk files and tiles stay. chash different or unknown → as before (drop the parsed block, refresh
+  the held bins; §8.1c still spares the bins whose own bytes did not change).
+- A manifest poll drops the pending entry of every block whose served gen moved; while a fresh
+  manifest with `served_gen` is on hand (< 30 min) `neFidxPendLoop` sends **no** per-block recheck.
+  As a fallback the recheck honours `Retry-After` in full on `X-Cells-Hold: 1` (≤ 4 h 15 min; 10 min
+  otherwise) and is conditional only while all 16 bins of the block are still parsed (a 304 with
+  nothing on hand would fall through to 16 single-bin requests — a hold outlives the LRU TTL).
+- `/debug/inflight` → `ne_fidx.blocks`: `served_gen` (manifest has the column), `held_at_peer`,
+  `same_content` (blocks taken over without a pull), `relabelled_bins`.
+
 **Bin content generations (2026-11-25, §8.1c, `ne_glyph_fidx_eff.go`).** A block gen moves when *any*
 of its 16 bins was re-run at the peer — also when the re-run reproduced the same bytes. Measured
 2026-11-24 (peer tree QC + obs re-uploads): 953 block rebuilds in 57 manifest polls; block 101/473 moved

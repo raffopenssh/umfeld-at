@@ -1670,6 +1670,19 @@ func (l *neFidxSrtmBlkLRU) has(k string) bool {
 	return e != nil && time.Since(e.at) <= l.ttl && !l.staleGen(k, e.v)
 }
 
+// neFidxSrtmBlkHasBlock — are all 16 bins of block (bi,bj) parsed and live? Only then may a recheck be
+// conditional: a 304 leaves the bins on hand standing, and a held block outlives the LRU's TTL by hours.
+func neFidxSrtmBlkHasBlock(bi, bj int) bool {
+	for a := 0; a < 4; a++ {
+		for c := 0; c < 4; c++ {
+			if !neFidxSrtmBlk.has(fmt.Sprintf("%d/%d", 4*bi+a, 4*bj+c)) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func (l *neFidxSrtmBlkLRU) put(k string, v *neFidxSrtm) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -1791,7 +1804,7 @@ func neFidxSrtmBlockGet(bi, bj int, tree bool) (ok, noCol bool) {
 		}
 		req, _ := http.NewRequest("GET", url, nil)
 		req.Header.Set("User-Agent", ua+" (+"+publicURL()+")")
-		if tag := neFidxPendETag(bi, bj, tree); tag != "" && attempt == 0 {
+		if tag := neFidxPendETag(bi, bj, tree); tag != "" && attempt == 0 && neFidxSrtmBlkHasBlock(bi, bj) {
 			req.Header.Set("If-None-Match", tag) // a recheck of a block held in its previous generation
 		}
 		resp, err := cl.Do(req)
@@ -1801,7 +1814,7 @@ func neFidxSrtmBlockGet(bi, bj int, tree bool) (ok, noCol bool) {
 		}
 		neFidxSrtmBlkFetches.Add(1)
 		ep, gen := resp.Header.Get("X-Cells-Epoch"), resp.Header.Get("X-Cells-Gen")
-		stale, ra := resp.Header.Get("X-Cells-Stale") == "1", neFidxRetryAfter(resp.Header.Get("Retry-After"))
+		stale, ra := resp.Header.Get("X-Cells-Stale") == "1", neFidxRetryAfter(resp.Header.Get("Retry-After"), resp.Header.Get("X-Cells-Hold") == "1")
 		empty := func() (bool, bool) {
 			neFidxPendClear(bi, bj)
 			neFidxSrtmEpochStore(ep)

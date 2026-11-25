@@ -211,3 +211,106 @@ func TestFidxBlockPreviousGenerationWhileRebuilding(t *testing.T) {
 		t.Fatal("no fetch for a block the peer is building")
 	}
 }
+
+// The peer's debounce + content hash (2026-11-25, §8.1d): the manifest is read by served_gen, a held block (target
+// gen moved, previous generation serves) moves nothing, a new served gen with the chash of our copy is taken over
+// without a pull, and only a new chash drops the parsed block.
+func TestFidxBlocksServedGenAndContentHash(t *testing.T) {
+	dir := t.TempDir()
+	old, oldPin := neFidxDiskDir, neTreeHPinned
+	neFidxDiskDirSet(dir)
+	neTreeHPinned = "0"
+	reset := func() {
+		neFidxBlocksMu.Lock()
+		neFidxBlocksGen, neFidxBlocksCh, neFidxBlocksFH, neFidxBlocksAll, neFidxBlocksETag, neFidxBlocksLoaded = map[[2]int]string{}, map[[2]int]string{}, "", "", "", true
+		neFidxBlocksMu.Unlock()
+		neFidxPendMu.Lock()
+		neFidxPend = map[[2]int]*neFidxPendEnt{}
+		neFidxPendMu.Unlock()
+	}
+	reset()
+	t.Cleanup(func() {
+		reset()
+		neFidxBlocksMu.Lock()
+		neFidxBlocksLoaded, neFidxBlocksServed = false, false
+		neFidxBlocksMu.Unlock()
+		neTreeHPinned = oldPin
+		neFidxDiskDirSet(old)
+	})
+	type row struct {
+		gen, served, ch string
+		hold            interface{}
+	}
+	cur := row{"g1", "g1", "c1", nil}
+	var q atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q.Store(r.URL.RawQuery)
+		json.NewEncoder(w).Encode(map[string]interface{}{"epoch": "2026-10", "generation": cur.gen + cur.served, "fh": "ab12", "blocks": map[string]interface{}{
+			"bi": []int{116}, "bj": []int{468}, "gen": []string{cur.gen}, "served_gen": []string{cur.served}, "chash": []string{cur.ch}, "hold_until": []interface{}{cur.hold}}})
+	}))
+	defer srv.Close()
+	pc := peers()
+	pc.ObsAPI = srv.URL
+	setPeersForTest(pc)
+	defer setPeersForTest(peerConf{PublicURL: "https://umfeld.example", PrivatePrefix: "/k", ObsName: "obs-peer", ObsAPI: "https://obs.example:8100", ObsWeb: "https://obs.example", SubName: "sub-peer", SubAPI: "https://sub.example", MapName: "map-peer"})
+	poll := func() {
+		t.Helper()
+		if err := neFidxBlocksPoll(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	neFidxSrtmEpochStore("2026-10")
+	i, j := 464, 1872 // block 116/468
+	poll()
+	if s, _ := q.Load().(string); s != "fields="+neFidxSrtmFlds {
+		t.Fatalf("the manifest is asked for the field set we pull (chash is per field set), got %q", s)
+	}
+	v := &neFidxSrtm{epoch: "2026-10", gen: "g1", ids: []uint64{7}, cols: map[string][]byte{"elev_mean": {1}}}
+	neFidxEffNote(i, j, v)
+	neFidxSrtmBlk.put("464/1872", v)
+	st1 := neFidxState(i, j)
+
+	// held: the target moved, the previous generation serves — nothing to pull, nothing moves
+	cur = row{"g2", "g1", "c1", float64(time.Now().Unix() + 1800)}
+	ch0 := neFidxBlocksChanged.Load()
+	poll()
+	if neFidxState(i, j) != st1 || neFidxBlocksChanged.Load() != ch0 || neFidxBlockGenRaw(116, 468) != "g1" {
+		t.Fatalf("a held block moved: raw=%q", neFidxBlockGenRaw(116, 468))
+	}
+	if NEFidxBlocksStats()["held_at_peer"] != 1 || !neFidxBlocksTellServed() {
+		t.Fatalf("stats: %v", NEFidxBlocksStats())
+	}
+	// a stale answer on record for it (a fetch during the hold) goes when the manifest says the block flipped
+	neFidxPendSet(116, 468, "g1", `"B-g1"`, false, neFidxRetryAfter("3600", true))
+
+	// built to the same content: new served gen, same chash → our copy is the new body
+	cur = row{"g2", "g2", "c1", nil}
+	poll()
+	if neFidxPendIs(116, 468) {
+		t.Fatal("the manifest's served gen ends a pending entry")
+	}
+	if neFidxState(i, j) != st1 || neFidxBlocksChanged.Load() != ch0 || !neFidxEffCovers(i, j, "") {
+		t.Fatal("same chash under a new gen: the state must stay and the table must cover the new gen without a fetch")
+	}
+	if got, ok := neFidxSrtmBlk.get("464/1872"); !ok || got.gen != "g2" || got.effC != "g1" || v.gen != "g1" {
+		t.Fatal("the parsed bin is carried over to the new gen as a copy (readers of the old pointer see no write)")
+	}
+
+	// new content: the parsed block is dropped, the state is unknown until the pull
+	cur = row{"g3", "g3", "c3", nil}
+	poll()
+	if _, ok := neFidxSrtmBlk.get("464/1872"); ok || neFidxState(i, j) == st1 || neFidxBlocksChanged.Load() != ch0+1 {
+		t.Fatal("a new chash is a change")
+	}
+
+	// Retry-After: 10 min at most, but a hold is honoured in full (≤ 4 h 15 min)
+	if d := neFidxRetryAfter("7200", false); d != 10*time.Minute {
+		t.Fatalf("plain Retry-After clamp: %s", d)
+	}
+	if d := neFidxRetryAfter("7200", true); d != 2*time.Hour {
+		t.Fatalf("hold Retry-After: %s", d)
+	}
+	if d := neFidxRetryAfter("99999", true); d != neFidxHoldMax {
+		t.Fatalf("hold clamp: %s", d)
+	}
+}
