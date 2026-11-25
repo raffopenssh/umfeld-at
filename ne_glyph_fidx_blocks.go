@@ -140,14 +140,14 @@ func neFidxBlocksGeneration() string {
 }
 
 // neFidxBoxBlockGens — ";blk=" + the gens of every block a box touches (neFidxBoxState).
-func neFidxBoxBlockGens(w, s, e, n float64) string {
+func neFidxBoxBlockGens(w, s, e, n float64, th string) string {
 	i0, i1 := int(w/0.1), int((e-1e-9)/0.1)
 	j0, j1 := int(s/0.1), int((n-1e-9)/0.1)
 	var sb strings.Builder
 	sb.WriteString(";blk=")
 	for bi := i0; bi <= i1; bi++ {
 		for bj := j0; bj <= j1; bj++ {
-			sb.WriteString(neFidxBlockGen(bi, bj))
+			sb.WriteString(neFidxBlockEff(bi, bj, th))
 			sb.WriteByte(',')
 		}
 	}

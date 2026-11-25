@@ -494,6 +494,36 @@ field set) parks that block for the given time — no request, no doubling, and 
 nor a failed tree-set fetch is booked. `/debug/inflight` → `ne_fidx.blocks.rebuilding`
 (`pending`, `building`, `stale_answers`, `not_modified`, `became_current`, `http_503`).
 
+**Bin content generations (2026-11-25, §8.1c, `ne_glyph_fidx_eff.go`).** A block gen moves when *any*
+of its 16 bins was re-run at the peer — also when the re-run reproduced the same bytes. Measured
+2026-11-24 (peer tree QC + obs re-uploads): 953 block rebuilds in 57 manifest polls; block 101/473 moved
+gen 13 times and each of its bins was rebuilt and written ~24 times (once on the previous generation,
+once on the current one), of which 20 were byte-identical in every column — the 2 GB disk cache, the
+browsers' `e=` copies and the veil tiles turned over with them. So every parsed block body is digested
+**per bin** — `D` = ids + the fixed columns we ask for, `T` = the apex lists — and `;blk=` in a bin's
+state is its **effective gen**: the block gen under which the present `D` (list-less state) or `(D, T)`
+(`;th2` state) first appeared. Rules:
+
+- The table covers a bin only at the block gen whose body we parsed (`Gen` / `GenT`). When the manifest
+  moves, the state falls back to the new block gen (it moves, as before — unknown content), the held bins
+  are queued for a refresh, and `neFidxGet` fetches the block **before** it builds (`neFidxEffCovers`):
+  same bytes → the state is the old one again, the blob comes from the LRU / disk (`neFidxHave`),
+  no build, no file (`ne_fidx.eff_spared_builds`).
+- A built bin is filed under the effective gen of the body it was built **from** (`neFidxSrtm.effC/effT`
+  → `bin.effC/effT` → `neFidxStateBlk`), never under what the table says when the build ends.
+  Only a bin built without a peer body takes the state at the end of its build.
+- Veil tiles: `neFidxBoxState` reads `neFidxBlockEff` — the block gen while all 16 bins sit on it,
+  else a digest of the 16 effective gens.
+- `data/ne_fidx/bin_eff.json` (≈ 2 MB, written 5 s after a change) carries the table across a restart;
+  without it bins whose content is older than their block's gen rebuild once. The header's `srtm.gen`
+  is the effective gen (a regenerated block leaves the blob byte-identical).
+- Inflight: `ne_fidx.eff {bins, cap, on_older_gen, regen_same, regen_moved, first_seen}` —
+  `regen_same` ≫ `regen_moved` = the peer rebuilds blocks without changing our bins (what the
+  churn was); `ne_fidx.in_flight` must be 0 when idle.
+- Tests (`ne_glyph_fidx_eff_test.go`, staged build + staged peer via `neFidxBuildFn` /
+  `neFidxSrtmFetchFn`): state moves mid-build and comes back (the flight leak of b1ab64d), a body
+  parsed mid-build does not label the bin, four regenerations to the same bytes = one build / one file.
+
 What it costs them, worst case (every bin of Austria asked once): 12 k bins × one request × ~20–60 KB
 ≈ 0.3–0.7 GB egress **per epoch**, stored per release like their H3 tiles (obs peer: ≈ 8 B/cell × 273 M
 cells ≈ 2 GB raw, ~0.5 GB zstd on disk — or zero if computed from the H3B products they already keep,

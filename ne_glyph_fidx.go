@@ -103,6 +103,8 @@ func NEFidxStats() map[string]interface{} {
 	m["disk_hits"] = neFidxDiskHits.Load()
 	m["disk_bytes"] = neFidxDiskSize()
 	m["srtm_epoch"] = neFidxSrtmEpoch()
+	m["eff"] = neFidxEffStats()
+	m["eff_spared_builds"] = neFidxEffSpared.Load()
 	m["tree_h"] = NETreeHStats()
 	m["srtm_blk"] = neFidxSrtmBlk.stats()
 	m["blocks"] = NEFidxBlocksStats()
@@ -140,7 +142,7 @@ func neFidxSrtmEpochStore(ep string) {
 	os.WriteFile(filepath.Join(neFidxDiskDir, "srtm_epoch"), []byte(ep+"\n"), 0o644)
 }
 
-func neFidxDiskDirSet(d string) { neFidxDiskDir = d }
+func neFidxDiskDirSet(d string) { neFidxDiskDir = d; neFidxEffReset() }
 
 // ── the bin ──────────────────────────────────────────────────────────────────
 
@@ -172,7 +174,9 @@ type neFidxBin struct {
 	N    int
 	IJ   []int32 // 2n: i, j of cell k
 	Cols map[string][]byte
-	TH   *neTreeH         // apex height lists (nil: not in this blob / not served yet)
+	TH   *neTreeH // apex height lists (nil: not in this blob / not served yet)
+	effC string   // the effective gens of the peer body it was built from (ne_glyph_fidx_eff.go; never encoded)
+	effT string
 	noTH bool             // built from the prebuilt peer set while the lists are owed (never encoded; neFidxGet files it under the list-less state)
 	idx  map[uint32]int32 // (i<<16|j) → k, built lazily
 }
@@ -425,16 +429,22 @@ func neFidxBox(i, j int) (w, s, e, n float64) {
 
 // neFidxState — sha256[:12] over everything the bin reads: the declared/obs
 // state of every KG it touches, the subsidy release, the srtm cells epoch and
-// the gen of the peer block the bin lies in (ne_glyph_fidx_blocks.go), the
-// layout version.
+// the effective gen of the bin's content at the peer (the block gen under which
+// its bytes first appeared, ne_glyph_fidx_eff.go; the block gen itself until the
+// block's body was parsed), the layout version.
 func neFidxState(i, j int) string { return neFidxStateTHx(i, j, neFidxStateTH()) }
 
 // neFidxStateTHx — the state with a given tree-height suffix ("" | ";th").
 func neFidxStateTHx(i, j int, th string) string {
+	return neFidxStateBlk(i, j, th, neFidxBinBlk(i, j, th))
+}
+
+// neFidxStateBlk — the state with a given ";blk=" part (neFidxGet: the effective gen of the body a bin was built from).
+func neFidxStateBlk(i, j int, th, blk string) string {
 	w, s, e, n := neFidxBox(i, j)
 	h := sha256.New()
 	h.Write([]byte("nfx" + strconv.Itoa(neFidxVer) + ";" + neGlyphTileState(KGCodesInBBoxMem(w-neFidxHaloDeg, s-neFidxHaloDeg, e+neFidxHaloDeg, n+neFidxHaloDeg), true)))
-	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch() + ";blk=" + neFidxBlockGenOfBin(i, j) + th))
+	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch() + ";blk=" + blk + th))
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
@@ -455,7 +465,7 @@ func neFidxStateTH() string {
 func neFidxBoxState(w, s, e, n float64) string {
 	h := sha256.New()
 	h.Write([]byte("nfx" + strconv.Itoa(neFidxVer) + ";" + neGlyphTileState(KGCodesInBBoxMem(w-neFidxHaloDeg, s-neFidxHaloDeg, e+neFidxHaloDeg, n+neFidxHaloDeg), true)))
-	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch() + neFidxBoxBlockGens(w, s, e, n) + neFidxStateTH()))
+	h.Write([]byte(";sub=" + neSubReleaseSeen() + ";srtm=" + neFidxSrtmEpoch() + neFidxBoxBlockGens(w, s, e, n, neFidxStateTH()) + neFidxStateTH()))
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
@@ -509,8 +519,21 @@ func neFidxGet(i, j int) ([]byte, string, error) {
 		return b, st, nil
 	}
 	neFidxBuildSem <- struct{}{} // a pool slot: builds never outnumber the workers, whoever asks
+	if !neFidxEffCovers(i, j, neFidxStateTH()) {
+		// the block's gen is one whose body we never parsed (the manifest moved, or first touch): fetch it
+		// BEFORE building. A block rebuilt at the peer to the same bytes for this bin puts the state back on
+		// the one we hold — no build, no new file (ne_glyph_fidx_eff.go). The build would fetch it anyway.
+		w, s, e, n := neFidxBox(i, j)
+		neFidxSrtmFetchFn(w, s, e, n)
+		if b, stH := neFidxHave(i, j); b != nil {
+			<-neFidxBuildSem
+			neFidxEffSpared.Add(1)
+			c.b, c.st = b, stH
+			return b, stH, nil
+		}
+	}
 	t0 := time.Now()
-	bin, err := neFidxBuild(i, j, st)
+	bin, err := neFidxBuildFn(i, j, st)
 	<-neFidxBuildSem
 	if err != nil {
 		c.err = err
@@ -521,13 +544,23 @@ func neFidxGet(i, j int) ([]byte, string, error) {
 	neFidxBuildMs.Add(bin.Hdr.BuiltMs)
 	b := bin.encode("all")
 	// the state may have moved during the build (a srtm epoch learnt on the first fetch): key on what was built
-	st2 := neFidxState(i, j)
+	// — and a block body parsed while this one was building must not label it: the ";blk=" part is the effective
+	// gen of the body the bin was built FROM (bin.effC / effT), the table's only when there was no such body.
+	th2 := neFidxStateTH()
 	if bin.noTH && neTreeHMode() {
 		// built from the prebuilt set while the lists are owed: filed under the list-less state, so the `;th`
 		// key stays a miss and the bin is rebuilt when the block's lists land (ne_tree_h.go)
-		st2 = neFidxStateTHx(i, j, "")
+		th2 = ""
 		neTreeHTriedNote(i, j)
 	}
+	blk := bin.effC
+	if th2 != "" {
+		blk = bin.effT
+	}
+	if blk == "" {
+		blk = neFidxBinBlk(i, j, th2)
+	}
+	st2 := neFidxStateBlk(i, j, th2, blk)
 	if st2 != st {
 		bin.Hdr.State = st2
 		b = bin.encode("all")
@@ -538,6 +571,39 @@ func neFidxGet(i, j int) ([]byte, string, error) {
 	neFidxDiskWrite(st, i, j, b)
 	c.b, c.st = b, st
 	return b, st, nil
+}
+
+// neFidxBuildFn / neFidxSrtmFetchFn — the build and the peer fetch neFidxGet runs (tests stage a state change inside them).
+var (
+	neFidxBuildFn     func(i, j int, st string) (*neFidxBin, error)
+	neFidxSrtmFetchFn func(w, s, e, n float64) *neFidxSrtm
+	neFidxEffSpared   atomic.Int64 // builds not made: the fetched block left the bin on a state we hold
+)
+
+func init() { neFidxBuildFn, neFidxSrtmFetchFn = neFidxBuild, neFidxSrtmFetch }
+
+// neFidxHave — the bin at its current state without building: LRU → disk → a superset / list-less twin
+// (the same answers neFidxPeekL gives). nil when a build is due.
+func neFidxHave(i, j int) ([]byte, string) {
+	st := neFidxState(i, j)
+	key := fmt.Sprintf("%d/%d/%s", i, j, st)
+	if b, ok := neFidxLRU.get(key); ok {
+		return b, st
+	}
+	if b := neFidxDiskRead(st, i, j); b != nil {
+		neFidxDiskHits.Add(1)
+		neFidxLRU.put(key, b)
+		return b, st
+	}
+	if b, stT := neFidxGetTH(i, j, st); b != nil {
+		return b, stT
+	}
+	if neTreeHOwed(i, j) {
+		if b, stP := neFidxGetNoTH(i, j, st); b != nil {
+			return b, stP
+		}
+	}
+	return nil, ""
 }
 
 // neFidxPlane — slice the stored blob down to one plane (re-encode: cheap, planar copy).
@@ -824,7 +890,12 @@ func neFidxBuild(i, j int, st string) (*neFidxBin, error) {
 	}
 	// srtm cells bin: structure heights, roof, canopy, aspect_deg; terrain for cells without an obs row
 	if sr := neFidxSrtmFetch(w, s, e, n); sr != nil {
-		bin.Hdr.Srtm = map[string]interface{}{"epoch": sr.epoch, "gen": sr.gen}
+		srGen := sr.effC // the gen the bin's peer bytes first appeared under: a block rebuilt to the same bytes leaves the blob byte-identical
+		if srGen == "" {
+			srGen = sr.gen
+		}
+		bin.Hdr.Srtm = map[string]interface{}{"epoch": sr.epoch, "gen": srGen}
+		bin.effC, bin.effT = sr.effC, sr.effT
 		var th *neTreeH
 		if sr.th != nil {
 			th = &neTreeH{Off: make([]uint32, 1, len(ord)+1), H: make([]byte, 0, len(sr.th.H))}
@@ -1433,6 +1504,8 @@ type neFidxSrtm struct {
 	ids   []uint64
 	cols  map[string][]byte
 	th    *neTreeH // tree_h_n + tree_h when asked for and served
+	effC  string   // effective gens (ne_glyph_fidx_eff.go): the block gen under which these fixed columns / these
+	effT  string   // columns + lists first appeared — what a bin built from this body is filed under
 	stale bool     // the body is the block's previous generation (X-Cells-Stale; ne_glyph_fidx_blocks.go, neFidxPend)
 	thSet bool     // the body answered the tree field set (lists present, or no apex in the bin): nothing is owed
 }
@@ -1695,10 +1768,15 @@ func neFidxSrtmBlockGet(bi, bj int, tree bool) (ok, noCol bool) {
 			neFidxSrtmNoBlock.set(time.Now())
 		}
 	}
+	effMoved := false
 	put := func(k string, v *neFidxSrtm) {
 		v.thSet = tree
 		neFidxSrtmPutMu.Lock()
 		defer neFidxSrtmPutMu.Unlock()
+		var bi2, bj2 int
+		if _, err := fmt.Sscanf(k, "%d/%d", &bi2, &bj2); err == nil && neFidxEffNote(bi2, bj2, v) {
+			effMoved = true
+		}
 		if !tree {
 			if old, ok := neFidxSrtmBlk.get(k); ok && old.thSet && (old.gen == v.gen || v.stale) {
 				return // the tree set won the race after all: never put the list-less twin over it
@@ -1808,6 +1886,9 @@ func neFidxSrtmBlockGet(bi, bj int, tree bool) (ok, noCol bool) {
 			what = " +tree_h"
 		}
 		neFidxSrtmEpochStore(ep)
+		if effMoved {
+			neMVTStateMemoDrop()
+		}
 		if stale {
 			neFidxPendSet(bi, bj, gen, resp.Header.Get("ETag"), tree, ra)
 			what += " (previous generation)"

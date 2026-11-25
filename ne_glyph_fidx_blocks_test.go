@@ -189,8 +189,10 @@ func TestFidxBlockPreviousGenerationWhileRebuilding(t *testing.T) {
 	if ok, _ := neFidxSrtmBlockGet(117, 469, false); !ok || neFidxPendIs(117, 469) {
 		t.Fatal("current answer must end pending")
 	}
-	if neFidxState(i, j) != stNew {
-		t.Fatal("state must be the manifest-gen state again")
+	// the current body holds the same bytes as the previous generation did (empty bins): the bin keeps the state
+	// it had (ne_glyph_fidx_eff.go) — the manifest-gen state would only be a second name for the same blob
+	if neFidxState(i, j) != stOld || neFidxBinBlk(i, j, "") != "old0" || stNew == stOld {
+		t.Fatalf("same bytes in the current body: the state must stay, blk=%q", neFidxBinBlk(i, j, ""))
 	}
 	if v, ok := neFidxSrtmBlk.get("469/1878"); !ok || v.stale || v.gen != "new1" {
 		t.Fatal("the current body must be in the LRU")
