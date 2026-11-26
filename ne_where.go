@@ -118,7 +118,7 @@ func neWhereParseShare(raw string) neWhereView {
 			} else if strings.EqualFold(val, "chg") {
 				v.Flags = append(v.Flags, "change")
 			}
-		case k == "diff" || k == "ortho" || k == "roads":
+		case k == "diff" || k == "ortho" || k == "roads" || k == "trees": // trees=h: the height colours (ne_glyph_th.go)
 			v.Flags = append(v.Flags, k+"="+val)
 		case k == "f":
 			f := val

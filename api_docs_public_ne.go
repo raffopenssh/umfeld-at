@@ -266,9 +266,10 @@ GET /api/v1/ne/glyph/trees[?res=8|9|10&bbox=w,s,e,n | ?u=<unit>]
                                             the trees wherever single crowns are not drawn, from {OBS_NAME}'s national stand
                                             index (LiDAR tree tops >= 3 m per H3 hexagon; CC BY 4.0). No parameter: {gen, cell_ha,
                                             total{trees, hexes, tallest_m, mean_height_m, ge_30m, ge_40m, edges_m[], bands[]},
-                                            trees[], tallest_m[], mean_m[]} — one entry per cells[] entry of /ne/glyph (res 7);
+                                            trees[], tallest_m[], mean_m[], p90_m[], p25_m[] (top height / lower storey: 9 of 10 /
+                                            a quarter of the tops stand below)} — one entry per cells[] entry of /ne/glyph (res 7);
                                             ETag = gen. With res= and bbox= (res 8: <= 1.4 deg2, res 9: <= 0.2 deg2, res 10:
-                                            <= 0.035 deg2; larger = 413): binary, little endian, "NTH2" · n u32 · res u32 ·
+                                            <= 0.035 deg2; larger = 413; &hb=1 appends p90 u8[n] · p25 u8[n] in 0.25 m, magic "NTH3"): binary, little endian, "NTH2" · n u32 · res u32 ·
                                             cell_ha f32 · w f32 · s f32 · e f32 · n f32 · trees u32[n] · lon u16[n] · lat u16[n]
                                             · tallest_m u8[n] · mean u8[n] (0.25 m); lon = w + u/65535*(e-w), lat = s +
                                             u/65535*(n-s) with w,s,e,n from the header (the asked box, grown to hold every
@@ -504,6 +505,12 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
       ;full               full resolution (res-12 tiles)      ;nofull  no automatic full res at the deepest zoom
       ;trees              every tree as a ring of its crown (srtm apices; any profile; drawn from the near
                           tiles, ≥110×)
+      ;trees=h            the same trees coloured by HEIGHT, to read stand structure: a ramp over 3–45 m (bright =
+                          tall on a dark page, dark = tall on a light one), the ground stepped back. Far out a
+                          hexagon takes the colour of its top height (9 of 10 tree tops stand below); once a hexagon
+                          is wide enough its core shows the lower storey (a quarter of the tops stand below) — one
+                          colour = even-aged, a darker/lighter core = layered. On the page: hold the trees icon
+                          (or shift-click, right-click, key h). A .qgs opened from such a link carries the ramp.
       ;tree=lon,lat       one tree, picked: its crown ring is highlighted and its card opens (the apex within
                           3 m; implies ;trees;full; without ;at=/;z= the view goes to it). Written when a tree is tapped.
       ;relief             hillshade from the 25 m terrain model blended over full res (any profile; full weight
@@ -537,7 +544,7 @@ Landing page GET / — the third way into land-use change, next to /ne/stats (fi
     LODs hidden below a complete LOD, decQ/decN = off-thread decode queue}};
     settled(ms) → promise once nothing loads; go('#kg=…;full;trees') → sets the hash and resolves with settled();
     card() / legend() / peek() = the card's, the in-view legend's and the hover peek's text; hover(lon,lat),
-    pin(lon,lat), profile('declared'|'observed'), view('obs'|''), change(bool), diff(bool[,{raw}]), trees(bool), relief(bool), ortho(bool[, op]), roads(bool[, op]), subsidy(bool),
+    pin(lon,lat), profile('declared'|'observed'), view('obs'|''), change(bool), diff(bool[,{raw}]), trees(bool[, heights]), treeHeights(bool), relief(bool), ortho(bool[, op]), roads(bool[, op]), subsidy(bool),
     set({profile, change, diff, diffRaw, subsidy, trees, relief, ortho, orthoOp, roads, roadsOp}) → settled(), lonlat(x,y), xy(lon,lat), client(lon,lat).
     Soak: import('/api/v1/ne/glyph/soak.js').then(m=>m.run({spots:2})) on the landing page walks every profile × overlay by share
     link and returns one string (PASS|FAIL + one line per failure) — layers complete, overlays shown iff on, JSON ↔ dots ↔

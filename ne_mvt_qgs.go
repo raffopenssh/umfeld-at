@@ -60,6 +60,7 @@ func neQGSFill(name, color, outline, width string) string {
 // profile, change + mismatch on, the rest off.
 type neQGSView struct {
 	obs, change, diff, trees, sub, roads, relief, ortho bool
+	treesH                                              bool // ;trees=h: the trees in the height colours (ne_glyph_th.go)
 	orthoOp, roadsOp                                    float64
 }
 
@@ -74,6 +75,9 @@ func neQGSViewOf(share string) neQGSView {
 	v.trees, v.sub, v.roads, v.relief = sv.has("trees"), sv.has("subsidy"), sv.has("roads"), sv.has("relief")
 	v.ortho = sv.has("ortho")
 	for _, f := range sv.Flags {
+		if len(f) > 6 && strings.EqualFold(f[:7], "trees=h") {
+			v.treesH = true
+		}
 		if strings.HasPrefix(f, "ortho=") {
 			if x, err := strconv.ParseFloat(f[6:], 64); err == nil && x >= 0.1 && x <= 1 {
 				v.orthoOp = x
@@ -138,7 +142,28 @@ func neQGSRules(v neQGSView, pic bool) []neQGSRule {
 	// along the crowns' ramp by their MEAN tree height (the page's tone: the band of mean + 3.5 m).
 	// Every zoom carries tn_ha / ht_mean (ne_tree_bands.go); from z 14 on the crowns themselves take
 	// over (layer "trees")
+	// ;trees=h — the page's height colours: the ground dimmed, a hexagon in the colour of its TOP height
+	// (ht_p90: 9 of 10 tree tops stand below), 5 m classes along the ramp; ht_p25 (the lower storey) rides
+	// along as an attribute for anyone who wants the page's core as a second symbol layer
+	if v.treesH {
+		add(true, "tree heights · ground dimmed", `TRUE`, neMVTMinZ, neMVTMaxZ, neQGSFill("0", "14,16,22,189", "14,16,22,189", "0.15"))
+		for lo := 5; lo <= 40; lo += 5 {
+			c := neGlyphThRGB(float64(lo) + 2.5)
+			col := fmt.Sprintf("%d,%d,%d,235", c[0], c[1], c[2])
+			name, expr := fmt.Sprintf("trees · top height %d–%d m", lo, lo+5), fmt.Sprintf(`"tn_ha" >= %d AND "ht_p90" >= %d AND "ht_p90" < %d`, neQGSTreeMinHa, lo, lo+5)
+			switch lo {
+			case 5:
+				name, expr = "trees · top height < 10 m", fmt.Sprintf(`"tn_ha" >= %d AND "ht_p90" < 10`, neQGSTreeMinHa)
+			case 40:
+				name, expr = "trees · top height ≥ 40 m", fmt.Sprintf(`"tn_ha" >= %d AND "ht_p90" >= 40`, neQGSTreeMinHa)
+			}
+			add(true, name+" (hexagons, far zooms)", expr, neMVTMinZ, 13, neQGSFill("0", col, col, "0.15"))
+		}
+	}
 	for b, lo := range []int{0, 12, 22, 32} {
+		if v.treesH {
+			break
+		}
 		c := neGlyphTreeRGB[b+1]
 		col := fmt.Sprintf("%d,%d,%d,235", c[0], c[1], c[2])
 		name, expr := "", fmt.Sprintf(`"tn_ha" >= %d AND "ht_mean" >= %d`, neQGSTreeMinHa, lo)
@@ -243,44 +268,70 @@ func neQGSTreeLabel(i int) string {
 	return fmt.Sprintf("%g–%g m", neQGSTreeBands[i], neQGSTreeBands[i+1])
 }
 
+// neQGSTreeClasses — the classes of the crown rings: the page's five bands in its greens, or
+// (heights, ;trees=h) 5 m steps along the height ramp — lower bound, upper bound, label, colour.
+func neQGSTreeClasses(heights bool) (lo, hi []float64, label []string, col [][3]uint8) {
+	if !heights {
+		for i := 0; i < 5; i++ {
+			lo, hi, label, col = append(lo, neQGSTreeBands[i]), append(hi, neQGSTreeBands[i+1]), append(label, neQGSTreeLabel(i)), append(col, neGlyphTreeRGB[i])
+		}
+		return
+	}
+	e := []float64{3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 80}
+	for i := 0; i+1 < len(e); i++ {
+		l := fmt.Sprintf("%g–%g m", e[i], e[i+1])
+		if i+2 == len(e) {
+			l = "≥ 45 m"
+		}
+		lo, hi, label, col = append(lo, e[i]), append(hi, e[i+1]), append(label, l), append(col, neGlyphThRGB(math.Min(47, (e[i]+e[i+1])/2)))
+	}
+	return
+}
+
 // neQGSTreeGraduated — the trees as a GRADUATED renderer on "h" (the point
 // layer trees.geojson): five classes in the page's bands and greens. In QGIS:
 // Symbology → Colour ramp → any ramp (Viridis, …) recolours the rings; the
 // class breaks, their count and the mode are the reader's to change.
-func neQGSTreeGraduated() string {
+func neQGSTreeGraduated(heights bool) string {
+	lo, hi, label, col := neQGSTreeClasses(heights)
+	n := len(lo)
+	rgb := func(c [3]uint8) string { return fmt.Sprintf("%d,%d,%d,255", c[0], c[1], c[2]) }
 	var b strings.Builder
 	b.WriteString(`<renderer-v2 type="graduatedSymbol" attr="h" graduatedMethod="GraduatedColor" symbollevels="0" forceraster="0" enableorderby="0" referencescale="-1"><ranges>`)
-	for i := 0; i < 5; i++ {
-		fmt.Fprintf(&b, `<range lower="%g" upper="%g" symbol="%d" label="%s" render="true" uuid="{00000000-0000-4000-8000-00000000a%03d}"/>`, neQGSTreeBands[i], neQGSTreeBands[i+1], i, html.EscapeString(neQGSTreeLabel(i)), i)
+	for i := 0; i < n; i++ {
+		fmt.Fprintf(&b, `<range lower="%g" upper="%g" symbol="%d" label="%s" render="true" uuid="{00000000-0000-4000-8000-00000000a%03d}"/>`, lo[i], hi[i], i, html.EscapeString(label[i]), i)
 	}
 	b.WriteString(`</ranges><symbols>`)
-	for i := 0; i < 5; i++ {
-		b.WriteString(neQGSTreeRing(strconv.Itoa(i), neGlyphTreeRGB[i], neQGSTreeCorrLat))
+	for i := 0; i < n; i++ {
+		b.WriteString(neQGSTreeRing(strconv.Itoa(i), col[i], neQGSTreeCorrLat))
 	}
-	b.WriteString(`</symbols><source-symbol>` + neQGSTreeRing("0", neGlyphTreeRGB[2], neQGSTreeCorrLat) + `</source-symbol>`)
+	b.WriteString(`</symbols><source-symbol>` + neQGSTreeRing("0", col[n/2], neQGSTreeCorrLat) + `</source-symbol>`)
 	// the page's ramp, so the ramp control shows what is drawn
-	b.WriteString(`<colorramp type="gradient" name="[source]"><Option type="Map"><Option type="QString" name="color1" value="` + neQGSTreeCol(0) + `"/><Option type="QString" name="color2" value="` + neQGSTreeCol(4) + `"/><Option type="QString" name="discrete" value="0"/><Option type="QString" name="rampType" value="gradient"/><Option type="QString" name="stops" value="0.25;` + neQGSTreeCol(1) + `:0.5;` + neQGSTreeCol(2) + `:0.75;` + neQGSTreeCol(3) + `"/></Option></colorramp>`)
+	stops := ""
+	for i := 1; i < n-1; i++ {
+		if i > 1 {
+			stops += ":"
+		}
+		stops += fmt.Sprintf("%.3f;%s", float64(i)/float64(n-1), rgb(col[i]))
+	}
+	b.WriteString(`<colorramp type="gradient" name="[source]"><Option type="Map"><Option type="QString" name="color1" value="` + rgb(col[0]) + `"/><Option type="QString" name="color2" value="` + rgb(col[n-1]) + `"/><Option type="QString" name="discrete" value="0"/><Option type="QString" name="rampType" value="gradient"/><Option type="QString" name="stops" value="` + stops + `"/></Option></colorramp>`)
 	b.WriteString(`<classificationMethod id="Fixed"><symmetricMode enabled="0" symmetrypoint="0" astride="0"/><labelFormat format="%1–%2 m" labelprecision="0" trimtrailingzeroes="1"/><parameters><Option/></parameters><extraInformation/></classificationMethod><rotation/><sizescale/></renderer-v2>`)
 	return b.String()
-}
-
-func neQGSTreeCol(i int) string {
-	c := neGlyphTreeRGB[i]
-	return fmt.Sprintf("%d,%d,%d,255", c[0], c[1], c[2])
 }
 
 // neQGSTreeStyles — the same rings on the "trees" TILE layer (views too large
 // for one fetch): one legend entry per band. A vector-tile layer has no
 // graduated renderer; there the colour is changed per entry.
-func neQGSTreeStyles() string {
+func neQGSTreeStyles(heights bool) string {
+	lo, hi, label, col := neQGSTreeClasses(heights)
 	var b strings.Builder
 	b.WriteString(`<renderer type="basic"><styles>`)
-	for i := 0; i < 5; i++ {
-		expr := fmt.Sprintf(`"h" >= %g`, neQGSTreeBands[i])
-		if i < 4 {
-			expr += fmt.Sprintf(` AND "h" < %g`, neQGSTreeBands[i+1])
+	for i := range lo {
+		expr := fmt.Sprintf(`"h" >= %g`, lo[i])
+		if i < len(lo)-1 {
+			expr += fmt.Sprintf(` AND "h" < %g`, hi[i])
 		}
-		fmt.Fprintf(&b, `<style enabled="1" name="%s" layer="trees" geometry="0" expression="%s" min-zoom="-1" max-zoom="-1"><symbols>%s</symbols></style>`, html.EscapeString("tree · "+neQGSTreeLabel(i)), html.EscapeString(expr), neQGSTreeRing("0", neGlyphTreeRGB[i], "1.48"))
+		fmt.Fprintf(&b, `<style enabled="1" name="%s" layer="trees" geometry="0" expression="%s" min-zoom="-1" max-zoom="-1"><symbols>%s</symbols></style>`, html.EscapeString("tree · "+label[i]), html.EscapeString(expr), neQGSTreeRing("0", col[i], "1.48"))
 	}
 	b.WriteString(`</styles></renderer>`)
 	return b.String()
@@ -466,6 +517,8 @@ func neQGSTreeAliases(al func(f, n string)) {
 	al("tn_ha", "trees per ha")
 	al("ht", "ht · tallest tree (m)")
 	al("ht_mean", "mean tree height (m)")
+	al("ht_p90", "ht_p90 · top height: 9 of 10 trees are lower (m)")
+	al("ht_p25", "ht_p25 · lower storey: a quarter of the trees are lower (m)")
 	for b, e := range neTreeBandEdgesM {
 		n := fmt.Sprintf("trees %d m and taller", e)
 		if b+1 < neTreeBands {
@@ -651,14 +704,14 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 		}
 		// on the map: the live tiles — the page's rings wherever the reader pans
 		t, l := neQGSTileLayer(neQGSTileOpt{id: "trees", name: tn, url: q(base+"/api/v1/ne/mvt/trees/{z}/{x}/{y}.pbf", ht), zmin: neLayerTreesZ, zmax: neLayerTreesZ,
-			rights: pr.ObsName + " (CC BY 4.0), BEV", renderer: neQGSTreeStyles(), checked: view.trees, opacity: "0.9", minScale: 34000,
+			rights: pr.ObsName + " (CC BY 4.0), BEV", renderer: neQGSTreeStyles(view.treesH), checked: view.trees, opacity: "0.9", minScale: 34000,
 			abstract: "Every tree found by LiDAR as a ring the size of its crown, coloured by height — as on the map. Live tiles: they load wherever the map goes. Visible below 1:34 000. Click a ring with the identify tool: h (m), crown_d (m), crown_m2, species, vitality."})
 		over = append(over, bm{tree: t, layer: l, id: "trees"})
 		// for analysis and export: the trees as real points that FOLLOW the map —
 		// an OGC API Features source (ne_mvt_ogc.go) read by the canvas extent
 		// into QGIS's own cache, so "save features as…" writes what is in view
 		if sp.archive == "" {
-			t, l := neQGSOAPIF("treepts", tp+" (current view)", q(base+"/api/v1/ne/mvt/ogc", ht), "trees", pr.ObsName+" (CC BY 4.0), BEV", neQGSTreeGraduated(), "0.9", neQGSTreePtsMinScale)
+			t, l := neQGSOAPIF("treepts", tp+" (current view)", q(base+"/api/v1/ne/mvt/ogc", ht), "trees", pr.ObsName+" (CC BY 4.0), BEV", neQGSTreeGraduated(view.treesH), "0.9", neQGSTreePtsMinScale)
 			vec = append(vec, bm{tree: t, layer: l, id: "treepts", grp: true})
 		}
 	}

@@ -126,9 +126,48 @@ type neStandsHexes struct {
 		Trees   []int64   `json:"trees"`
 		Tallest []float64 `json:"tallest_m"`
 		Mean    []float64 `json:"mean_height_m"`
+		Bands   [][]int64 `json:"bands"` // with bands=1: apices per height band (neTreeBandEdgesM)
 	} `json:"columns"`
 	Gen     string `json:"gen"`
 	BuiltAt string `json:"built_at"`
+}
+
+// neStandsQ — the height (m) below which the share q of a hexagon's tree tops
+// stand, read off its band counts (edges neTreeBandEdgesM, the last band open):
+// linear inside a band, the band that holds the tallest apex ends at it. The
+// landing page's height colours use two of them (ne_glyph_th.go): q = .9 the
+// upper storey ("top height"), q = .25 the lower one. 0 = no tree.
+func neStandsQ(bands []int64, tallest, q float64) float64 {
+	var n int64
+	for _, c := range bands {
+		n += c
+	}
+	if n <= 0 || len(bands) == 0 {
+		return 0
+	}
+	want, acc := q*float64(n), 0.0
+	for b, c := range bands {
+		if c <= 0 {
+			continue
+		}
+		if acc+float64(c) >= want {
+			lo, hi := 3.0, tallest
+			if b < neTreeBands {
+				lo = float64(neTreeBandEdgesM[b])
+			}
+			if b+1 < neTreeBands && b+1 < len(bands) {
+				if e := float64(neTreeBandEdgesM[b+1]); hi <= lo || hi > e {
+					hi = e
+				}
+			}
+			if hi < lo {
+				hi = lo
+			}
+			return lo + (hi-lo)*(want-acc)/float64(c)
+		}
+		acc += float64(c)
+	}
+	return tallest
 }
 
 func neStandsFetch(done chan struct{}) {
@@ -148,7 +187,7 @@ func neStandsFetch(done chan struct{}) {
 	s.mu.Lock()
 	etag := s.etag
 	s.mu.Unlock()
-	resp, err := neStandsPeerGet(ctx, "/hexes?res=7", etag)
+	resp, err := neStandsPeerGet(ctx, "/hexes?res=7&bands=1", etag)
 	if err != nil {
 		fail(err.Error())
 		return
@@ -218,6 +257,8 @@ func neStandsFetch(done chan struct{}) {
 		Trees   []int64       `json:"trees"`
 		Tallest []int         `json:"tallest_m"`
 		Mean    []float64     `json:"mean_m"`
+		P90     []float64     `json:"p90_m,omitempty"` // upper storey: 9 of 10 tree tops stand below (neStandsQ)
+		P25     []float64     `json:"p25_m,omitempty"` // lower storey: a quarter of the tree tops stand below
 	}{Gen: hx.Gen, BuiltAt: hx.BuiltAt, Source: peers().ObsName, License: "CC-BY-4.0", Res: neGlyphRes,
 		Trees: make([]int64, n), Tallest: make([]int, n), Mean: make([]float64, n)}
 	doc.Total = neStandsTotal{Trees: a.Trees, Hexes: a.Hexes, TallestM: a.Tallest.M, MeanM: a.Mean}
@@ -226,6 +267,10 @@ func neStandsFetch(done chan struct{}) {
 	}
 	if len(a.AtLeast) >= 9 {
 		doc.Total.Ge30, doc.Total.Ge40 = a.AtLeast[6], a.AtLeast[8]
+	}
+	hb := len(c.Bands) == len(c.H3)
+	if hb {
+		doc.P90, doc.P25 = make([]float64, n), make([]float64, n)
 	}
 	var area float64
 	for i, hs := range c.H3 {
@@ -238,6 +283,10 @@ func neStandsFetch(done chan struct{}) {
 			continue // a border hexagon outside the frame
 		}
 		doc.Trees[j], doc.Tallest[j], doc.Mean[j] = c.Trees[i], int(math.Round(c.Tallest[i])), c.Mean[i]
+		if hb {
+			doc.P90[j] = math.Round(neStandsQ(c.Bands[i], c.Tallest[i], .9)*2) / 2
+			doc.P25[j] = math.Round(neStandsQ(c.Bands[i], c.Tallest[i], .25)*2) / 2
+		}
 	}
 	for _, p := range f.cells {
 		area += neStandsHexHa(p.id)
@@ -263,11 +312,18 @@ func neStandsHexHa(id uint64) float64 {
 //
 //	"NTH2" · n u32 · res u32 · cell_ha f32 · w s e n f32 · trees u32[n] · lon u16[n] · lat u16[n] · tallest_m u8[n] · mean u8[n] (0.25 m)
 //
+// hb (the page's height colours, ne_glyph_th.go): "NTH3" = the same plus p90 u8[n] · p25 u8[n]
+// (0.25 m, neStandsQ over the peer's bands — the upper and the lower storey of the hexagon).
+//
 // lon = w + u/65535·(e−w), lat = s + u/65535·(n−s): the centres are quantised inside the frame the
 // header names — the asked box grown to hold every centre — so a res-10 hexagon (66 m edge) sits
 // within a metre of its place (NTH1 used the national frame: 10 m steps, seams between hexagons).
-func neStandsBox(ctx context.Context, res int, w, s, e, n float64) ([]byte, int, error) {
-	resp, err := neStandsPeerGet(ctx, fmt.Sprintf("/hexes?res=%d&bbox=%.3f,%.3f,%.3f,%.3f", res, w, s, e, n), "")
+func neStandsBox(ctx context.Context, res int, w, s, e, n float64, hb bool) ([]byte, int, error) {
+	bq := ""
+	if hb {
+		bq = "&bands=1"
+	}
+	resp, err := neStandsPeerGet(ctx, fmt.Sprintf("/hexes?res=%d&bbox=%.3f,%.3f,%.3f,%.3f%s", res, w, s, e, n, bq), "")
 	if err != nil {
 		return nil, 502, err
 	}
@@ -284,14 +340,16 @@ func neStandsBox(ctx context.Context, res int, w, s, e, n float64) ([]byte, int,
 		return nil, 502, err
 	}
 	c := hx.Columns
-	if len(c.Trees) != len(c.H3) || len(c.Tallest) != len(c.H3) || len(c.Mean) != len(c.H3) {
+	if len(c.Trees) != len(c.H3) || len(c.Tallest) != len(c.H3) || len(c.Mean) != len(c.H3) || (hb && len(c.Bands) != len(c.H3)) {
 		return nil, 502, fmt.Errorf("bad columns")
 	}
 	type row struct {
 		lon, lat   uint16
 		trees      uint32
 		tall, mean uint8
+		p90, p25   uint8
 	}
+	q4 := func(m float64) uint8 { return uint8(math.Max(0, math.Min(255, math.Round(m*4)))) }
 	rows := make([]row, 0, len(c.H3))
 	lls := make([]h3.LatLng, 0, len(c.H3))
 	idx := make([]int, 0, len(c.H3))
@@ -316,13 +374,21 @@ func neStandsBox(ctx context.Context, res int, w, s, e, n float64) ([]byte, int,
 	}
 	for j, ll := range lls {
 		i := idx[j]
-		rows = append(rows, row{q(ll.Lng, fw, fe), q(ll.Lat, fs, fn), uint32(c.Trees[i]),
-			uint8(math.Min(255, math.Round(c.Tallest[i]))), uint8(math.Min(255, math.Round(c.Mean[i]*4)))})
+		r := row{lon: q(ll.Lng, fw, fe), lat: q(ll.Lat, fs, fn), trees: uint32(c.Trees[i]),
+			tall: uint8(math.Min(255, math.Round(c.Tallest[i]))), mean: q4(c.Mean[i])}
+		if hb {
+			r.p90, r.p25 = q4(neStandsQ(c.Bands[i], c.Tallest[i], .9)), q4(neStandsQ(c.Bands[i], c.Tallest[i], .25))
+		}
+		rows = append(rows, r)
 	}
 	k := len(rows)
 	const hd = 32
-	out := make([]byte, hd+10*k)
-	copy(out, "NTH2")
+	per, magic := 10, "NTH2"
+	if hb {
+		per, magic = 12, "NTH3"
+	}
+	out := make([]byte, hd+per*k)
+	copy(out, magic)
 	le := binary.LittleEndian
 	le.PutUint32(out[4:], uint32(k))
 	le.PutUint32(out[8:], uint32(res))
@@ -336,6 +402,9 @@ func neStandsBox(ctx context.Context, res int, w, s, e, n float64) ([]byte, int,
 		le.PutUint16(out[hd+6*k+2*i:], r.lat)
 		out[hd+8*k+i] = r.tall
 		out[hd+9*k+i] = r.mean
+		if hb {
+			out[hd+10*k+i], out[hd+11*k+i] = r.p90, r.p25
+		}
 	}
 	return out, 200, nil
 }
@@ -391,14 +460,18 @@ func handleNEGlyphTrees(w http.ResponseWriter, r *http.Request) {
 		apiError(w, fmt.Sprintf("bbox too large for res=%d (≤ %g deg²); use a lower res", res, max), 413)
 		return
 	}
+	hb := q.Get("hb") == "1"
 	key := fmt.Sprintf("trh2/%s/%d/%.3f,%.3f,%.3f,%.3f", sn.Gen, res, b[0], b[1], b[2], b[3])
+	if hb {
+		key = "trh3" + key[4:]
+	}
 	out, hit := neGlyphTileLRU.get(key)
 	if !hit {
 		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 		defer cancel()
 		var code int
 		var err error
-		if out, code, err = neStandsBox(ctx, res, b[0], b[1], b[2], b[3]); err != nil {
+		if out, code, err = neStandsBox(ctx, res, b[0], b[1], b[2], b[3], hb); err != nil {
 			w.Header().Set("Cache-Control", "no-store")
 			apiError(w, "tree index unavailable", code)
 			return

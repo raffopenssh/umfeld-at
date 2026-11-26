@@ -902,6 +902,37 @@ sheet's opacity (`.843` = `neGlyphTreeSheetAlpha`). With the alpha in the pixels
 composited twice — a pale stripe along every tile seam, 3+ screen px at LOD 2. Clipping the ring instead leaves an
 anti-aliased dark hairline. Crown marks (`.ap`) are siblings of `g.sh`. Tile key `/o`, URL `&o=1` (cache bust).
 
+## Tree heights in colour — `;trees=h` (`ne_glyph_th.go`, 2026-11-26)
+
+A second reading of the trees layer, for **stand structure** (even-aged plantation · layered plenter · old-growth
+emergents). Entry: **hold** the trees icon 380 ms (the ramp runs in under it), shift-click, right-click, key `h`;
+the same gesture flips back. Off → on in colour directly. Sticky for the page (plain tap off/on keeps it). Share
+token `;trees=h` (`;trees` unchanged); `neGlyph.trees(on, heights)`, `neGlyph.treeHeights(bool)`,
+`state().treeHeights`.
+
+| Where | Drawn | Data |
+|---|---|---|
+| LOD 0·1 | the same crown rings (`apDraw`), stroke = the tree's own height in `TH_N` 16 ramp steps (was 5 greens) | unchanged |
+| stand sheet, tiles off | the **res-7 faces themselves** — in both modes since 2026-11-26, one hexagon grid on screen (`troBox` returns null → national table, no fetch): colour = `p90_m`, 4 density weights | `/api/v1/ne/glyph/trees` (`p90_m`, `p25_m`) |
+| stand sheet, LOD 2 | res 8/9/10 by box as before; colour = p90 | `…/trees?res=&bbox=&hb=1` → `NTH3` (= NTH2 + `p90 u8[n]`, `p25 u8[n]`, 0.25 m) |
+| core | once a hexagon is ≥ `TH_CZ` 8.5 px across: inner hexagon (½ R) = p25, group `.co`, class `cz` on `g.tro` | same |
+
+- **Quantiles** come from the peer's 12 height bands per hexagon (`neStandsQ`, linear inside a band, capped by the
+  tallest). p90 = "top height", p25 = "lower storey".
+- **Ramp** (`neGlyphThRamp` dark page / `neGlyphThRampL` light page, CSS vars `--thg`, `--th0…4`; `thLut`, `thDk`,
+  `thSkin`): "stands out more = taller" in both modes — bright yellow on dark, deep violet on light. Over the photo
+  the dark ramp is used whatever the page (`figure.th-dk`). `prefers-color-scheme` changes repaint live.
+- **Ground veil** `path.thg` = the res-7 faces in the page colour at .8 (nothing outside Austria): inside `g.tro` in
+  the overview; with tiles on, ONE path in `hi.g` right before `.ov-rd` (`thPlace`), and the sheet joins it there
+  (`troPlace`) — so **roads stay on top** and the **photo** shows through (veil → thin dark .38, sheet opacity .55
+  under `v-ortho`). No CSS filter anywhere (phone repaint cost).
+- **Legend keeps its shape**: swatches `g-th0…4` instead of `g-tr0…4`, the height scale's gradient, the icon's
+  underline. What the core means is said once per page (≤ 4 × per device, `neg-thk`) in the hint, with two glyphs
+  (`thKey`). Discovery: the first plain tap on trees says "tap and hold…" (≤ 2 × per device, `neg-thh`, `thTease`);
+  a hint hides the trees chip while it speaks (`:has`).
+- **Exports**: `.qgs` from a `;trees=h` link → `neQGSTreeClasses(true)` for rings / tree points, far hexagons by
+  `ht_p90`, a dim-ground rule; MVT attributes `ht_p90`, `ht_p25` (`ne_tree_bands.go`).
+
 ## Trees far out — the stand sheet (`ne_glyph_tro.go`, `ne_tree_stands.go`, 2026-11-23)
 
 Contract of record: the observed-layer peer's `llm.txt` section *Trees* (`/trees/summary`, `/trees/hexes`: one row per
@@ -922,7 +953,7 @@ H3 res-10 hexagon holding ≥ 1 LiDAR apex ≥ 3 m, rolled up exactly to coarser
   hexagon's mean height + `TRO_H` 3.5 m, in `TRO_C` 8 steps; weight = `TRO_A` .843 × the share of its res-12 cells
   that hold a tree, 1 − e^(−tops per ha / `TRO_D` 65), 8 steps. Both constants were measured against fully observed
   `v=tree` tiles (share of wooded cells, mean band of a cell's tallest tree). Same colours in both schemes.
-- **Resolution by box** (`troBox`): the view's lon/lat box snapped to 0.05° → res 10 if ≤ `TRO_A10` 0.035 deg², else
+- **Resolution by box** (`troBox`): with the full-resolution tiles OFF the sheet is always the national res-7 table (the faces under it; 2026-11-26). With tiles on (LOD 2): the view's lon/lat box snapped to 0.05° → res 10 if ≤ `TRO_A10` 0.035 deg², else
   0.1° → res 9 if ≤ `TRO_A9` 0.2 deg², else 0.25° → res 8 if ≤ `TRO_A8` 1.4 deg², else the national res-7 table
   (aligned with `cells[]`, painted with `faceD`). The server enforces the same areas (`neStandsMaxDeg2r8/9/10`, keeps a
   box under the peer's 20 000 hexagons). Res 9 shares the res-7 orientation (edge / 7), res 8 and 10 are turned 19.1°

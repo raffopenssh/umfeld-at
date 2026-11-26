@@ -143,7 +143,7 @@ func (t *neTreeAgg) topM() float64 {
 	return float64(t.top) * 0.5
 }
 
-// mvt — the tile attributes of an aggregate: tn, tn_ha, ht_mean, tn_<edge>
+// mvt — the tile attributes of an aggregate: tn, tn_ha, ht_mean, ht_p90, ht_p25, tn_<edge>
 // per non-empty band. rng: a height window is set — a count that is not
 // list-exact would be the wrong population and is left out.
 func (t *neTreeAgg) mvt(f *mvtFeature, areaHa float64, rng bool) {
@@ -164,6 +164,10 @@ func (t *neTreeAgg) mvt(f *mvtFeature, areaHa float64, rng bool) {
 				f.i64("tn_"+strconv.Itoa(neTreeBandEdgesM[b]), c)
 			}
 		}
+		// the two storeys the landing page's height colours read (ne_glyph_th.go): 9 of 10 / a quarter of the tree tops stand below
+		bo := t.bandsOut()
+		f.num("ht_p90", neRound(neStandsQ(bo[:], t.topM(), .9), 1))
+		f.num("ht_p25", neRound(neStandsQ(bo[:], t.topM(), .25), 1))
 	}
 }
 
@@ -191,6 +195,7 @@ func (t *neTreeAgg) figures(f map[string]interface{}, areaHa float64, approx boo
 // neMVTTreeFields — the attribute names above, for TileJSON / archive metadata.
 func neMVTTreeFields(fields map[string]string) {
 	fields["tn_ha"], fields["ht_mean"] = "Number", "Number"
+	fields["ht_p90"], fields["ht_p25"] = "Number", "Number"
 	for _, e := range neTreeBandEdgesM {
 		fields["tn_"+strconv.Itoa(e)] = "Number"
 	}

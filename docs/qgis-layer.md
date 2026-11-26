@@ -68,6 +68,7 @@ sum equals its `/trees/stats`):
 | `tn` | tree tops in the hexagon (z 14+: in the cell) |
 | `tn_ha` | per hectare of the hexagon (aggregates) |
 | `ht` | tallest tree, m |
+| `ht_p90` · `ht_p25` | top height (9 of 10 tree tops stand below) and lower storey (a quarter stand below), m, from the band counts — the two figures the page's height colours (`;trees=h`) draw: close together = even-aged, far apart = layered |
 | `ht_mean` | mean tree height, m — exact from z 12; at z 9–11 from the band counts (± 0.3 m) |
 | `tn_3` `tn_5` `tn_10` … `tn_50` `tn_55` | tree tops per height band: 3–5 m, 5–10 m, then 5 m steps, `tn_55` = 55 m and taller; a band without a tree is absent (aggregates) |
 
@@ -118,7 +119,9 @@ the whole map; without a key the same URLs work anonymously. Only the two foreig
 basemaps (basemap.at, OpenStreetMap) are asked directly. Top to bottom:
 
 - **Trees · crowns by height** — every tree as a ring of its crown, as on the
-  page (on with `;trees`, visible below 1:34 000). Live tiles
+  page (on with `;trees`, visible below 1:34 000). From a `;trees=h` link the
+  rings and the far hexagons come in the page's height ramp (5 m classes, top
+  height `ht_p90` for hexagons) over a dimmed ground. Live tiles
   (`mvt/trees/14/{x}/{y}.pbf[?ht=lo..hi]`, zoom 14, layer `trees`): they load
   wherever the map goes. Identify a ring: `h` (m), `crown_d` (m), `crown_m2`,
   `species`, `vitality`. One legend entry per height band (3–5 · 5–15 · 15–25 ·
