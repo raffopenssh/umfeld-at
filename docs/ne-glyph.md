@@ -971,6 +971,21 @@ Cold cost: a block is ~0.25 s of parse + the wire (2 cores), a LOD-2 tile reads 
 ring; diagonal neighbours are not fetched). Warm: 60–100 ms a tile; rendered tiles live in the tile cache (RAM + disk).
 Slow-phone walk (`CPU=6 … glyph_touch_probe.js … th`, 2026-11-26): plain and heights now cost the same at every step —
 the sheet is 0 SVG nodes in both (z 40: fps 43 / 32, z 95: 29 / 30, crowns z 300: 23 / 25, z 300 photo: 21 / 24).
+Later the same day: the top cost of a drag in BOTH modes was a layout read per frame (`blend` → `getBoundingClientRect`, plus the height scale's placement in `tsSync`); `blend` now reads the gesture's cached box (`navRect`), `tsSync` leaves the scale alone mid-gesture. `PROF=1` names the caller of a native leaf (`getBoundingClientRect<blend`).
+
+**Cold start** (measured, 28-tile view, two cores): a first ask waits `neTrsFirstWait` = 250 ms for its blocks, then
+paints what is missing from the national table (`pend`) and the page repolls (`treeRepoll`, 0.5 s steps, `&late=1`
+waits 2.5 s) — trees on screen in ~2 s on a region never seen, cell-exact in ~10 s (peer + 0.25 s parse per block).
+A parsed block is kept in the tile store's directory (`neTrsDiskPut/Get`, key `trsblk/1/<bi>/<bj>/<gen>`, ~1 MB,
+same bounds and sweep as the tiles, `disk_hits` on `ne_tree_sheet`): after a restart the same view is 1.6 s from
+blocks on disk, 0.4 s when its tiles are on disk too (was ~20 s).
+
+**A tab that outlived a deploy** (`pgCheck`): a link opened into an old tab only changes the hash, so the OLD script
+drew the new link (field report: the retired stand sheet under a filter). The script carries its fingerprint
+(`{PAGE_BUILD}` = `neGlyphPageBuild()`), the page answers `HEAD` with `X-NE-Page`; on a hash change from outside or
+when the tab comes back (≤ 1/min) a moved build reloads the page — once per build, never with a field focused; the
+state is in the hash, the outbox in localStorage.
+
 
 ## Trees far out — the stand sheet (`ne_glyph_tro.go`, `ne_tree_stands.go`, 2026-11-23)
 

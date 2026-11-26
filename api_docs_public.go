@@ -536,6 +536,10 @@ func servePublicDocs(w http.ResponseWriter, r *http.Request) {
 	// Live coverage line inside: browsers must revalidate on every load
 	// (no heuristic caching of a page that changes every few minutes).
 	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-NE-Page", neGlyphPageBuild())
+	if r.Method == http.MethodHead {
+		return // the page's build check (pgCheck): the header is the answer
+	}
 	_, _ = w.Write([]byte(seoText(r, publicDocsHTMLText())))
 }
 

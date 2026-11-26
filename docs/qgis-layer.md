@@ -160,6 +160,12 @@ basemaps (basemap.at, OpenStreetMap) are asked directly. Top to bottom:
 - **Filter veil** — only with a filter: the tiles with `?f=…&veil=1`, the
   **complement** of the filter (zoom 12+), whitened like the page's veil over
   the pictures below. Identify a veiled cell to see why it fails.
+- **Filter veil · far zooms** and **Cells in the filter · far zooms** — farther
+  out than 1:140 000 (zoom < 12) a hexagon is an aggregate of 49 to 100 000
+  cells: everything is whitened, and each hexagon that holds matching cells is
+  a **dot at its centre whose area is the share that passes** (`match_pct`;
+  never smaller than 0.7 mm), in the colours of the legend. Identify a dot for
+  `n` of `n_all`. The cell layer itself starts at zoom 12 in a filtered project.
 - **Vector data of this view (analysis)** — a collapsed group, all off at
   first. The view as **plain vector layers**, one fetch each (they do not grow
   when you pan): what the attribute table, *select by expression* and the

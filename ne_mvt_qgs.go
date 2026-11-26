@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -61,6 +62,7 @@ func neQGSFill(name, color, outline, width string) string {
 type neQGSView struct {
 	obs, change, diff, trees, sub, roads, relief, ortho bool
 	treesH                                              bool // ;trees=h: the trees in the height colours (ne_glyph_th.go)
+	filt                                                bool // a live project with a filter: the cell layer starts at z 12, farther out the matches are their own layer of dots (neQGSFarStyles)
 	treePic                                             bool // the project carries the tree sheet as a picture from z 12 (live projects)
 	orthoOp, roadsOp                                    float64
 }
@@ -224,6 +226,12 @@ func neQGSTileStyles(v neQGSView, pic bool) string {
 	var b strings.Builder
 	b.WriteString(`<renderer type="basic"><styles>`)
 	for _, r := range neQGSRules(v, pic) {
+		if v.filt { // farther out: the far layers (veil, ground, dots)
+			if r.maxz < neLayerPicMinZ {
+				continue
+			}
+			r.minz = max(r.minz, neLayerPicMinZ)
+		}
 		maxz := r.maxz
 		if maxz >= neMVTMaxZ { // z15 tiles are overzoomed past the source ceiling: keep painting
 			maxz = neQGSStyleMaxZ
@@ -520,10 +528,75 @@ func neQGSVeilTileStyle() string {
 		neMVTLayerName, neQGSStyleMaxZ, neQGSFill("0", "250,250,247,209", "250,250,247,209", "0.1"))
 }
 
+// neQGSFarVeilStyle — the filter's veil farther out than the veil tiles reach (z < 12): there a hexagon is an
+// aggregate and nearly all of it fails, so the veil is every hexagon of the UNFILTERED tiles in the paper colour;
+// what passes is drawn over it at its true share (neQGSFarStyles). The page does the same from its sample.
+func neQGSFarVeilStyle() string {
+	return fmt.Sprintf(`<renderer type="basic"><styles><style enabled="1" name="veiled by the filter (far zooms)" layer="%s" geometry="2" expression="" min-zoom="%d" max-zoom="%d"><symbols>%s</symbols></style></styles></renderer>`,
+		neMVTLayerName, neMVTMinZ, neLayerPicMinZ-1, neQGSFill("0", "250,250,247,255", "250,250,247,255", "0.15")) // opaque; the LAYER carries the 82 % — translucent fills with outlines draw a honeycomb where they overlap
+}
+
+var neQGSSymColRe = regexp.MustCompile(`name="(color|outline_color)" value="(\d+),(\d+),(\d+),(\d+)"`)
+
+// neQGSFarDot — a far hexagon of a FILTERED tile as a dot at its centre whose AREA is the share of the hexagon
+// that passes (match_pct), not the whole hexagon: one matching cell in a res-9 hexagon used to paint 10 ha of
+// "match" — stray dark hexagons where the page shows a speck. Floor 0.7 mm so a single cell is still seen;
+// sizes in map units (Web Mercator metres: ×1.5 at Austria's latitude). Colour: the rule's fill, else its outline.
+func neQGSFarDot(sym string) string {
+	col := ""
+	for _, m := range neQGSSymColRe.FindAllStringSubmatch(sym, -1) {
+		if m[5] != "0" {
+			col = m[2] + "," + m[3] + "," + m[4] + ",255"
+			break
+		}
+	}
+	if col == "" {
+		return ""
+	}
+	size := `max(0.0007 * coalesce(@map_scale, 0), 1.5 * sqrt(coalesce("match_pct", 100) / 100) * CASE WHEN "res" <= 7 THEN 2440 WHEN "res" = 8 THEN 922 WHEN "res" = 9 THEN 348 WHEN "res" = 10 THEN 132 ELSE 50 END)`
+	return `<symbol type="fill" name="0" alpha="1" clip_to_extent="1" force_rhr="0"><layer class="CentroidFill" enabled="1" locked="0" pass="0"><Option type="Map">` +
+		`<Option type="QString" name="point_on_all_parts" value="1"/><Option type="QString" name="point_on_surface" value="0"/><Option type="QString" name="clip_points" value="0"/></Option>` +
+		`<symbol type="marker" name="@0@0" alpha="1" clip_to_extent="1" force_rhr="0"><layer class="SimpleMarker" enabled="1" locked="0" pass="0"><Option type="Map">` +
+		`<Option type="QString" name="color" value="` + col + `"/><Option type="QString" name="name" value="hexagon"/><Option type="QString" name="outline_style" value="no"/>` +
+		`<Option type="QString" name="size" value="2"/><Option type="QString" name="size_unit" value="MapUnit"/></Option>` +
+		`<data_defined_properties><Option type="Map"><Option type="QString" name="name" value=""/><Option type="Map" name="properties"><Option type="Map" name="size">` +
+		`<Option type="bool" name="active" value="true"/><Option type="QString" name="expression" value="` + html.EscapeString(size) + `"/><Option type="int" name="type" value="3"/></Option></Option>` +
+		`<Option type="QString" name="type" value="collection"/></Option></data_defined_properties></layer></symbol></layer></symbol>`
+}
+
+// neQGSFarStyles — the cell legend for the far layer of a filtered project (z < 12): the same rules, each as a dot.
+func neQGSFarStyles(v neQGSView) string {
+	var b strings.Builder
+	b.WriteString(`<renderer type="basic"><styles>`)
+	for _, r := range neQGSRules(v, true) {
+		if r.minz >= neLayerPicMinZ || r.expr == "TRUE" {
+			continue
+		}
+		sym := neQGSFarDot(r.sym)
+		if sym == "" {
+			continue
+		}
+		en := "0"
+		if r.on {
+			en = "1"
+		}
+		fmt.Fprintf(&b, `<style enabled="%s" name="%s" layer="%s" geometry="2" expression="%s" min-zoom="%d" max-zoom="%d"><symbols>%s</symbols></style>`,
+			en, html.EscapeString(strings.TrimSuffix(strings.TrimSuffix(r.name, " (aggregates, far zooms)"), " (hexagons, far zooms)")), neMVTLayerName, html.EscapeString(r.expr), r.minz, min(r.maxz, neLayerPicMinZ-1), sym)
+	}
+	b.WriteString(`</styles></renderer>`)
+	return b.String()
+}
+
 // neQGSGroundStyle — the ground veil of the tree heights: every cell in the paper colour (the filter veil's).
-func neQGSGroundStyle() string {
-	return fmt.Sprintf(`<renderer type="basic"><styles><style enabled="1" name="ground under the tree heights" layer="%s" geometry="2" expression="" min-zoom="12" max-zoom="%d"><symbols>%s</symbols></style></styles></renderer>`,
-		neMVTLayerName, neQGSStyleMaxZ, neQGSFill("0", "250,250,247,209", "250,250,247,209", "0.1"))
+// far: from the first zoom (a filtered project, whose cell layer starts at z 12); else from z 12, the cell layer's
+// own rule veils the aggregates.
+func neQGSGroundStyle(far bool) string {
+	minz := neLayerPicMinZ
+	if far {
+		minz = neMVTMinZ
+	}
+	return fmt.Sprintf(`<renderer type="basic"><styles><style enabled="1" name="ground under the tree heights" layer="%s" geometry="2" expression="" min-zoom="%d" max-zoom="%d"><symbols>%s</symbols></style></styles></renderer>`,
+		neMVTLayerName, minz, neQGSStyleMaxZ, neQGSFill("0", "250,250,247,255", "250,250,247,255", "0.15")) // opaque, the layer carries the 82 %
 }
 
 func neQGSHexStyles(v neQGSView, res int) string {
@@ -771,6 +844,7 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 	}
 	// the tree sheet (below) is a picture from z 12 on live projects: the hexagon rules stop there
 	view.treePic = pr.ObsAPI != "" && sp.archive == ""
+	view.filt = sp.canon != "" && sp.archive == ""
 	// the page's own cell picture (dominant group, shade = dominance, second
 	// group as an inner hexagon): under the vector cells, which then carry the
 	// outlines, the attributes and — with a filter — the matching cells
@@ -815,6 +889,21 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 			t, l := neQGSTileLayer(neQGSTileOpt{id: "veilt", name: "Filter veil", url: q(base+"/api/v1/ne/mvt/{z}/{x}/{y}.pbf", fq, "veil=1"), zmin: 12, zmax: neMVTMaxZ,
 				rights: rights, renderer: neQGSVeilTileStyle(), opacity: "1", minScale: 140000, checked: true,
 				abstract: "The cells that do NOT pass the filter (" + words + "), whitened as on the map. Live tiles (zoom 12+), they follow the map. Click a veiled cell with the identify tool to see its values and why it fails." + docs})
+			// farther out (z < 12): the veil over everything (unfiltered hexagons), the matches over it as dots
+			// at their true share — on the page's order: pictures · ground · trees · veil · matches
+			ft, fl := neQGSTileLayer(neQGSTileOpt{id: "farmatch", name: "Cells in the filter · far zooms (dot = share that passes)", url: q(base+"/api/v1/ne/mvt/{z}/{x}/{y}.pbf", fq), zmin: neMVTMinZ, zmax: neLayerPicMinZ - 1,
+				rights: rights, renderer: neQGSFarStyles(view), opacity: "1", checked: true,
+				abstract: "Farther out than 1:140 000 a hexagon is an aggregate: a dot at its centre, its area the share of the hexagon that passes the filter (" + words + "; match_pct, n of n_all cells). Click one for the figures." + docs})
+			over = append(over, bm{tree: ft, layer: fl, id: "farmatch"})
+			vt, vl := neQGSTileLayer(neQGSTileOpt{id: "veilfar", name: "Filter veil · far zooms", url: q(base + "/api/v1/ne/mvt/{z}/{x}/{y}.pbf"), zmin: neMVTMinZ, zmax: neLayerPicMinZ - 1,
+				rights: rights, renderer: neQGSFarVeilStyle(), opacity: "0.82", checked: true,
+				abstract: "The veil farther out than the veil tiles reach: everything whitened, the matches drawn over it."})
+			vl = strings.Replace(vl, "<Identifiable>1</Identifiable>", "<Identifiable>0</Identifiable>", 1)
+			if view.treePic && view.trees {
+				over = append(over, bm{tree: vt, layer: vl, id: "veilfar"})
+			} else {
+				bms = append(bms, bm{tree: vt, layer: vl, id: "veilfar"})
+			}
 			if view.treePic && view.trees {
 				// with the trees on, the veil lies over the tree sheet, and both over the cells (which a filtered
 				// project fills): the cells that pass and the veiled ones are disjoint, so nothing is hidden
@@ -845,8 +934,8 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 			}
 			put(bm{tree: t, layer: l, id: "treesheet"})
 			if view.treesH {
-				t, l := neQGSTileLayer(neQGSTileOpt{id: "treeground", name: "Tree heights · ground veil", url: q(base + "/api/v1/ne/mvt/{z}/{x}/{y}.pbf"), zmin: 12, zmax: neMVTMaxZ,
-					rights: rights, renderer: neQGSGroundStyle(), opacity: "1", minScale: 140000, checked: true,
+				t, l := neQGSTileLayer(neQGSTileOpt{id: "treeground", name: "Tree heights · ground veil", url: q(base + "/api/v1/ne/mvt/{z}/{x}/{y}.pbf"), zmin: map[bool]int{true: neMVTMinZ, false: neLayerPicMinZ}[view.filt], zmax: neMVTMaxZ,
+					rights: rights, renderer: neQGSGroundStyle(view.filt), opacity: "0.82", minScale: map[bool]int{true: 0, false: 140000}[view.filt], checked: true,
 					abstract: "The paper colour over the land use, so the height colours read. Untick to see the land use between the trees."})
 				l = strings.Replace(l, "<Identifiable>1</Identifiable>", "<Identifiable>0</Identifiable>", 1) // the cell layer answers a click
 				put(bm{tree: t, layer: l, id: "treeground"})

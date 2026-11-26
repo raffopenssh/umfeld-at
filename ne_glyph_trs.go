@@ -28,6 +28,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"image"
 	"image/color"
@@ -35,6 +36,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,11 +47,12 @@ import (
 )
 
 const (
-	neTrsFields  = "tree_n,tree_h_max"
-	neTrsMaxMB   = 96
-	neTrsStale   = 10 * time.Minute // a block whose gen is not the manifest's is asked again after this
-	neTrsSteps   = 16               // height colours (the page's TH_N)
-	neTrsDitherD = 65.0             // tree tops per ha at which 1-1/e of the cells hold one (the page's TRO_D)
+	neTrsFields    = "tree_n,tree_h_max"
+	neTrsMaxMB     = 96
+	neTrsStale     = 10 * time.Minute // a block whose gen is not the manifest's is asked again after this
+	neTrsSteps     = 16               // height colours (the page's TH_N)
+	neTrsDitherD   = 65.0             // tree tops per ha at which 1-1/e of the cells hold one (the page's TRO_D)
+	neTrsFirstWait = 250 * time.Millisecond
 )
 
 type neTrsBlock struct {
@@ -79,6 +82,7 @@ var (
 	neTrsHits    atomic.Int64
 	neTrsPend    atomic.Int64
 	neTrsTiles   atomic.Int64
+	neTrsDiskHit atomic.Int64
 	neTrsClient  = &http.Client{Timeout: 12 * time.Second}
 	neTrsBase    = func() string { return peers().ObsAPI + "/api/v1/cells" } // var: tests point it at a stub
 )
@@ -88,7 +92,7 @@ func NETrsStats() map[string]interface{} {
 	neTrsMu.Lock()
 	defer neTrsMu.Unlock()
 	return map[string]interface{}{"blocks": len(neTrsLRU), "bytes": neTrsBytes, "cap_bytes": neTrsMaxMB << 20, "in_flight": len(neTrsFlight),
-		"parked": len(neTrsFail), "fetches": neTrsFetches.Load(), "hits": neTrsHits.Load(), "tiles_rendered": neTrsTiles.Load(), "tiles_pending": neTrsPend.Load()}
+		"parked": len(neTrsFail), "fetches": neTrsFetches.Load(), "disk_hits": neTrsDiskHit.Load(), "hits": neTrsHits.Load(), "tiles_rendered": neTrsTiles.Load(), "tiles_pending": neTrsPend.Load()}
 }
 
 func neTrsInAustria(bi, bj int) bool {
@@ -145,9 +149,15 @@ func neTrsGet(bi, bj int, wait time.Duration) *neTrsBlock {
 		ch = make(chan struct{})
 		neTrsFlight[k] = ch
 		go func() {
-			neTrsSem <- struct{}{}
-			b, retry := neTrsFetch(bi, bj)
-			<-neTrsSem
+			b, retry := neTrsDiskGet(bi, bj), time.Duration(0)
+			if b == nil {
+				neTrsSem <- struct{}{}
+				b, retry = neTrsFetch(bi, bj)
+				<-neTrsSem
+				if b != nil {
+					neTrsDiskPut(bi, bj, b)
+				}
+			}
 			if b != nil {
 				neTrsPut(k, b)
 			}
@@ -551,9 +561,14 @@ func neTrsServe(w http.ResponseWriter, r *http.Request, L neGlyphLOD, lod, i, j 
 	// the blocks are fetched before the gate: the wait is the wire, not a core
 	t0 := time.Now()
 	var m neTrsMeta
-	wait := 6 * time.Second
+	// The first ask does not hold the picture for the peer: after neTrsFirstWait the blocks still on their way
+	// are painted from the national table (pend) and the page asks again — trees on screen within a second on a
+	// cold start, the cells swap in as they land. A repoll (late=1) waits longer: the fetch is already running.
+	wait := neTrsFirstWait
 	if r.URL.Query().Get("late") == "1" {
-		wait = 2500 * time.Millisecond // a repoll: the fetch has been running since the first ask
+		wait = 2500 * time.Millisecond
+	} else if neNatTreesGet() == nil {
+		wait = 6 * time.Second // nothing to paint meanwhile
 	}
 	type res struct {
 		png  []byte
@@ -703,4 +718,93 @@ func neTrsPic(g *neGlyphTileGeom, w, s, e, n float64, heights bool) (img *image.
 	var m neTrsMeta
 	img, _ = neTrsRender(g, w, s, e, n, mode, 0, &m)
 	return img, m.pend > 0
+}
+
+// ── the parsed blocks on disk ────────────────────────────────────────────────────────────────────────────────
+// A block costs a peer request and ~0.25 s of H3 enumeration to parse; after a restart every view paid that again
+// (a 28-tile view: 50 blocks, ~20 s on two cores). The parsed block — wooded cells only, ~1 MB — is kept in the
+// tile store's directory (ne_glyph_tile_disk.go: same bounds, same sweep, rebuildable, off under go test) under
+// a key that carries the block's generation, so a stored block is valid for as long as the manifest names that
+// generation. Read on a RAM miss before the peer is asked: ~1 ms.
+const neTrsDiskVer = "TRB1"
+
+func neTrsDiskKey(bi, bj int, gen string) string {
+	return fmt.Sprintf("trsblk/1/%d/%d/%s", bi, bj, gen)
+}
+
+func neTrsDiskPut(bi, bj int, b *neTrsBlock) {
+	if b.gen == "" {
+		return
+	}
+	neGlyphTileDiskInit()
+	if !neGlyphTileDiskOn {
+		return
+	}
+	n := len(b.x)
+	out := make([]byte, 0, 4+16+96+8+6*n)
+	out = append(out, neTrsDiskVer...)
+	f := func(v float64) { out = binary.LittleEndian.AppendUint64(out, math.Float64bits(v)) }
+	f(b.ox)
+	f(b.oy)
+	for v := 0; v < 6; v++ {
+		f(b.hex[v][0])
+		f(b.hex[v][1])
+	}
+	out = binary.LittleEndian.AppendUint32(out, uint32(b.cells))
+	out = binary.LittleEndian.AppendUint32(out, uint32(n))
+	for _, v := range b.x {
+		out = binary.LittleEndian.AppendUint16(out, v)
+	}
+	for _, v := range b.y {
+		out = binary.LittleEndian.AppendUint16(out, v)
+	}
+	out = append(out, b.ht...)
+	out = append(out, b.tn...)
+	select {
+	case neGlyphTileDiskQ <- [2]string{neGlyphTileHash(neTrsDiskKey(bi, bj, b.gen)), string(out)}:
+	default:
+	}
+}
+
+// neTrsDiskGet — the block of the manifest's generation from disk; nil = not there.
+func neTrsDiskGet(bi, bj int) *neTrsBlock {
+	gen := neFidxBlockGenRaw(bi, bj)
+	if gen == "" {
+		return nil
+	}
+	neGlyphTileDiskInit()
+	if !neGlyphTileDiskOn {
+		return nil
+	}
+	p := neGlyphTileDiskPath(neGlyphTileHash(neTrsDiskKey(bi, bj, gen)))
+	d, err := os.ReadFile(p)
+	const head = 4 + 4 + 16 + 96 + 8
+	if err != nil || len(d) < head || string(d[:4]) != neGlyphTileDiskVer || string(d[4:8]) != neTrsDiskVer {
+		return nil
+	}
+	d = d[8:]
+	f := func(o int) float64 { return math.Float64frombits(binary.LittleEndian.Uint64(d[o:])) }
+	b := &neTrsBlock{gen: gen, at: time.Now(), ox: f(0), oy: f(8)}
+	for v := 0; v < 6; v++ {
+		b.hex[v] = [2]float64{f(16 + 16*v), f(24 + 16*v)}
+	}
+	b.cells = int(binary.LittleEndian.Uint32(d[112:]))
+	n := int(binary.LittleEndian.Uint32(d[116:]))
+	d = d[120:]
+	if n < 0 || len(d) != 6*n {
+		return nil
+	}
+	b.x, b.y = make([]uint16, n), make([]uint16, n)
+	for k := 0; k < n; k++ {
+		b.x[k] = binary.LittleEndian.Uint16(d[2*k:])
+		b.y[k] = binary.LittleEndian.Uint16(d[2*n+2*k:])
+	}
+	b.ht = append([]uint8(nil), d[4*n:5*n]...)
+	b.tn = append([]uint8(nil), d[5*n:6*n]...)
+	neTrsDiskHit.Add(1)
+	if fi, err := os.Stat(p); err == nil && time.Since(fi.ModTime()) > time.Hour {
+		now := time.Now()
+		_ = os.Chtimes(p, now, now) // mtime = last use, for the sweep
+	}
+	return b
 }
