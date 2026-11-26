@@ -9,7 +9,7 @@ statistics) as **H3 cell polygons with every attribute**, in two forms:
 | Vector tiles (MVT) | `{PUBLIC_URL}/api/v1/ne/mvt/{z}/{x}/{y}.pbf` | live layer, always current (what the project uses) |
 | PMTiles archive | `{PUBLIC_URL}/api/v1/ne/pmtiles?bbox=w,s,e,n` (`&format=zip`: with style and project) | one file per area, works offline |
 | **Cells as a plain vector layer** | `{PUBLIC_URL}/api/v1/ne/mvt/cells.geojson?bbox=w,s,e,n` (`&f=` the matching cells · `&f=…&veil=1` the rest) | one view as GeoJSON polygons with every attribute: identify, attribute table, **processing tools** (in the project, off at first) |
-| Companion layers | `…/ne/mvt/ogc` (trees by extent, OGC API Features) · `…/ne/mvt/trees.geojson?bbox=` · `…/ne/mvt/trees/14/{x}/{y}.pbf` · `…/ne/mvt/relief/{z}/{x}/{y}.png` · `…/ne/mvt/pic/{declared\|observed\|sub\|subc\|roads}/{z}/{x}/{y}.png` | what the page draws around the cells: tree crowns, hillshade, the page's own pictures (used by the project) |
+| Companion layers | `…/ne/mvt/ogc` (trees by extent, OGC API Features) · `…/ne/mvt/trees.geojson?bbox=` · `…/ne/mvt/trees/14/{x}/{y}.pbf` · `…/ne/mvt/relief/{z}/{x}/{y}.png` · `…/ne/mvt/pic/{declared\|observed\|sub\|subc\|roads\|trees\|treesh}/{z}/{x}/{y}.png` | what the page draws around the cells: tree crowns, hillshade, the page's own pictures (used by the project) |
 | Style (QML) | `{PUBLIC_URL}/api/v1/ne/mvt.qml?for=tiles` / `?for=ogr` (`&share=` for a state of the page) | the legend alone, for a layer you added yourself / for an archive |
 
 TileJSON: `/api/v1/ne/mvt.json` (lists every field). Zoom 9–15. Same data at the
@@ -120,12 +120,23 @@ basemaps (basemap.at, OpenStreetMap) are asked directly. Top to bottom:
 
 - **Trees · crowns by height** — every tree as a ring of its crown, as on the
   page (on with `;trees`, visible below 1:34 000). From a `;trees=h` link the
-  rings and the far hexagons come in the page's height ramp (5 m classes, top
-  height `ht_p90` for hexagons) over a dimmed ground. Live tiles
+  rings, the cell sheet and the far hexagons come in the page's height ramp
+  for a light page (olive low → violet tall; 5 m classes, top height `ht_p90`
+  for hexagons) over a ground veiled in the paper colour. Live tiles
   (`mvt/trees/14/{x}/{y}.pbf[?ht=lo..hi]`, zoom 14, layer `trees`): they load
   wherever the map goes. Identify a ring: `h` (m), `crown_d` (m), `crown_m2`,
   `species`, `vitality`. One legend entry per height band (3–5 · 5–15 · 15–25 ·
   25–35 · ≥ 35 m). A `ht` term of the filter limits the trees as on the page.
+- **Trees · every cell with a tree (as on the map)** — between the far
+  hexagons and the rings (zoom 12 up to 1:34 000): every cell that holds a
+  tree top, coloured by its tallest tree — the page's own sheet as a picture
+  (`mvt/pic/trees/{z}/{x}/{y}.png`; from a `;trees=h` link
+  `mvt/pic/treesh/…` in the height ramp, with the layer *Tree heights · ground
+  veil* under it). It lies right under the cell layer; with a filter the
+  *Filter veil* lies over it, so a cell that fails the filter shows no tree,
+  as on the page. The figures behind a pixel are the cell's `tn` and `ht`
+  (identify the cell layer). A `503` + `Retry-After` means the tile's data is
+  still being fetched — QGIS asks again on the next pan.
 - **Roads and rail** — the page's road and rail ink as a picture
   (`mvt/pic/roads/{z}/{x}/{y}.png`, zoom 12–16), opacity from `;roads=<0.1–1>`.
 - **Subsidy claims (INVEKOS)** — the claimed fields as the page draws them
@@ -140,7 +151,8 @@ basemaps (basemap.at, OpenStreetMap) are asked directly. Top to bottom:
   the outlines — *change · confirmed / candidate* (z ≥ 13; *in the area* on
   aggregates below), *declared ≠ observed*, *subsidy cells · class* (off) — the
   *trees · mean height* tint of the stocked hexagons (≥ 20 tree tops per ha) at
-  zoom 9–13, in the crowns' colours like the map's far-out sheet, and the group
+  zoom 9–11 (9–13 without the tree picture; the offline archive and the bare
+  `.qml` colour each cell with `tn > 0` by its tallest tree `ht` instead), in the crowns' colours like the map's far-out sheet, and the group
   fills (*declared · group* by `d`, *observed · group* by `o`). While the
   pictures below are in charge the fills cover the aggregates up to zoom 11
   only; with a filter they paint the matching cells at every zoom. Styles run

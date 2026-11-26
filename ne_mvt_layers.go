@@ -4,7 +4,7 @@
 //
 //	GET /api/v1/ne/mvt/relief/{z}/{x}/{y}.png        the observed-layer peer's hillshade, relayed (z 10–17)
 //	GET /api/v1/ne/mvt/trees/{z}/{x}/{y}.pbf         tree apices as points, layer "trees" (z 14 only; ht=lo..hi)
-//	GET /api/v1/ne/mvt/pic/{declared|observed|sub|subc|roads}/{z}/{x}/{y}.png
+//	GET /api/v1/ne/mvt/pic/{declared|observed|sub|subc|roads|trees|treesh}/{z}/{x}/{y}.png
 //	                                                  the landing page's own overlay pictures as XYZ tiles (z 12–16, 512 px)
 //
 // relief — the peer's tile, with the page's tone curve baked in (flat ground,
@@ -97,8 +97,8 @@ func handleNEMVTLayer(w http.ResponseWriter, r *http.Request, rest string) bool 
 		p = p[1:]
 	case kind == "pic" && len(p) == 5:
 		view, p = p[1], p[2:]
-		if view != "sub" && view != "subc" && view != "roads" && view != "declared" && view != "observed" {
-			apiError(w, "mvt/pic/{declared|observed|sub|subc|roads}/{z}/{x}/{y}.png", 404)
+		if view != "sub" && view != "subc" && view != "roads" && view != "declared" && view != "observed" && view != "trees" && view != "treesh" {
+			apiError(w, "mvt/pic/{declared|observed|sub|subc|roads|trees|treesh}/{z}/{x}/{y}.png", 404)
 			return true
 		}
 	default:
@@ -732,7 +732,11 @@ func neLayerPic(view string, z, x, y int) ([]byte, error) {
 		}
 		return b, err
 	}
-	if view != "roads" { // the wire before the render gate, like handleNEGlyphTile
+	trees := view == "trees" || view == "treesh"
+	if trees { // the peer's tree blocks, before the gate
+		g.lod = neGlyphLOD{deg: 0.1, px: px}
+		neTrsWarm(&g, w, s, e, n, 8*time.Second)
+	} else if view != "roads" { // the wire before the render gate, like handleNEGlyphTile
 		defer neSubPrefetch(w, s, e, n)()
 	}
 	select {
@@ -742,7 +746,13 @@ func neLayerPic(view string, z, x, y int) ([]byte, error) {
 		return nil, errBusy
 	}
 	var img image.Image
-	if view == "roads" {
+	if trees { // the page's tree sheet: every cell that holds a tree top (ne_glyph_trs.go)
+		pimg, pend := neTrsPic(&g, w, s, e, n, view == "treesh")
+		if pend {
+			return nil, errBusy // a peer block is on its way: 503 + Retry-After, nothing kept
+		}
+		img = pimg
+	} else if view == "roads" {
 		var m neGlyphRoadsMeta
 		img = neGlyphRoadsRender(&g, w, s, e, n, &m)
 		if m.down {

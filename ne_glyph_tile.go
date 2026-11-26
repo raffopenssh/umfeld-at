@@ -1157,6 +1157,10 @@ func handleNEGlyphTile(w http.ResponseWriter, r *http.Request) {
 		apiError(w, "tile outside Austria", 404)
 		return
 	}
+	if x := q.Get("x"); view == "tree" && (x == "p" || x == "l" || x == "d") {
+		neTrsServe(w, r, L, lod, i, j, x, ds) // the trees as a cell sheet, from the peer's tree blocks (ne_glyph_trs.go)
+		return
+	}
 	neFidxWarmNoteTile(lod, i, j) // the filter index warms behind the near tiles (ne_glyph_fidx.go) — after the box check: a noted bin outside Austria jammed the warmer (one failing pick every 20 s, 2026-11-09)
 	key := fmt.Sprintf("%s/%d/%d/%d", view, lod, i, j)
 	noStore := false

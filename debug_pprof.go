@@ -91,6 +91,7 @@ func RegisterDebugAPI(mux *http.ServeMux) {
 			"ne_fidx":          NEFidxStats(),         // ne_glyph_fidx.go: filter index bins (LRU 48 MB + disk 2 GB)
 			"ne_stats":         NEStatsUnitStats(),    // api_ne_stats_unit.go: envelope + peer memo (LRU 16 MB, 10 min)
 			"ne_mvt_nat_trees": NENatTreesStats(),     // ne_mvt_nat_trees.go: trees per res 7–9 hexagon, one mapped file (~50 MB, no heap)
+			"ne_tree_sheet":    NETrsStats(),          // ne_glyph_trs.go: wooded cells per 0.1° peer block for the v=tree&x= tiles (≤ 96 MB)
 			"ne_tree_stands":   NEStandsStats(),       // ne_tree_stands.go: national tree table per res-7 cell (1 snapshot, ~250 KB)
 			"tree_frames":      TreeFrameStats(),      // tree_frames.go: position frames of the tree layer
 			"tree_report":      TreeReportStats(),     // api_tree_report.go: relay to the observed-layer peer

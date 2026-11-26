@@ -61,6 +61,7 @@ func neQGSFill(name, color, outline, width string) string {
 type neQGSView struct {
 	obs, change, diff, trees, sub, roads, relief, ortho bool
 	treesH                                              bool // ;trees=h: the trees in the height colours (ne_glyph_th.go)
+	treePic                                             bool // the project carries the tree sheet as a picture from z 12 (live projects)
 	orthoOp, roadsOp                                    float64
 }
 
@@ -145,10 +146,18 @@ func neQGSRules(v neQGSView, pic bool) []neQGSRule {
 	// ;trees=h — the page's height colours: the ground dimmed, a hexagon in the colour of its TOP height
 	// (ht_p90: 9 of 10 tree tops stand below), 5 m classes along the ramp; ht_p25 (the lower storey) rides
 	// along as an attribute for anyone who wants the page's core as a second symbol layer
+	// With the tree sheet as a picture (live projects, z 12+: every cell that holds a tree, as on the page) the
+	// hexagons stop where it starts.
+	aggMax := 13
+	if v.treePic {
+		aggMax = neLayerPicMinZ - 1
+	}
 	if v.treesH {
-		add(true, "tree heights · ground dimmed", `TRUE`, neMVTMinZ, neMVTMaxZ, neQGSFill("0", "14,16,22,189", "14,16,22,189", "0.15"))
+		// the ground under the heights is the PAGE colour, like the page's veil — QGIS's canvas is light
+		// (from z 12 on a live project the veil is its own layer under the tree sheet)
+		add(true, "tree heights · ground veiled", `TRUE`, neMVTMinZ, map[bool]int{true: neLayerPicMinZ - 1, false: neMVTMaxZ}[v.treePic], neQGSFill("0", "250,250,247,209", "250,250,247,209", "0.15"))
 		for lo := 5; lo <= 40; lo += 5 {
-			c := neGlyphThRGB(float64(lo) + 2.5)
+			c := neGlyphThRampAt(&neGlyphThRampL, float64(lo)+2.5)
 			col := fmt.Sprintf("%d,%d,%d,235", c[0], c[1], c[2])
 			name, expr := fmt.Sprintf("trees · top height %d–%d m", lo, lo+5), fmt.Sprintf(`"tn_ha" >= %d AND "ht_p90" >= %d AND "ht_p90" < %d`, neQGSTreeMinHa, lo, lo+5)
 			switch lo {
@@ -157,7 +166,7 @@ func neQGSRules(v neQGSView, pic bool) []neQGSRule {
 			case 40:
 				name, expr = "trees · top height ≥ 40 m", fmt.Sprintf(`"tn_ha" >= %d AND "ht_p90" >= 40`, neQGSTreeMinHa)
 			}
-			add(true, name+" (hexagons, far zooms)", expr, neMVTMinZ, 13, neQGSFill("0", col, col, "0.15"))
+			add(true, name+" (hexagons, far zooms)", expr, neMVTMinZ, aggMax, neQGSFill("0", col, col, "0.15"))
 		}
 	}
 	for b, lo := range []int{0, 12, 22, 32} {
@@ -175,7 +184,25 @@ func neQGSRules(v neQGSView, pic bool) []neQGSRule {
 		default:
 			name, expr = fmt.Sprintf("trees · mean height %d–%d m", lo, lo+10), expr+fmt.Sprintf(` AND "ht_mean" < %d`, lo+10)
 		}
-		add(v.trees, name+" (hexagons, far zooms)", expr, neMVTMinZ, 13, neQGSFill("0", col, col, "0.15"))
+		add(v.trees, name+" (hexagons, far zooms)", expr, neMVTMinZ, aggMax, neQGSFill("0", col, col, "0.15"))
+	}
+	// Without the picture (the offline archive, read at its deepest zoom): the same sheet from the cells' own
+	// attributes — a cell that holds a tree top (tn > 0) in the colour of its tallest tree (ht), the classes of
+	// the crown rings.
+	if !v.treePic {
+		lo, hi, label, col := neQGSTreeClasses(v.treesH)
+		alpha := 153
+		if v.treesH {
+			alpha = 255
+		}
+		for i := range lo {
+			expr := fmt.Sprintf(`"res" = 12 AND "tn" > 0 AND "ht" >= %g AND "ht" < %g`, lo[i], hi[i])
+			if i == 0 {
+				expr = fmt.Sprintf(`"res" = 12 AND "tn" > 0 AND ("ht" IS NULL OR "ht" < %g)`, hi[i])
+			}
+			c := fmt.Sprintf("%d,%d,%d,%d", col[i][0], col[i][1], col[i][2], alpha)
+			add(v.trees, "trees · tallest in the cell "+label[i], expr, 14, neMVTMaxZ, neQGSFill("0", c, c, "0.15"))
+		}
 	}
 	add(v.change, "change · confirmed", `"chg"='conf'`, 13, neMVTMaxZ, neQGSFill("0", "194,65,12,70", "194,65,12,255", "0.5"))
 	add(v.change, "change · candidate", `"chg"='cand'`, 13, neMVTMaxZ, neQGSFill("0", "0,0,0,0", "194,65,12,150", "0.3"))
@@ -283,7 +310,7 @@ func neQGSTreeClasses(heights bool) (lo, hi []float64, label []string, col [][3]
 		if i+2 == len(e) {
 			l = "≥ 45 m"
 		}
-		lo, hi, label, col = append(lo, e[i]), append(hi, e[i+1]), append(label, l), append(col, neGlyphThRGB(math.Min(47, (e[i]+e[i+1])/2)))
+		lo, hi, label, col = append(lo, e[i]), append(hi, e[i+1]), append(label, l), append(col, neGlyphThRampAt(&neGlyphThRampL, math.Min(47, (e[i]+e[i+1])/2)))
 	}
 	return
 }
@@ -375,6 +402,7 @@ type neQGSRasterOpt struct {
 	grey                  bool // desaturate (OSM under coloured cells)
 	blend                 int  // QGIS blend mode: 0 normal, 8 overlay (the page's mix-blend for the relief)
 	hidpi                 bool // 512-px tiles
+	maxScale              int  // > 0: hidden closer in than 1:maxScale (another layer takes over there)
 }
 
 // neQGSRaster — layer-tree entry + maplayer.
@@ -398,6 +426,9 @@ func neQGSRaster(o neQGSRasterOpt) (tree, layer string) {
 	tree = fmt.Sprintf(`<layer-tree-layer id="%s" name="%s" source="%s" providerKey="wms" checked="%s" expanded="0" legend_exp="" patch_size="-1,-1"><customproperties><Option/></customproperties></layer-tree-layer>`, id, html.EscapeString(o.name), src, chk)
 	layer = fmt.Sprintf(`<maplayer type="raster" hasScaleBasedVisibilityFlag="0" autoRefreshMode="Disabled" styleCategories="AllStyleCategories"><id>%s</id><datasource>%s</datasource><layername>%s</layername><srs>%s</srs><resourceMetadata><rights>%s</rights></resourceMetadata><provider>wms</provider><flags><Identifiable>0</Identifiable><Removable>1</Removable><Searchable>0</Searchable><Private>0</Private></flags><customproperties><Option/></customproperties><pipe><provider><resampling enabled="false" maxOversampling="2" zoomedInResamplingMethod="nearestNeighbour" zoomedOutResamplingMethod="nearestNeighbour"/></provider><rasterrenderer type="singlebandcolordata" opacity="%.2f" alphaBand="-1" band="1" nodataColor=""><rasterTransparency/><minMaxOrigin><limits>None</limits><extent>WholeRaster</extent><statAccuracy>Estimated</statAccuracy><cumulativeCutLower>0.02</cumulativeCutLower><cumulativeCutUpper>0.98</cumulativeCutUpper><stdDevFactor>2</stdDevFactor></minMaxOrigin></rasterrenderer><brightnesscontrast brightness="0" contrast="0" gamma="1"/>%s<rasterresampler maxOversampling="2"/><resamplingStage>resamplingFilter</resamplingStage></pipe><blendMode>%d</blendMode></maplayer>`,
 		id, src, html.EscapeString(o.name), neQGSCRS3857, html.EscapeString(o.rights), o.opacity, hue, o.blend)
+	if o.maxScale > 0 {
+		layer = strings.Replace(layer, `hasScaleBasedVisibilityFlag="0"`, fmt.Sprintf(`hasScaleBasedVisibilityFlag="1" maxScale="%d" minScale="100000000"`, o.maxScale), 1)
+	}
 	return
 }
 
@@ -486,6 +517,12 @@ func neQGSHexShaded(x neQGSRule, res int) string {
 // neQGSVeilTileStyle — the veil tiles: one entry, the page's paper at 82 %.
 func neQGSVeilTileStyle() string {
 	return fmt.Sprintf(`<renderer type="basic"><styles><style enabled="1" name="veiled by the filter" layer="%s" geometry="2" expression="" min-zoom="12" max-zoom="%d"><symbols>%s</symbols></style></styles></renderer>`,
+		neMVTLayerName, neQGSStyleMaxZ, neQGSFill("0", "250,250,247,209", "250,250,247,209", "0.1"))
+}
+
+// neQGSGroundStyle — the ground veil of the tree heights: every cell in the paper colour (the filter veil's).
+func neQGSGroundStyle() string {
+	return fmt.Sprintf(`<renderer type="basic"><styles><style enabled="1" name="ground under the tree heights" layer="%s" geometry="2" expression="" min-zoom="12" max-zoom="%d"><symbols>%s</symbols></style></styles></renderer>`,
 		neMVTLayerName, neQGSStyleMaxZ, neQGSFill("0", "250,250,247,209", "250,250,247,209", "0.1"))
 }
 
@@ -732,6 +769,8 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 			zmin: neLayerReliefMinZ, zmax: neLayerReliefMaxZ, opacity: 0.45, checked: view.relief, blend: 8})
 		over = append(over, bm{tree: t, layer: l, id: "relief"})
 	}
+	// the tree sheet (below) is a picture from z 12 on live projects: the hexagon rules stop there
+	view.treePic = pr.ObsAPI != "" && sp.archive == ""
 	// the page's own cell picture (dominant group, shade = dominance, second
 	// group as an inner hexagon): under the vector cells, which then carry the
 	// outlines, the attributes and — with a filter — the matching cells
@@ -776,7 +815,42 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 			t, l := neQGSTileLayer(neQGSTileOpt{id: "veilt", name: "Filter veil", url: q(base+"/api/v1/ne/mvt/{z}/{x}/{y}.pbf", fq, "veil=1"), zmin: 12, zmax: neMVTMaxZ,
 				rights: rights, renderer: neQGSVeilTileStyle(), opacity: "1", minScale: 140000, checked: true,
 				abstract: "The cells that do NOT pass the filter (" + words + "), whitened as on the map. Live tiles (zoom 12+), they follow the map. Click a veiled cell with the identify tool to see its values and why it fails." + docs})
-			bms = append(bms, bm{tree: t, layer: l, id: "veilt"})
+			if view.treePic && view.trees {
+				// with the trees on, the veil lies over the tree sheet, and both over the cells (which a filtered
+				// project fills): the cells that pass and the veiled ones are disjoint, so nothing is hidden
+				over = append(over, bm{tree: t, layer: l, id: "veilt"})
+			} else {
+				bms = append(bms, bm{tree: t, layer: l, id: "veilt"})
+			}
+		}
+		// the trees between the far hexagons and the crowns: the page's cell sheet — every cell that holds a tree
+		// top, in the colour of its tallest tree (mvt/pic/trees, heights: treesh), on the page's own stack order:
+		// UNDER the filter veil (a cell that fails the filter shows no tree; a filtered project fills its cells, so
+		// veil, sheet and ground veil then lie over the cell layer), over the ground veil of the heights
+		// (the paper colour over the land use, like the filter's), over the pictures. The crown rings take over
+		// at 1:34 000.
+		if view.treePic {
+			pv, pn, op := "trees", "Trees · every cell with a tree (as on the map)", 0.6
+			if view.treesH {
+				pv, pn, op = "treesh", "Tree heights · every cell with a tree (as on the map)", 1
+			}
+			t, l := neQGSRaster(neQGSRasterOpt{id: "treesheet", name: pn, url: q(base + "/api/v1/ne/mvt/pic/" + pv + "/{z}/{x}/{y}.png"), rights: pr.ObsName + " (CC BY 4.0), BEV",
+				zmin: neLayerPicMinZ, zmax: neLayerPicMaxZ, opacity: op, checked: view.trees, hidpi: true, maxScale: 34000})
+			put := func(m bm) {
+				if sp.canon != "" && view.trees {
+					over = append(over, m)
+				} else {
+					bms = append(bms, m)
+				}
+			}
+			put(bm{tree: t, layer: l, id: "treesheet"})
+			if view.treesH {
+				t, l := neQGSTileLayer(neQGSTileOpt{id: "treeground", name: "Tree heights · ground veil", url: q(base + "/api/v1/ne/mvt/{z}/{x}/{y}.pbf"), zmin: 12, zmax: neMVTMaxZ,
+					rights: rights, renderer: neQGSGroundStyle(), opacity: "1", minScale: 140000, checked: true,
+					abstract: "The paper colour over the land use, so the height colours read. Untick to see the land use between the trees."})
+				l = strings.Replace(l, "<Identifiable>1</Identifiable>", "<Identifiable>0</Identifiable>", 1) // the cell layer answers a click
+				put(bm{tree: t, layer: l, id: "treeground"})
+			}
 		}
 		if hres := neCellsJSONRes(km2); hres > 0 {
 			what := map[int]string{11: " · 25 m", 10: " · 66 m"}[hres] // coarser than the cells themselves
