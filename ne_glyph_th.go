@@ -89,7 +89,7 @@ var neGlyphThCSS = `
 figure.glyph{` + neGlyphThVars(&neGlyphThRampL) + `}figure.glyph.th-dk{` + neGlyphThVars(&neGlyphThRamp) + `}
 .glyph-tip .g-th0,.glyph-peek .g-th0{fill:var(--th0)}.glyph-tip .g-th1,.glyph-peek .g-th1{fill:var(--th1)}.glyph-tip .g-th2,.glyph-peek .g-th2{fill:var(--th2)}.glyph-tip .g-th3,.glyph-peek .g-th3{fill:var(--th3)}.glyph-tip .g-th4,.glyph-peek .g-th4{fill:var(--th4)}
 /* the ground steps back INTO THE PAGE (light or dark), inside Austria only */svg.glyph .thg{fill:var(--bg,#fafaf7);fill-opacity:.8;stroke:none;pointer-events:none}
-/* over the photo: a thin dark veil, the sheet lets it through */svg.glyph.v-ortho .hi .thg{fill:#0b0d0c;fill-opacity:.38}svg.glyph.v-ortho.v-th .hi .tro{opacity:.55}
+/* over the photo: a thin dark veil; the sheet turns into dots sized by density (troPaint, PH) — the photo shows between them */svg.glyph.v-ortho .hi .thg{fill:#0b0d0c;fill-opacity:.22}
 /* a hint has the bottom edge to itself: the trees chip steps out while it speaks (and the hint is opaque and on top where :has is missing) */.glyph-hint{z-index:6;max-width:calc(100% - 16px);box-sizing:border-box}.glyph-main:has(.glyph-hint.on) .glyph-trn{opacity:0!important;transition:opacity .2s}
 svg.glyph .tro .co{display:none}svg.glyph .tro.cz .co{display:inline}
 .glyph-hint svg.thk{width:1.05em;height:1.05em;vertical-align:-.18em;margin:0 .25em 0 .1em}
@@ -101,6 +101,7 @@ var neGlyphThJS = `
 var TH_N=16,TH_CZ=8.5/* px across from which a hexagon shows its core */,TH_MQ=window.matchMedia?matchMedia('(prefers-color-scheme:dark)'):null,TH_S,TH_LUT,th={on:false,sc:null,held:0,hT:0,kn:0};
 function thLut(){TH_S=thDk()?[` + neGlyphThStops("'") + `]:[` + neGlyphThStopsOf(&neGlyphThRampL, "'") + `];var o=[],i,k;for(i=0;i<TH_N;i++){var t=i/(TH_N-1)*(TH_S.length-1),j=Math.min(TH_S.length-2,Math.floor(t)),f=t-j,c='#';for(k=1;k<7;k+=2){var u=parseInt(TH_S[j].substr(k,2),16),v=parseInt(TH_S[j+1].substr(k,2),16);c+=('0'+Math.round(u+(v-u)*f).toString(16)).slice(-2)}o.push(c)}TH_LUT=o}
 function thInit(){th.dk=thDk();thLut();fig.classList.toggle('th-dk',th.dk)}
+function thPhoto(){thSkin();if(thOn()&&typeof troSync==='function'){troSync();apSched()}}
 function thSay(){return'tree heights \u00b7 '+(thDk()?'blue 3\u202fm \u2192 yellow 45\u202fm':'olive 3\u202fm \u2192 violet 45\u202fm')+' \u00b7 '+(coarse?'tap and hold':'hold')+' the tree again for the plain crowns'}
 /* the device flips light ⇄ dark: new inks everywhere */if(TH_MQ){var thMq=function(){thSkin()};if(TH_MQ.addEventListener)TH_MQ.addEventListener('change',thMq);else if(TH_MQ.addListener)TH_MQ.addListener(thMq)}
 function thGd(){if(!th.gd&&cells.length){var gd=[],i;for(i=0;i<cells.length;i++)gd.push(faceD(i));th.gd=gd.join('')}return th.gd||''}

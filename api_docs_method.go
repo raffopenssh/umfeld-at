@@ -42,6 +42,21 @@ var publicMethodParas = []methodPara{
 		`clear-cut is forest in the register by design, so a mark says where to look, not who is wrong. Subsidy shows INVEKOS Schläge (AMA) as ` +
 		`farmers drew them for their claims; {SUB_NAME} rolls them onto the cells and compares each year with the one ` +
 		`before (new, redrawn, gone).`},
+	{"How the trees are drawn", `A tree here is one tree top of 3 m or more that the laser scan found. Close up, every ` +
+		`tree is a ring the size of its crown. Farther out there are too many to draw one by one, so they are counted per ` +
+		`hexagon: the fuller the colour, the more trees stand there. As you zoom in the hexagons get finer and then hand ` +
+		`over to the single rings. Hold the tree icon (or shift-click, right-click, key h) to colour the trees by height ` +
+		`instead: on a dark page blue is low and yellow is tall, on a light page olive is low and violet is tall; the land ` +
+		`use underneath is faded so the colours can be read. A ring then shows the height of that one tree. A hexagon shows ` +
+		`its top height — the height that nine of ten of its trees stay below — and brighter means more trees. Once a ` +
+		`hexagon is large enough it gets a centre in a second colour: the height that a quarter of its trees stay below, ` +
+		`in other words the small trees. That pair tells how a forest is built. Rim and centre in the same colour: the ` +
+		`trees are all about the same height, as in a plantation. A centre much lower than the rim: tall and small trees ` +
+		`grow together, as in a selection forest (Plenterwald) or an old stand with young growth below. Single yellow or ` +
+		`violet rings above the rest are old giants. Over the aerial photo the hexagons shrink to dots — larger dot, more ` +
+		`trees — so the photo stays readable in between. Both heights are worked out from counts in twelve height bands ` +
+		`per hexagon, so they are good to about a metre or two, not to the centimetre; the same two figures are in the ` +
+		`map tiles for QGIS (ht_p90, ht_p25).`},
 	{"Filter and counts", `Every filter field is a per-cell value from the layers above, or a distance computed from ` +
 		`OpenStreetMap. Zoomed in, the filter and its counts are exact cell by cell; farther out they come from a ` +
 		`national sample of one cell in 49, so those counts are estimates — responses say so ` +

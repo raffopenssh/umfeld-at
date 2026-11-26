@@ -12,7 +12,13 @@
 //     mode  all (default) = hold · pan · pinch out · pinch in · tap, the page must answer after each
 //           run  = the url carries ?run=<scenario>: gestures are made whenever the page asks for fingers,
 //                  until it reports "finished"; prints the run's log (an end-to-end test of the run driver)
-//   env CHROME (default /headless-shell/headless-shell), PORT (9333)
+//           th   = tree heights (;trees=h) on a slow phone: at four zooms the plain trees and the heights are
+//                  loaded, panned and pinched with real touches; per step the worst gap between two animation
+//                  frames, the long tasks and the stand sheet's node count are printed side by side, then the
+//                  icon is held with a real finger (the hold must flip the mode). url = the page's base
+//   env CHROME (default /headless-shell/headless-shell), PORT (9333), CPU (CDP CPU throttling rate, e.g. 6 =
+//       a slow phone; default 1), PT (lon,lat of the th walk), STEP (only the steps whose name matches),
+//       PROF=1 (CPU profile of each step's gestures: top functions by self time, ms as throttled)
 // No dependencies: Node ≥ 18, a 60-line WebSocket client below. Exit 0 = every step answered, no JS error.
 const {spawn}=require('child_process'),net=require('net'),crypto=require('crypto'),os=require('os'),fs=require('fs'),path=require('path');
 const url=process.argv[2]||'http://localhost:8000/?trace#pt=14.34043,48.36932;v=obs;full;trees;screen;at=4205,853,770',mode=process.argv[3]||'all';
@@ -46,6 +52,7 @@ function wsConnect(u){return new Promise((res,rej)=>{const m=/^ws:\/\/([^:/]+):(
   await send('Emulation.setDeviceMetricsOverride',{width:384,height:721,deviceScaleFactor:2.8125,mobile:true});
   await send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
   await send('Emulation.setUserAgentOverride',{userAgent:'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Mobile Safari/537.36',userAgentMetadata:{brands:[{brand:'Chromium',version:'156'},{brand:'DuckDuckGo',version:'156'}],platform:'Android',platformVersion:'10',architecture:'',model:'K',mobile:true}});
+  if(+process.env.CPU>1)await send('Emulation.setCPUThrottlingRate',{rate:+process.env.CPU});
   await send('Page.enable');await send('Page.navigate',{url});
   for(let i=0;i<40;i++){await sleep(500);if(await ev("!!(window.neGlyph&&document.querySelector('svg.glyph'))")===true)break}
   const T=(type,pts)=>send('Input.dispatchTouchEvent',{type,touchPoints:pts.map((p,i)=>({x:p[0],y:p[1],id:i,radiusX:22,radiusY:22,force:1}))},6000);
@@ -53,7 +60,35 @@ function wsConnect(u){return new Promise((res,rej)=>{const m=/^ws:\/\/([^:/]+):(
   let bad=0;const alive=async l=>{const v=await ev("new Promise(r=>requestAnimationFrame(()=>r('alive z='+(window.neGlyph.state().z||'')+' '+location.hash.slice(-60))))",6000);console.log((l+'        ').slice(0,10),v);if(!/^alive/.test(String(v)))bad++};
   const pan=async r=>{await T('touchStart',[[r.x,r.y]]);for(let i=1;i<=24;i++){await T('touchMove',[[r.x-i*3,r.y+i*3]]);await sleep(16)}await T('touchEnd',[])};
   const pinch=async(r,a,b)=>{await T('touchStart',[[r.x-a,r.y]]);await T('touchStart',[[r.x-a,r.y],[r.x+a,r.y]]);for(let i=1;i<=30;i++){const d=a+(b-a)*i/30;await T('touchMove',[[r.x-d,r.y],[r.x+d,r.y+i/2]]);await sleep(16)}await T('touchEnd',[])};
-  if(mode==='run'){
+  if(mode==='th'){
+   const base=url.replace(/[?#].*$/,''),pt=process.env.PT||'15.07,47.78';let rN=Date.now()%1e6;
+   const meter="(function(){if(window.__thm)return;var m=window.__thm={max:0,n100:0,lt:0,ltmax:0,last:0,fr:0};try{new PerformanceObserver(function(l){l.getEntries().forEach(function(e){m.lt++;if(e.duration>m.ltmax)m.ltmax=e.duration})}).observe({entryTypes:['longtask']})}catch(e){}(function f(t){if(m.last){var d=t-m.last;if(d>m.max)m.max=d;if(d>100)m.n100++}m.last=t;m.fr++;requestAnimationFrame(f)})(performance.now())})()";
+   const reset="(function(){var m=window.__thm;m.max=0;m.n100=0;m.lt=0;m.ltmax=0;m.fr=0;m.t0=performance.now()})()";
+   const read="(function(){var m=window.__thm,t=document.querySelector('svg.glyph .tro'),s=window.neGlyph.state();return JSON.stringify({gap:Math.round(m.max),n100:m.n100,lt:m.lt,ltmax:Math.round(m.ltmax),fps:Math.round(m.fr*1000/(performance.now()-m.t0)),sheet:t?t.querySelectorAll('path').length:0,d:t?Math.round(t.innerHTML.length/1024):0,lod:s.lod,th:s.treeHeights})})()";
+   const steps=[['far (Austria)',''],['tiles off z14','pt='+pt+';z=14'],['sheet z40','pt='+pt+';full;z=40'],['sheet z95','pt='+pt+';full;z=95'],['sheet z95 photo+roads','pt='+pt+';full;ortho;roads;z=95'],['crowns z300','pt='+pt+';full;z=300'],['crowns z300 photo','pt='+pt+';full;ortho;z=300']];
+   console.log('cpu ×'+(process.env.CPU||1)+'   worst frame gap ms / gaps>100ms / long tasks (worst ms) / fps during gestures / sheet paths (KB)');
+   const prof=async()=>{const r=await send('Profiler.stop',{},60000),p=r.result&&r.result.profile;if(!p)return;const dt=p.timeDeltas,self={},by={};p.nodes.forEach(n=>by[n.id]=n);p.samples.forEach((id,i)=>{const n=by[id],k=(n.callFrame.functionName||'(anon)')+':'+n.callFrame.lineNumber;self[k]=(self[k]||0)+(dt[i]||0)/1000});console.log('   top self ms: '+Object.entries(self).filter(e=>!/^\((idle|program)\)/.test(e[0])).sort((a,b)=>b[1]-a[1]).slice(0,9).map(e=>e[0]+' '+Math.round(e[1])).join(' · '))};
+   for(const st of steps){if(process.env.STEP&&!new RegExp(process.env.STEP).test(st[0]))continue;const row=[];for(const tok of ['trees','trees=h']){
+     await send('Page.navigate',{url:base+'?r='+(++rN)+'#'+(st[1]?st[1]+';':'')+tok});
+     for(let i=0;i<40;i++){await sleep(500);if(await ev("!!(window.neGlyph&&document.querySelector('svg.glyph'))")===true)break}
+     await ev(meter);const t0=Date.now();await ev("window.neGlyph.settled?window.neGlyph.settled(900).then(function(){return 1}):1",45000);const load=Date.now()-t0;
+     const ld=JSON.parse(await ev(read));await sleep(600);await ev(reset);const r=await box();if(process.env.PROF){await send('Profiler.enable');await send('Profiler.start')}
+     await pan(r);await sleep(700);await pinch(r,30,110);await sleep(900);await pinch(r,110,40);await sleep(900);await pan(r);await sleep(1200);
+     const g=JSON.parse(await ev(read,15000)||'{}');if(process.env.PROF)await prof();const er=await ev("JSON.stringify(window.neGlyph.log().errors)");if(er!=='[]'){bad++;console.log('errors',er)}
+     row.push((tok+'       ').slice(0,8)+' load '+(load/1000).toFixed(1)+'s gap '+ld.gap+' | gestures gap '+g.gap+' n>100 '+g.n100+' lt '+g.lt+' ('+g.ltmax+') fps '+g.fps+' sheet '+g.sheet+' ('+g.d+' KB) lod '+g.lod)}
+    console.log((st[0]+'                         ').slice(0,24)+row.join('\n'+' '.repeat(24)))}
+   if(process.env.STEP){throw new Error('STEP set: hold test skipped')}
+   /* the hold, with a real finger: trees off → held → on in colour → held → plain */
+   await send('Page.navigate',{url:base+'?r='+(++rN)});for(let i=0;i<40;i++){await sleep(500);if(await ev("!!(window.neGlyph&&document.querySelector('svg.glyph'))")===true)break}await sleep(2500);
+   const bt=JSON.parse(await ev("(function(){var b=document.querySelector('.gv-tree');b.scrollIntoView({block:'center'});var r=b.getBoundingClientRect();return JSON.stringify({x:r.left+r.width/2,y:r.top+r.height/2})})()"));
+   const stt=()=>ev("location.hash+' trees='+window.neGlyph.state().overlays.trees+' heights='+window.neGlyph.state().treeHeights+' hint='+document.querySelector('.glyph-hint').textContent.slice(0,60)");
+   const hold=async ms=>{await T('touchStart',[[bt.x,bt.y]]);await sleep(ms);await T('touchEnd',[]);await sleep(1200)};
+   await hold(80);let a=await stt();console.log('tap       ',a);if(!/trees=true heights=false/.test(a))bad++;await sleep(1800);console.log('tease     ',await stt());
+   await hold(700);a=await stt();console.log('hold      ',a);if(!/trees=true heights=true/.test(a)||!/trees=h/.test(a))bad++;
+   await hold(700);a=await stt();console.log('hold again',a);if(!/trees=true heights=false/.test(a))bad++;
+   await hold(80);a=await stt();console.log('tap       ',a);if(!/trees=false/.test(a))bad++;
+   await hold(700);a=await stt();console.log('hold (off)',a);if(!/trees=true heights=true/.test(a))bad++;
+  }else if(mode==='run'){
    let lastSay='';for(let i=0;i<(+process.env.PROBE_N||400);i++){const s=String(await ev("(function(){var z=window.neGlyphTrace&&window.neGlyphTrace.run();return z?(z.ph+'|'+(z.cur?z.cur.id:'')+'|'+(z.sub||'')+'|'+z.verdict):'?'})()"));
     if(s!==lastSay){console.log(s);lastSay=s}
     if(/^done/.test(s))break;

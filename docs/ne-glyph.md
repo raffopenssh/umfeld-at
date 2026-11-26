@@ -924,14 +924,30 @@ token `;trees=h` (`;trees` unchanged); `neGlyph.trees(on, heights)`, `neGlyph.tr
   the dark ramp is used whatever the page (`figure.th-dk`). `prefers-color-scheme` changes repaint live.
 - **Ground veil** `path.thg` = the res-7 faces in the page colour at .8 (nothing outside Austria): inside `g.tro` in
   the overview; with tiles on, ONE path in `hi.g` right before `.ov-rd` (`thPlace`), and the sheet joins it there
-  (`troPlace`) — so **roads stay on top** and the **photo** shows through (veil → thin dark .38, sheet opacity .55
-  under `v-ortho`). No CSS filter anywhere (phone repaint cost).
+  (`troPlace`) — so **roads stay on top** and the **photo** shows through (under `v-ortho` the veil is a thin dark .22 and the sheet turns into
+  **dots**: each hexagon shrinks to .35–.5 R by density (a quarter of the ground at most) at full ink, no cores, no group opacity — `PH` in `troPaint`). No CSS filter anywhere (phone repaint cost).
 - **Legend keeps its shape**: swatches `g-th0…4` instead of `g-tr0…4`, the height scale's gradient, the icon's
   underline. What the core means is said once per page (≤ 4 × per device, `neg-thk`) in the hint, with two glyphs
   (`thKey`). Discovery: the first plain tap on trees says "tap and hold…" (≤ 2 × per device, `neg-thh`, `thTease`);
   a hint hides the trees chip while it speaks (`:has`).
 - **Exports**: `.qgs` from a `;trees=h` link → `neQGSTreeClasses(true)` for rings / tree points, far hexagons by
   `ht_p90`, a dim-ground rule; MVT attributes `ht_p90`, `ht_p25` (`ne_tree_bands.go`).
+
+### Crowded crowns and the slow-phone walk
+
+`apDraw` over closed forest at LOD 0 (z 110–300) has 50–70 k rings in a phone's view. Stroking them froze a
+×6-throttled phone profile for 7–10 s in one task (1 s unthrottled), in plain trees too. Above 4 000 rings the
+draw therefore (1) **thins** to one ring per 3 px square of screen — the tallest, the one the band order puts
+on top anyway — and (2) **stamps** them: one small ring picture per colour and half-pixel radius (`apStamp`,
+cache `apSp`, reset when line width / dpr / ramp change), blitted at whole device pixels; rings over 10 px
+radius are still stroked. Counts and the legend are of all trees, never of the thinned list. After: worst
+task 0.1–0.6 s at ×6.
+
+Measure, don't guess: `CPU=6 node scripts/glyph_touch_probe.js http://localhost:8000/ th` walks seven
+views (Austria → crowns, with photo and roads) in plain and heights mode with real touches and prints the worst
+frame gap, long tasks and fps side by side, then holds the icon with a real finger (tap → tease → hold → flip).
+`STEP=<regex>` picks steps, `PROF=1` adds the top functions by self time. A heights row much worse than its
+plain row = the heights code; both bad = the shared path.
 
 ## Trees far out — the stand sheet (`ne_glyph_tro.go`, `ne_tree_stands.go`, 2026-11-23)
 
