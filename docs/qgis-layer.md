@@ -123,10 +123,13 @@ basemaps (basemap.at, OpenStreetMap) are asked directly. Top to bottom:
   rings, the cell sheet and the far hexagons come in the page's height ramp
   for a light page (olive low → violet tall; 5 m classes, top height `ht_p90`
   for hexagons) over a ground veiled in the paper colour. Live tiles
-  (`mvt/trees/14/{x}/{y}.pbf[?ht=lo..hi]`, zoom 14, layer `trees`): they load
+  (`mvt/trees/14/{x}/{y}.pbf[?ht=lo..hi][&f=…]`, zoom 14, layer `trees`): they load
   wherever the map goes. Identify a ring: `h` (m), `crown_d` (m), `crown_m2`,
   `species`, `vitality`. One legend entry per height band (3–5 · 5–15 · 15–25 ·
-  25–35 · ≥ 35 m). A `ht` term of the filter limits the trees as on the page.
+  25–35 · ≥ 35 m). In a filtered project the trees follow the filter as on the
+  page (*… · in the filter*): a tree is there when the cell its top stands in
+  passes (`f=`, the same cells as the veil), and a `ht` term limits the trees
+  by their own height. The same holds for *Trees as points (current view)*.
 - **Trees · every cell with a tree (as on the map)** — between the far
   hexagons and the rings (zoom 12 up to 1:34 000): every cell that holds a
   tree top, coloured by its tallest tree — the page's own sheet as a picture
@@ -165,7 +168,8 @@ basemaps (basemap.at, OpenStreetMap) are asked directly. Top to bottom:
   cells: everything is whitened, and each hexagon that holds matching cells is
   a **dot at its centre whose area is the share that passes** (`match_pct`;
   never smaller than 0.7 mm), in the colours of the legend. Identify a dot for
-  `n` of `n_all`. The cell layer itself starts at zoom 12 in a filtered project.
+  `n` of `n_all`. The cell layer itself starts at zoom 12 in a filtered project
+  (one identify answer per click: the dot layer far out, the cell layer close up).
 - **Vector data of this view (analysis)** — a collapsed group, all off at
   first. The view as **plain vector layers**, one fetch each (they do not grow
   when you pan): what the attribute table, *select by expression* and the
@@ -239,7 +243,8 @@ tells you how much of an area is ready (`status: ready|warming|cold`, `eta_s`);
 
 **The trees by hand:** *Layer → Add Layer → Add WFS / OGC API Features Layer →
 New*, URL `{PUBLIC_URL}/api/v1/ne/mvt/ogc` (with `?key=…` if you have one,
-`?ht=20..` for a height range), *Connect*, add `trees`, and tick *Only request
+`?ht=20..` for a height range, `&f=…` for the trees of the cells that pass a
+filter), *Connect*, add `trees`, and tick *Only request
 features overlapping the view extent*. Zoom in first: a box over 40 km² is
 answered `413`. Outside QGIS it is plain GeoJSON:
 `…/mvt/ogc/collections/trees/items?bbox=w,s,e,n&limit=10000` (+ `offset=`, or

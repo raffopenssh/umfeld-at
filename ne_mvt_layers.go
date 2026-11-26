@@ -3,7 +3,7 @@
 // layer of the map and an anonymous reader still talks to one host:
 //
 //	GET /api/v1/ne/mvt/relief/{z}/{x}/{y}.png        the observed-layer peer's hillshade, relayed (z 10–17)
-//	GET /api/v1/ne/mvt/trees/{z}/{x}/{y}.pbf         tree apices as points, layer "trees" (z 14 only; ht=lo..hi)
+//	GET /api/v1/ne/mvt/trees/{z}/{x}/{y}.pbf         tree apices as points, layer "trees" (z 14 only; ht=lo..hi, f=<cell filter>)
 //	GET /api/v1/ne/mvt/pic/{declared|observed|sub|subc|roads|trees|treesh}/{z}/{x}/{y}.png
 //	                                                  the landing page's own overlay pictures as XYZ tiles (z 12–16, 512 px)
 //
@@ -155,7 +155,7 @@ func handleNEMVTLayer(w http.ResponseWriter, r *http.Request, rest string) bool 
 		neLayerServed[0].Add(1)
 	case "trees":
 		var whole bool
-		body, whole, err = neLayerTrees(z, x, y, r.URL.Query().Get("ht"))
+		body, whole, err = neLayerTrees(z, x, y, r.URL.Query().Get("ht"), r.URL.Query().Get("f"))
 		ctype, cache, gz = "application/vnd.mapbox-vector-tile", "public, max-age=3600", true
 		if !whole {
 			cache = "no-store"
@@ -463,21 +463,29 @@ func neLayerHtRange(s string) (lo, hi float64, ok bool) {
 
 // neLayerTrees — gzip'd MVT of the apices in a z-14 tile; whole=false when the
 // peer answered a partial list (not cached).
-func neLayerTrees(z, x, y int, ht string) ([]byte, bool, error) {
+func neLayerTrees(z, x, y int, ht, filt string) ([]byte, bool, error) {
 	pr := peers()
 	if pr.ObsAPI == "" {
 		return nil, true, nil
 	}
-	hlo, hhi, hasHt := neLayerHtRange(ht)
+	hlo, hhi, hasHt := neLayerHtRange(neTreeHtOf(ht, filt))
 	treeFrameCheck(false)
 	key := fmt.Sprintf("tree/%s/g%d/%d/%d/%d", time.Now().UTC().Format("20060102"), treeFrameGen.Load(), z, x, y)
 	if hasHt {
 		key += fmt.Sprintf("/%g..%g", hlo, hhi)
 	}
+	w, s, e, n := mvtTileBox(z, x, y)
+	// the cell filter: a tree shows where its cell passes (ne_mvt_treefilt.go)
+	pass, err := neTreePassFor(filt, w-(e-w)*0.01, s-(n-s)*0.01, e+(e-w)*0.01, n+(n-s)*0.01)
+	if err != nil {
+		return nil, false, err
+	}
+	if pass != nil {
+		key += "/f=" + pass.canon + "/" + pass.key
+	}
 	if b, ok := neLayerLRU.get(key); ok {
 		return b, true, nil
 	}
-	w, s, e, n := mvtTileBox(z, x, y)
 	// a crown's margin (≈ 16 m): a disc centred just outside is drawn in this tile too
 	mx, my := (e-w)*0.01, (n-s)*0.01
 	url := fmt.Sprintf("%s/api/v1/trees/bbox?bbox=%.6f,%.6f,%.6f,%.6f&min_height=3&format=columns&fields=lon,lat,h_m,crown_m2,species,vitality,kg_code&limit=100000", pr.ObsAPI, w-mx, s-my, e+mx, n+my)
@@ -505,6 +513,9 @@ func neLayerTrees(z, x, y int, ht string) ([]byte, bool, error) {
 		h := c.H[i]
 		// 0.5 m steps, the quantisation of the cell filter (neFiltBounds): a 34.8 m tree is a 35 m apex
 		if q := math.Round(h * 2); hasHt && (q < math.Ceil(hlo*2) || q > math.Floor(hhi*2)) {
+			continue
+		}
+		if pass != nil && !pass.pass(c.Lon[i], c.Lat[i]) {
 			continue
 		}
 		px, py := mvtProject(z, x, y, c.Lon[i], c.Lat[i])
@@ -582,8 +593,18 @@ func handleNELayerTreesGeoJSON(w http.ResponseWriter, r *http.Request) {
 	if _, ok := neMVTGate(w, r, ((i1-i0+1)*(j1-j0+1)+3)/4, box[0], box[1], box[2], box[3]); !ok {
 		return
 	}
-	hlo, hhi, hasHt := neLayerHtRange(q.Get("ht"))
+	hlo, hhi, hasHt := neLayerHtRange(neTreeHtOf(q.Get("ht"), q.Get("f")))
 	key := fmt.Sprintf("treej/%s/g%d/%.5f,%.5f,%.5f,%.5f/%v/%g..%g", time.Now().UTC().Format("20060102"), treeFrameGen.Load(), box[0], box[1], box[2], box[3], hasHt, hlo, hhi)
+	pass, perr := neTreePassFor(q.Get("f"), box[0], box[1], box[2], box[3])
+	if perr != nil {
+		w.Header().Set("Retry-After", "5")
+		w.Header().Set("Cache-Control", "no-store")
+		apiError(w, "trees unavailable — retry in a few seconds", http.StatusServiceUnavailable)
+		return
+	}
+	if pass != nil {
+		key += "/f=" + pass.canon + "/" + pass.key
+	}
 	gz, hit := neLayerLRU.get(key)
 	whole := true
 	if !hit {
@@ -646,6 +667,9 @@ func handleNELayerTreesGeoJSON(w http.ResponseWriter, r *http.Request) {
 				lat := int32(binary.LittleEndian.Uint32(rows[o+4:]))
 				h := rows[o+8]
 				if lon < bw || lon >= be || lat < bs || lat >= bn || h < qlo || h > qhi {
+					continue
+				}
+				if pass != nil && !pass.pass(float64(lon)/1e6, float64(lat)/1e6) {
 					continue
 				}
 				if n > 0 {

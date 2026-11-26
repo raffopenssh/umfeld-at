@@ -213,8 +213,8 @@ func handleNEOGC(w http.ResponseWriter, r *http.Request, rest string) bool {
 	base := publicBaseURL(r) + path
 	q := r.URL.Query()
 	keep := url.Values{}
-	for _, k := range []string{"key", "ht"} {
-		if v := q.Get(k); v != "" && len(v) <= 64 {
+	for _, k := range []string{"key", "ht", "f"} {
+		if v := q.Get(k); v != "" && len(v) <= map[bool]int{true: 512, false: 64}[k == "f"] {
 			keep.Set(k, v)
 		}
 	}
@@ -250,6 +250,7 @@ func handleNEOGC(w http.ResponseWriter, r *http.Request, rest string) bool {
 				"limit":  map[string]interface{}{"name": "limit", "in": "query", "schema": map[string]interface{}{"type": "integer", "minimum": 1, "maximum": neOGCLimitMax, "default": neOGCLimitDef}},
 				"offset": map[string]interface{}{"name": "offset", "in": "query", "schema": map[string]interface{}{"type": "integer", "minimum": 0, "default": 0}},
 				"ht":     map[string]interface{}{"name": "ht", "in": "query", "description": "height range in metres, lo..hi", "schema": map[string]string{"type": "string"}},
+				"f":      map[string]interface{}{"name": "f", "in": "query", "description": "cell filter (the grammar of /api/v1/ne/filter): trees whose cell passes", "schema": map[string]string{"type": "string"}},
 			}}})
 		w.Write(b)
 	case "conformance":
@@ -340,10 +341,20 @@ func handleNEOGCTreeItems(w http.ResponseWriter, r *http.Request, self string, k
 	if _, ok := neMVTGate(w, r, charge, box[0], box[1], box[2], box[3]); !ok {
 		return
 	}
-	hlo, hhi, hasHt := neLayerHtRange(q.Get("ht"))
+	hlo, hhi, hasHt := neLayerHtRange(neTreeHtOf(q.Get("ht"), q.Get("f")))
 	qlo, qhi := byte(0), byte(255)
 	if hasHt && !sample { // the sample shows the fields whatever the filter
 		qlo, qhi = byte(math.Min(255, math.Max(0, math.Ceil(hlo*4)))), byte(math.Min(255, math.Max(0, math.Floor(hhi*4))))
+	}
+	var pass *neTreePass
+	if !sample {
+		var perr error
+		if pass, perr = neTreePassFor(q.Get("f"), box[0], box[1], box[2], box[3]); perr != nil {
+			w.Header().Set("Retry-After", "5")
+			w.Header().Set("Cache-Control", "no-store")
+			apiError(w, "trees unavailable — retry in a few seconds", http.StatusServiceUnavailable)
+			return
+		}
 	}
 	type ij struct{ i, j int }
 	var ids []ij
@@ -394,6 +405,9 @@ scan:
 			lat := int32(binary.LittleEndian.Uint32(rows[o+4:]))
 			h := rows[o+8]
 			if lon < bw || lon > be || lat < bs || lat > bn || h < qlo || h > qhi {
+				continue
+			}
+			if pass != nil && !pass.pass(float64(lon)/1e6, float64(lat)/1e6) {
 				continue
 			}
 			if sv := rows[o+11]; sample && (sv>>4 == 0 || sv&15 == 0 || rows[o+9]|rows[o+10] == 0) {

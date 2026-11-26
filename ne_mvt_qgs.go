@@ -812,8 +812,16 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 			tn, tp = tn+w, tp+w
 			ht = "ht=" + ht
 		}
+		// as on the page: a tree shows where its cell passes the filter (ne_mvt_treefilt.go);
+		// a lone height term says the same as ht= alone
+		tfq := fq
+		if e := neFiltParse(sp.canon); fq == "" || (ht != "" && len(e.Groups) == 1 && e.K == 0) {
+			tfq = ""
+		} else {
+			tn, tp = tn+" · in the filter", tp+" · in the filter"
+		}
 		// on the map: the live tiles — the page's rings wherever the reader pans
-		t, l := neQGSTileLayer(neQGSTileOpt{id: "trees", name: tn, url: q(base+"/api/v1/ne/mvt/trees/{z}/{x}/{y}.pbf", ht), zmin: neLayerTreesZ, zmax: neLayerTreesZ,
+		t, l := neQGSTileLayer(neQGSTileOpt{id: "trees", name: tn, url: q(base+"/api/v1/ne/mvt/trees/{z}/{x}/{y}.pbf", ht, tfq), zmin: neLayerTreesZ, zmax: neLayerTreesZ,
 			rights: pr.ObsName + " (CC BY 4.0), BEV", renderer: neQGSTreeStyles(view.treesH), checked: view.trees, opacity: "0.9", minScale: 34000,
 			abstract: "Every tree found by LiDAR as a ring the size of its crown, coloured by height — as on the map. Live tiles: they load wherever the map goes. Visible below 1:34 000. Click a ring with the identify tool: h (m), crown_d (m), crown_m2, species, vitality."})
 		over = append(over, bm{tree: t, layer: l, id: "trees"})
@@ -821,7 +829,7 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 		// an OGC API Features source (ne_mvt_ogc.go) read by the canvas extent
 		// into QGIS's own cache, so "save features as…" writes what is in view
 		if sp.archive == "" {
-			t, l := neQGSOAPIF("treepts", tp+" (current view)", q(base+"/api/v1/ne/mvt/ogc", ht), "trees", pr.ObsName+" (CC BY 4.0), BEV", neQGSTreeGraduated(view.treesH), "0.9", neQGSTreePtsMinScale)
+			t, l := neQGSOAPIF("treepts", tp+" (current view)", q(base+"/api/v1/ne/mvt/ogc", ht, tfq), "trees", pr.ObsName+" (CC BY 4.0), BEV", neQGSTreeGraduated(view.treesH), "0.9", neQGSTreePtsMinScale)
 			vec = append(vec, bm{tree: t, layer: l, id: "treepts", grp: true})
 		}
 	}
@@ -892,7 +900,7 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 			// farther out (z < 12): the veil over everything (unfiltered hexagons), the matches over it as dots
 			// at their true share — on the page's order: pictures · ground · trees · veil · matches
 			ft, fl := neQGSTileLayer(neQGSTileOpt{id: "farmatch", name: "Cells in the filter · far zooms (dot = share that passes)", url: q(base+"/api/v1/ne/mvt/{z}/{x}/{y}.pbf", fq), zmin: neMVTMinZ, zmax: neLayerPicMinZ - 1,
-				rights: rights, renderer: neQGSFarStyles(view), opacity: "1", checked: true,
+				rights: rights, renderer: neQGSFarStyles(view), opacity: "1", checked: true, maxScale: 140000,
 				abstract: "Farther out than 1:140 000 a hexagon is an aggregate: a dot at its centre, its area the share of the hexagon that passes the filter (" + words + "; match_pct, n of n_all cells). Click one for the figures." + docs})
 			over = append(over, bm{tree: ft, layer: fl, id: "farmatch"})
 			vt, vl := neQGSTileLayer(neQGSTileOpt{id: "veilfar", name: "Filter veil · far zooms", url: q(base + "/api/v1/ne/mvt/{z}/{x}/{y}.pbf"), zmin: neMVTMinZ, zmax: neLayerPicMinZ - 1,
@@ -988,6 +996,9 @@ func neQGSProject(sp neQGSSpec) (xml string, lname string) {
 		clayer = fmt.Sprintf(`<maplayer type="vector-tile" hasScaleBasedVisibilityFlag="0" autoRefreshMode="Disabled" styleCategories="AllStyleCategories"><id>%s</id><datasource>%s</datasource><layername>%s</layername><srs>%s</srs>`, cid, src, html.EscapeString(cname), neQGSCRS3857) + meta +
 			`<provider>xyzvectortiles</provider><map-layer-style-manager current="default"><map-layer-style name="default"/></map-layer-style-manager><flags><Identifiable>1</Identifiable><Removable>1</Removable><Searchable>1</Searchable><Private>0</Private></flags><customproperties><Option/></customproperties>` +
 			neQGSTileStyles(view, pic) + fmt.Sprintf(`<blendMode>0</blendMode><layerOpacity>%.2f</layerOpacity></maplayer>`, cop)
+		if sp.canon != "" { // farther out the far-zooms layer answers: one identify result per click, not two
+			clayer = strings.Replace(clayer, `hasScaleBasedVisibilityFlag="0"`, `hasScaleBasedVisibilityFlag="1" maxScale="1" minScale="140000"`, 1)
+		}
 	} else {
 		// the archive next to the project, read by GDAL's PMTiles driver (its deepest zoom)
 		lname += " (offline archive)"
@@ -1059,7 +1070,7 @@ const neQGSVecGroup = "Vector data of this view (analysis)"
 // neQGSTileOpt / neQGSTileLayer — a vector-tile layer of ours other than the cells (the tree crowns).
 type neQGSTileOpt struct {
 	id, name, url, rights, renderer, abstract, opacity string
-	zmin, zmax, minScale                               int
+	zmin, zmax, minScale, maxScale                     int
 	checked                                            bool
 }
 
@@ -1073,6 +1084,8 @@ func neQGSTileLayer(o neQGSTileOpt) (tree, layer string) {
 	scale := `hasScaleBasedVisibilityFlag="0"`
 	if o.minScale > 0 {
 		scale = fmt.Sprintf(`hasScaleBasedVisibilityFlag="1" maxScale="1" minScale="%d"`, o.minScale)
+	} else if o.maxScale > 0 { // far layers: out of the way (and of the identify tool) close up
+		scale = fmt.Sprintf(`hasScaleBasedVisibilityFlag="1" maxScale="%d" minScale="100000000"`, o.maxScale)
 	}
 	tree = fmt.Sprintf(`<layer-tree-layer id="%s" name="%s" source="%s" providerKey="xyzvectortiles" checked="%s" expanded="0" legend_exp="" patch_size="-1,-1"><customproperties><Option/></customproperties></layer-tree-layer>`, id, html.EscapeString(o.name), src, chk)
 	layer = fmt.Sprintf(`<maplayer type="vector-tile" %s autoRefreshMode="Disabled" styleCategories="AllStyleCategories"><id>%s</id><datasource>%s</datasource><layername>%s</layername><srs>%s</srs><resourceMetadata><title>%s</title><abstract>%s</abstract><rights>%s</rights></resourceMetadata><provider>xyzvectortiles</provider><map-layer-style-manager current="default"><map-layer-style name="default"/></map-layer-style-manager><flags><Identifiable>1</Identifiable><Removable>1</Removable><Searchable>0</Searchable><Private>0</Private></flags><customproperties><Option/></customproperties>%s<blendMode>0</blendMode><layerOpacity>%s</layerOpacity></maplayer>`,
