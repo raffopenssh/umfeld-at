@@ -21,6 +21,8 @@ restart that refuses no connection) or the next deploy.
   acct noacct <name> [--undo]                an issued key that is no account (shared demo key)
   acct close <id>                            remove every key of the account from the env file
   acct unlink <id>                           the peer forgets the account's link (after close + deploy)
+  acct adjust <id> --day D --reason "…" [--exports -N --kind table] [--bytes -N] [--reports -N] [--limited -N]
+                                             correct one day row of the ledger (test traffic); logged in adjust.jsonl
   acct hash-env                              replace plain export keys in the env file by their hashes
   acct doctor                                is everything set up the way the docs say?
 
@@ -163,25 +165,32 @@ class API:
         self.prefix = env.get("UMFELD_PRIVATE_PREFIX") or "/k"
         self.token = (env.get("UMFELD_TOKEN").split(",") or [""])[0].strip()
 
-    def call(self, path, query=None, method="GET"):
+    def call(self, path, query=None, method="GET", body=None):
         if not self.token:
             die("UMFELD_TOKEN is not set in the env file — the private tier is closed")
         q = {k: v for k, v in (query or {}).items() if v not in (None, "", 0)}
         url = self.base + self.prefix + "/api/v1/accounts" + path + ("?" + urllib.parse.urlencode(q) if q else "")
-        req = urllib.request.Request(url, method=method, headers={"Authorization": "Bearer " + self.token, "User-Agent": "umfeld-at/acct-cli"})
+        req = urllib.request.Request(url, method=method, data=json.dumps(body).encode() if body is not None else None,
+                                     headers={"Authorization": "Bearer " + self.token, "User-Agent": "umfeld-at/acct-cli", "Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=40) as r:
                 return r.read().decode()
         except urllib.error.HTTPError as e:
             body = e.read().decode(errors="replace")[:300]
+            if e.code == 400:
+                try:
+                    body = json.loads(body).get("error", body)
+                except ValueError:
+                    pass
+                die("refused: %s" % body)
             if e.code == 404 and path:
                 die("no such account %s (acct list) — or the service has not been deployed since it was created" % path.strip("/"))
             die("service answered %d: %s" % (e.code, body))
         except (urllib.error.URLError, OSError) as e:
             die("service not reachable at %s (%s)" % (self.base, getattr(e, "reason", e)))
 
-    def json(self, path, query=None, method="GET"):
-        return json.loads(self.call(path, query, method))
+    def json(self, path, query=None, method="GET", body=None):
+        return json.loads(self.call(path, query, method, body))
 
 
 def period(a):
@@ -431,6 +440,17 @@ def cmd_unlink(env, api, a):
     print(json.dumps(d.get("unlinked"), indent=1) if a.json else "unlinked at the peer: %s" % json.dumps(d.get("unlinked")))
 
 
+def cmd_adjust(env, api, a):
+    day = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d") if a.day == "today" else a.day
+    body = {"day": day, "exports": a.exports, "kind": a.kind, "bytes": a.bytes, "reports": a.reports, "limited": a.limited, "reason": a.reason}
+    d = api.json("/" + need_id(a.id), method="POST", body={k: v for k, v in body.items() if v})
+    if a.json:
+        return print(json.dumps(d, indent=1))
+    print("%s %s" % (d["account"], d["day"]))
+    print("  before  " + json.dumps(d["before"]))
+    print("  after   " + json.dumps(d["after"]) + ("   (row removed)" if not any(v for v in d["after"].values()) else ""))
+
+
 def cmd_hash_env(env, api, a):
     ks = load_export(env)
     plain = [k for k in ks if k.plain]
@@ -531,6 +551,9 @@ def main():
     cmd("noacct", cmd_noacct, (["name"], {}), (["--undo"], {"action": "store_true"}), edit=True, js=False)
     cmd("close", cmd_close, ID, YES, edit=True, js=False)
     cmd("unlink", cmd_unlink, ID, YES, FORCE)
+    INT = lambda n: (["--" + n], {"type": int, "default": 0, "metavar": "±N"})
+    cmd("adjust", cmd_adjust, ID, (["--day"], {"required": True, "help": "YYYY-MM-DD | today (UTC)"}), (["--reason"], {"required": True}), INT("exports"),
+        (["--kind"], {"choices": ["table", "tiles", "archive", "project", "features", "layers", "other"]}), INT("bytes"), INT("reports"), INT("limited"))
     cmd("hash-env", cmd_hash_env, edit=True, js=False)
     cmd("doctor", cmd_doctor, js=False)
     a = ap.parse_args()

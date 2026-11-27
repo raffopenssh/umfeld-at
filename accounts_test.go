@@ -8,10 +8,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // The three calls of the peer's "Accounts" contract against a mock: the linked
@@ -281,6 +283,36 @@ func TestAccountsPeerContract(t *testing.T) {
 	}
 	if get("GET", "/api/v1/accounts/org?format=txt", "contrib").Code != 404 || get("GET", "/api/v1/accounts?format=csv", "contrib").Code != 404 {
 		t.Fatal("contributor tier reached the statement / sheet")
+	}
+
+	// a correction takes test traffic out of a day row: reasoned, never below zero, on the audit trail
+	adj := func(body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/api/v1/accounts/org", strings.NewReader(body))
+		r.Header.Set(tierHeader, "private")
+		w := httptest.NewRecorder()
+		handleV1Accounts(w, r)
+		return w
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+	for _, bad := range []string{`{"day":"` + today + `","reports":-2}`, `{"day":"` + today + `","reports":-99,"reason":"test"}`, `{"day":"` + today + `","exports":-1,"reason":"test"}`, `{"day":"1999-01-01","reports":-1,"reason":"test"}`, `{"day":"` + today + `","exports":-1,"kind":"table","reason":"test"}`} {
+		if w := adj(bad); w.Code != 400 {
+			t.Fatalf("adjust %s → %d %s", bad, w.Code, w.Body.String())
+		}
+	}
+	if w := adj(`{"day":"` + today + `","reports":-2,"exports":-1,"kind":"tiles","bytes":-500,"reason":"test traffic"}`); w.Code != 200 {
+		t.Fatalf("adjust: %d %s", w.Code, w.Body.String())
+	}
+	if rows := acctLedgerRows("org", 0, 0, false); len(rows) != 1 || rows[0].Reports != 3 || rows[0].Exports != 0 || rows[0].Bytes != 0 || len(rows[0].Kinds) != 0 {
+		t.Fatalf("after adjust: %+v", rows)
+	}
+	acctLedger.mu.Lock()
+	trail, _ := os.ReadFile(filepath.Join(filepath.Dir(acctLedger.path), "adjust.jsonl"))
+	acctLedger.mu.Unlock()
+	if strings.Count(string(trail), "\n") != 1 || !strings.Contains(string(trail), `"reason":"test traffic"`) || !strings.Contains(string(trail), `"before"`) {
+		t.Fatalf("audit trail: %s", trail)
+	}
+	if w := adj(`{"day":"` + today + `","reports":-3,"reason":"rest"}`); w.Code != 200 || len(acctLedgerRows("org", 0, 0, false)) != 0 {
+		t.Fatalf("emptied row must go: %d %+v", w.Code, acctLedgerRows("org", 0, 0, false))
 	}
 
 	// the env file holds hashes: sha256:<hex>:name:… loads like a plain entry, flags in any place

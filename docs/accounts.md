@@ -38,6 +38,7 @@ are made here and sent.
     scripts/acct mail-key avl 2 --deploy                        # two more personal mail keys
     scripts/acct noacct demo --deploy                           # a shared key: budget only, no account
     scripts/acct close avl --yes --deploy && scripts/acct unlink avl --yes   # account closed, link erased at the peer
+    scripts/acct adjust avl --day today --reports -2 --reason "relay test"   # take test traffic out of a day row
     scripts/acct doctor                                         # secret, file mode, plain keys, stale copies, service in step, peer linking
 
 `--json` on `new`, `links`, `list`, `keys`, `rotate`, `mail-key` for scripting.
@@ -115,6 +116,12 @@ Behind it (private tier): `GET $P/api/v1/accounts[/{id}]` with `since=&until=`
   report under a live key links again — the tool refuses the other order). Take
   the last statement before the unlink: the peer's counts go with it.
 - Days are UTC.
+- Corrections: `acct adjust <id> --day D --reason "…"` with deltas (`--exports
+  -1 --kind table --bytes -5655 --reports -2 --limited -N`). Never below zero, an
+  emptied row disappears, and every correction is appended to
+  `data/accounts/adjust.jsonl` (before → after, reason) — the ledger is never
+  edited by hand. The peer's counts cannot be corrected per report: only
+  `unlink` resets them, for the whole account.
 
 `data/accounts/` is billing state: keep it, back it up, never commit it.
 

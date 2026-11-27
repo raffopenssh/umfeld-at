@@ -32,6 +32,7 @@
 //	GET    $P/api/v1/accounts                       every account: id, pseudonym, keys by NAME, ledger per month
 //	GET    $P/api/v1/accounts/{id}[?since=&until=]  + the peer's counts (unix seconds, as the peer takes them)
 //	GET    $P/api/v1/accounts/{id}?members=N        + activation links for members 1…N (member keys, below)
+//	POST   $P/api/v1/accounts/{id}                  correct one day row (deltas + reason; audit trail adjust.jsonl)
 //	GET    $P/api/v1/accounts[/{id}]?format=csv[&by=day]   the ledger as a sheet (default per month)
 //	GET    $P/api/v1/accounts/{id}?format=txt[&by=day]     the usage statement a holder is sent
 //
@@ -399,6 +400,102 @@ func acctCount(id, kind string, exports, bytes, reports int64) {
 	if kick {
 		go acctLedgerWrite()
 	}
+}
+
+// acctAdjustment — a correction of one day row (POST $P/api/v1/accounts/{id},
+// scripts/acct adjust): deltas, negative to take test traffic out. A billing
+// ledger is never edited silently: every correction needs a reason and is
+// appended to adjust.jsonl beside the ledger (before → after), and logged.
+type acctAdjustment struct {
+	Day     string `json:"day"` // YYYY-MM-DD (UTC)
+	Exports int64  `json:"exports,omitempty"`
+	Kind    string `json:"kind,omitempty"` // the product the exports delta belongs to
+	Bytes   int64  `json:"bytes,omitempty"`
+	Reports int64  `json:"reports,omitempty"`
+	Limited int64  `json:"limited,omitempty"`
+	Reason  string `json:"reason"`
+}
+
+func acctAdjust(id string, d acctAdjustment) (before, after acctDay, err error) {
+	if _, e := time.Parse("2006-01-02", d.Day); e != nil {
+		return before, after, errors.New("day must be YYYY-MM-DD")
+	}
+	if r := strings.TrimSpace(d.Reason); len(r) < 3 || len(r) > 200 {
+		return before, after, errors.New("reason: 3–200 chars")
+	}
+	if d.Exports != 0 {
+		ok := false
+		for _, k := range acctKinds {
+			ok = ok || k == d.Kind
+		}
+		if !ok {
+			return before, after, errors.New("kind must be one of " + strings.Join(acctKinds, ", ") + " when exports change")
+		}
+	}
+	if d.Exports == 0 && d.Bytes == 0 && d.Reports == 0 && d.Limited == 0 {
+		return before, after, errors.New("nothing to adjust")
+	}
+	l := &acctLedger
+	l.mu.Lock()
+	acctLedgerLoadLocked()
+	e := l.days[d.Day][id]
+	if e == nil {
+		l.mu.Unlock()
+		return before, after, errors.New("no row for " + id + " on " + d.Day)
+	}
+	cp := func(x *acctDay) acctDay {
+		c := *x
+		c.Kinds = map[string]int64{}
+		for k, v := range x.Kinds {
+			c.Kinds[k] = v
+		}
+		return c
+	}
+	before = cp(e)
+	n := cp(e)
+	n.Exports += d.Exports
+	n.Bytes += d.Bytes
+	n.Reports += d.Reports
+	n.Limited += d.Limited
+	if d.Exports != 0 {
+		n.Kinds[d.Kind] += d.Exports
+	}
+	if n.Exports < 0 || n.Bytes < 0 || n.Reports < 0 || n.Limited < 0 || n.Kinds[d.Kind] < 0 {
+		l.mu.Unlock()
+		return before, before, errors.New("the row would go below zero")
+	}
+	for k, v := range n.Kinds {
+		if v == 0 {
+			delete(n.Kinds, k)
+		}
+	}
+	after = cp(&n)
+	if len(n.Kinds) == 0 {
+		n.Kinds = nil
+	}
+	if n.Exports == 0 && n.Bytes == 0 && n.Reports == 0 && n.Limited == 0 {
+		delete(l.days[d.Day], id)
+		if len(l.days[d.Day]) == 0 {
+			delete(l.days, d.Day)
+		}
+	} else {
+		*e = n
+	}
+	l.dirty = true
+	path := l.path
+	l.mu.Unlock()
+	log.Printf("accounts: ledger row %s %s adjusted (%s): %+v → %+v", id, d.Day, d.Reason, before, after)
+	if path != "" {
+		rec, _ := json.Marshal(map[string]interface{}{"at": time.Now().UTC().Format(time.RFC3339), "account": id, "adjust": d, "before": before, "after": after})
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err == nil {
+			if f, err := os.OpenFile(filepath.Join(filepath.Dir(path), "adjust.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
+				f.Write(append(rec, '\n'))
+				f.Close()
+			}
+		}
+		acctLedgerFlush()
+	}
+	return before, after, nil
 }
 
 // acctLedgerFlush — write now if anything changed (shutdown).
@@ -816,6 +913,20 @@ func handleV1Accounts(w http.ResponseWriter, r *http.Request) {
 		if x.ID == id {
 			a = x
 		}
+	}
+	if r.Method == http.MethodPost { // a ledger correction (acctAdjust); also for an account whose keys are gone
+		var d acctAdjustment
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&d) != nil {
+			apiError(w, "body: {day, exports, kind, bytes, reports, limited, reason}", http.StatusBadRequest)
+			return
+		}
+		before, after, err := acctAdjust(id, d)
+		if err != nil {
+			apiError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"account": id, "day": d.Day, "before": before, "after": after})
+		return
 	}
 	if a == nil && r.Method == http.MethodDelete && len(id) <= 64 && !acctNone(id) {
 		a = &acctRow{ID: id, Account: acctPseudonym(id)} // a key already taken out of the env file can still be forgotten at the peer
