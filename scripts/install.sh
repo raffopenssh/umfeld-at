@@ -56,11 +56,17 @@ UMFELD_PEER_OBS_WEB=
 UMFELD_PEER_OBS_REPORTER_KEY=
 # trees by email (docs/tree-mail.md): key:name[:edits per day],… — empty = off
 TREE_MAIL_KEYS=
+# issued export keys key:name:rps:burst:daily,… and the secret that keys account pseudonyms
+# (docs/accounts.md) — ACCT_SECRET is filled in below; NEVER change it afterwards
+EXPORT_KEYS=
+ACCT_SECRET=
+ACCT_REVOKED=
 UMFELD_PEER_SUB_NAME=
 UMFELD_PEER_SUB_API=
 UMFELD_PEER_SUB_TOKEN=
 UMFELD_PEER_MAP_NAME=
 TPL
+  sudo sed -i "s|^ACCT_SECRET=$|ACCT_SECRET=$(LC_ALL=C tr -dc 'a-zA-Z0-9' </dev/urandom | head -c48)|" "$ENV_FILE"
   echo "  wrote template $ENV_FILE — edit it, then: sudo systemctl restart umfeld-at"
 else
   echo "  $ENV_FILE exists, left untouched"

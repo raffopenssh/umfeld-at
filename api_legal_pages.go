@@ -8,7 +8,7 @@
 // it in step with api.go (request log: no IP), api_ne_public.go (IP only in an
 // in-memory rate-limit bucket), api_feedback.go (free-text feedback is stored
 // and published; glyph-trace records — ?trace, ?run and ?deep — deleted after 24 h), ne_glyph_warm.go (shared
-// links — link icon clicked: hash without q=/pn=, tile URLs, device class, copy/open counts, day — no IP/UA), ne_glyph.go (localStorage for view prefs, no cookies; locate = Geolocation in the browser only, never sent), and
+// links — link icon clicked: hash without q=/pn=, tile URLs, device class, copy/open counts, day — no IP/UA), accounts.go (issued keys: day counters per account, a pseudonym to the observed-layer peer with keyed tree reports), ne_glyph.go (localStorage for view prefs, no cookies; locate = Geolocation in the browser only, never sent), and
 // the landing page (no third-party fonts/CSS/JS — the only cross-origin
 // traffic is the glyph's live data fetches to {OBS_NAME}, §3/§4
 // below). TestNoExternalAssets (api_no_external_assets_test.go) enforces
@@ -144,6 +144,18 @@ selben Gesprächsfaden) versendet ist, in der Regel nach Sekunden, spätestens n
 Anmeldung sowie Tageszähler (Anzahl Meldungen und Antworten). Mit dem Betreff <code>stop</code> wird auch dieser Eintrag gelöscht.
 Nachrichten unbekannter Absender werden ungelesen verworfen und nicht beantwortet. Rechtsgrundlage: Art. 6 Abs. 1 lit. a DSGVO
 (Einwilligung durch Anmeldung, jederzeit widerrufbar).</p>
+<p><strong>Schlüsselinhaber (Konto):</strong> Die Nutzung ist ohne Schlüssel und anonym möglich. Wer von uns einen Schlüssel erhalten
+hat (im Export-Menü der Karte eingetragen oder über einen Aktivierungslink übernommen – der Schlüssel steht dabei im
+Adressteil nach <code>#</code>, der an keinen Server gesendet wird – und nur im <code>localStorage</code> Ihres Browsers
+gespeichert, <code>ne.key</code>; Leeren des Feldes entfernt ihn; oder als E-Mail-Schlüssel), nutzt den
+Dienst unter dem Konto dieses Schlüssels: Wir speichern je Konto und Tag Zählwerte (Anzahl und Art der Exporte, übertragene
+Datenmenge, Anzahl weitergereichter Baummeldungen) bis zu 800 Tage – keine IP-Adresse, keine Inhalte, keine abgefragten Orte. Ist im
+Browser ein Schlüssel eingetragen, sendet die Karte ihn mit Baummeldungen an diesen Server; an {OBS_NAME} geht dann zusätzlich
+zur Kennung <code>reporter</code> nur ein gleichbleibendes <strong>Pseudonym des Kontos</strong> (HMAC-SHA-256, weder Schlüssel
+noch Name noch Adresse), von dem dort ein gesalzener Hash gespeichert wird; frühere Meldungen derselben Kennung werden dabei
+demselben Konto zugerechnet. Abrufbar sind darüber ausschließlich Zählwerte. Zweck: Abrechnung gegenüber dem Schlüsselinhaber;
+Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO (Vertrag) bzw. lit. f (Abrechnung). Auf Anfrage oder bei Rückgabe des Schlüssels wird
+die Zuordnung gelöscht; die Meldungen selbst bleiben anonym bestehen.</p>
 <p>Wenn Sie in der Karte einen Baum melden, benennen, vermessen oder einen fehlenden Baum ergänzen (Baumkarte; langes Drücken auf die
 Karte), erzeugt der Browser einmalig eine zufällige Kennung (<code>localStorage</code>-Schlüssel <code>neg-rep</code>) und sendet sie
 als <code>reporter</code> mit der Meldung. Die Meldung (Koordinaten des Baums, Art, Höhe, Durchmesser, Messzeitpunkt, optional eine Notiz)
@@ -177,8 +189,9 @@ Weitere Informationen: <a href="https://exe.dev/privacy">exe.dev Privacy Notice<
 <h2>6. Ihre Rechte</h2>
 <ul><li>Auskunft (Art. 15 DSGVO)</li><li>Berichtigung (Art. 16)</li><li>Löschung (Art. 17)</li><li>Einschränkung der Verarbeitung (Art. 18)</li>
 <li>Datenübertragbarkeit (Art. 20)</li><li>Widerspruch (Art. 21)</li></ul>
-<p>Zur Ausübung dieser Rechte genügt eine E-Mail an die oben genannte Adresse. Da keine IP-Adressen und keine Konten gespeichert werden,
-können Zugriffe in der Regel keiner Person zugeordnet werden; betroffen sind praktisch nur Feedback-Einträge.</p>
+<p>Zur Ausübung dieser Rechte genügt eine E-Mail an die oben genannte Adresse. Da keine IP-Adressen und keine Benutzerkonten gespeichert werden,
+können Zugriffe in der Regel keiner Person zugeordnet werden; betroffen sind praktisch nur Feedback-Einträge und – für Inhaber eines
+von uns vergebenen Schlüssels – die Zählwerte des Kontos (Punkt 3).</p>
 <h2>7. Beschwerderecht</h2>
 <p>Österreichische Datenschutzbehörde, Barichgasse 40–42, 1030 Wien, <a href="https://www.dsb.gv.at/">www.dsb.gv.at</a>.</p>
 <h2>8. Open Source</h2>

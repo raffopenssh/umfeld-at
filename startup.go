@@ -135,6 +135,7 @@ func startupServe(srv *http.Server, ln net.Listener, afterReady func()) error {
 		if err != nil {
 			_ = srv.Close()
 		}
+		acctLedgerFlush() // accounts.go: the last minute of the day ledger
 		log.Printf("🛑 %v: drained in %s (%v)", s, time.Since(t).Round(time.Millisecond), err)
 		if errors.Is(err, context.DeadlineExceeded) {
 			return nil // drain budget spent: requests cut, still a clean stop

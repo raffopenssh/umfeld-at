@@ -12,7 +12,8 @@
 // counter, enforced unless EXPORT_GATE_ENFORCE=0 (loopback is only counted). Answers carry the IETF RateLimit headers; 429 + Retry-After.
 //
 // Monitoring: per identity {requests, limited, bytes, last, first} (bounded
-// map, ≤ 2 000 identities, idle entries swept) → the debug inflight page
+// map, ≤ 2 000 identities, idle entries swept; an issued key's requests and
+// bytes are also kept per day on disk — accounts.go) → the debug inflight page
 // line `export_gate`; apiMiddleware's access log line already carries the
 // path. Keys never appear in logs or answers, only names.
 package main
@@ -119,6 +120,9 @@ func exportIdentity(r *http.Request) (string, *exportTier) {
 				return "key:" + t.name, t
 			}
 		}
+		if t := acctMemberTier(key); t != nil { // accounts.go: a person's key, derived from the account
+			return "key:" + t.name, t
+		}
 		if i := tokenIndex(key); i >= 0 {
 			t := exportNamedTok
 			t.name = tokenName(i)
@@ -178,6 +182,9 @@ func exportGate(w http.ResponseWriter, r *http.Request) (string, bool) {
 	w.Header().Set("RateLimit-Policy", strconv.Itoa(int(tier.burst))+";w=1, "+strconv.FormatInt(tier.daily, 10)+";w=86400")
 	if e.tokens < 1 || remainDay <= 0 {
 		e.limited++
+		if tier.key != nil {
+			acctCount(tier.name, "limited", 0, 0, 0)
+		}
 		if !exportEnforce || id == "ip:local" { // counted and advertised only: gate switched off, or the operator on loopback
 			e.tokens = math.Max(e.tokens, 0)
 			e.dayN++
@@ -199,6 +206,9 @@ func exportGate(w http.ResponseWriter, r *http.Request) (string, bool) {
 	}
 	e.tokens--
 	e.dayN++
+	if tier.key != nil {
+		acctCount(tier.name, acctKind(r.URL.Path), 1, 0, 0) // accounts.go: issued keys only
+	}
 	w.Header().Set("RateLimit-Limit", strconv.Itoa(int(tier.burst)))
 	w.Header().Set("RateLimit-Remaining", strconv.Itoa(int(e.tokens)))
 	w.Header().Set("RateLimit-Reset", strconv.Itoa(int(math.Ceil((tier.burst-e.tokens)/tier.rps))))
@@ -209,19 +219,26 @@ func exportGate(w http.ResponseWriter, r *http.Request) (string, bool) {
 // (tiles, archives, projects — their own gate is ne_mvt_gate.go) still show
 // up here: an unseen identity gets a row so a key's usage is one list.
 func exportAccount(id string, n int) {
-	exportAccountTier(id, nil, n)
+	exportAccountTier(id, nil, n, "")
 }
 
 // exportAccountFor — exportAccount with the identity resolved from the
 // request, so a fresh key's first tile/archive/project creates its row.
 func exportAccountFor(r *http.Request, n int) string {
 	id, tier := exportIdentity(r)
-	exportAccountTier(id, tier, n)
+	exportAccountTier(id, tier, n, acctKind(r.URL.Path))
 	return id
 }
 
-func exportAccountTier(id string, tier *exportTier, n int) {
+func exportAccountTier(id string, tier *exportTier, n int, kind string) {
 	now := time.Now()
+	if strings.HasPrefix(id, "key:") { // accounts.go: the day ledger of an issued key
+		var req int64
+		if tier != nil {
+			req = 1
+		}
+		acctCount(id[4:], kind, req, int64(n), 0)
+	}
 	exportGateMu.Lock()
 	e := exportIdents[id]
 	if e == nil {

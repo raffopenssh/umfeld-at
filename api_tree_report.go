@@ -7,6 +7,9 @@
 // (UMFELD_PEER_OBS_REPORTER_KEY → X-Reporter-Key), so the key never reaches a
 // browser and the reports are attributed to this service. Nothing is stored
 // here: no tree, no report, no reporter id (docs/ne-glyph.md §Tree reports).
+// A request that carries an issued export key (X-Export-Key) is relayed with
+// the account's pseudonym (X-Reporter-Account, accounts.go) and counted in
+// that account's day ledger; without one nothing changes.
 //
 // Bounds: body ≤ 32 KB, ≤ 50 items, tree layer only, string fields ≤ 64 chars
 // (species ≤ 60 is the peer's own limit; note ≤ its limits.note_chars, here ≤ 4500), one global token
@@ -173,6 +176,7 @@ func treeReportClean(m map[string]interface{}) string {
 		m["claim"] = "tree"
 	}
 	delete(m, "reporter_key")
+	delete(m, "account") // the peer reads it from the body too: an account is only ever what OUR relay derives (accounts.go)
 	m["source"] = treeReportSource
 	for k, v := range m {
 		s, ok := v.(string)
@@ -230,6 +234,7 @@ func handleV1TreeReport(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		delete(m, "reporter_key")
+		delete(m, "account")
 	} else if why := treeReportClean(m); why != "" {
 		apiError(w, why, http.StatusBadRequest)
 		return
@@ -278,7 +283,8 @@ func handleV1TreeReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	status, out, ra, err := treeReportDo(ctx, body, "tree-report")
+	// a reader who typed an issued key into the export menu reports for that account (accounts.go)
+	status, out, ra, err := treeReportDo(acctCtx(ctx, acctIDRequest(r)), body, "tree-report")
 	if idem != "" && r.Context().Err() != nil {
 		treeIdem.mu.Lock()
 		treeIdem.detached++
@@ -327,12 +333,23 @@ func treeReportDo(ctx context.Context, body []byte, component string) (status in
 	if k := treeReportKey(); k != "" {
 		req.Header.Set("X-Reporter-Key", k)
 	}
+	acct := acctFromCtx(ctx)
+	pseud := acctPseudonym(acct)
+	if pseud != "" {
+		req.Header.Set("X-Reporter-Account", pseud) // accounts.go: a constant pseudonym, never a key or an address
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return 0, nil, "", err
 	}
 	defer resp.Body.Close()
 	out, _ = io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if pseud != "" {
+		acctAnswer(acct, resp.StatusCode, out)
+		if resp.StatusCode < 300 {
+			acctCount(acct, "", 0, 0, 1)
+		}
+	}
 	treeReportBucket.mu.Lock()
 	treeReportBucket.sent++
 	treeReportBucket.status[resp.StatusCode]++

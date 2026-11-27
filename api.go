@@ -69,6 +69,9 @@ func RegisterAPIv1(mux *http.ServeMux) {
 
 	// Tree reports relayed to the observed-layer peer (api_tree_report.go)
 	v1("/api/v1/trees/report", handleV1TreeReport)
+	// Accounts of issued keys — private tier only (accounts.go)
+	v1("/api/v1/accounts", handleV1Accounts)
+	v1("/api/v1/accounts/", handleV1Accounts)
 
 	// Feedback
 	v1("/api/v1/feedback", handleV1Feedback)
@@ -149,7 +152,7 @@ func apiMiddleware(next http.HandlerFunc) http.Handler {
 		// peer= names the caller by tier + token slot (api_tiers.go
 		// requestPeerTag) so "who still runs the district loop?" is one grep.
 		log.Printf("📨 %s %s → %d (%s) [%s] %dB %s ua=%s peer=%s",
-			r.Method, r.URL.String(), lrw.statusCode,
+			r.Method, acctURL(r.URL), lrw.statusCode,
 			format, time.Since(start).Round(time.Microsecond),
 			lrw.bytes, gz, uaFamily(r.Header.Get("User-Agent")), requestPeerTag(r))
 	})

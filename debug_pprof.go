@@ -100,6 +100,7 @@ func RegisterDebugAPI(mux *http.ServeMux) {
 			"ne_mvt":           NEMVTStats(),          // ne_mvt.go: cell tiles LRU, ids LRU, build queue, archive jobs
 			"ne_mvt_gate":      NEMVTGateStats(),      // ne_mvt_gate.go: per-name tiles/km² budgets
 			"public_gate":      PublicGateStats(),     // public_gate.go: per-client requests/bytes/compute budgets, top talkers
+			"accounts":         AccountsStats(),       // accounts.go: day ledger (≤ 800 days × configured keys), peer counts memo (≤ 256, 1 h)
 			"export_gate":      ExportGateStats(),     // export_gate.go: identities, budgets, top callers
 			"ne_als_gate":      NEAlsGateStats(),      // ne_als_gate.go: re-flown res-10 cells from the lidar peer (one snapshot)
 			"ne_glyph_dif":     NEGlyphDifStats(),     // ne_glyph_dif.go: lidar epoch per KG from the lidar peer (one table, 24 h)

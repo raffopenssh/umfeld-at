@@ -51,7 +51,9 @@ function outbox(io){var q=[],cur=null,tries=0,wait=0,T=null,ctx={};
 const neGlyphOutboxJS = neGlyphOutboxCoreJS + `
 /* ── tree outbox (ne_glyph_outbox.go) ── */
 var OB={hint:0,sent:0,sT:0};
-function obSend(it){return fetch(TRP,{method:'POST',headers:{'Content-Type':'application/json','X-Idem':it.id},body:JSON.stringify(it.b)}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return{s:r.status,j:j||{},ra:+r.headers.get('Retry-After')||0}})})}
+/* an issued key in the export menu (ne.key, localStorage) rides along to OUR relay only: the report is then counted for that key's account (accounts.go); no key = anonymous as ever */
+function obHdr(it){var h={'Content-Type':'application/json','X-Idem':it.id},k=typeof xKey==='function'?xKey():'';if(k&&/^[\x21-\x7e]{8,128}$/.test(k))h['X-Export-Key']=k;return h}
+function obSend(it){return fetch(TRP,{method:'POST',headers:obHdr(it),body:JSON.stringify(it.b)}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return{s:r.status,j:j||{},ra:+r.headers.get('Retry-After')||0}})})}
 function obParked(it){apSched();var now=Date.now();if(now-OB.hint<8000)return;OB.hint=now;var n=OBX.list().length;showHint('saved on this device \u00b7 '+(n>1?n+' reports wait':'1 report waits')+(navigator.onLine===false?' for a signal':' \u00b7 sending in the background'),3600)}
 function obFirst(b){return b&&b.reports?b.reports[0]||{}:b||{}}
 /* a report sent by a page that is gone (reload, the browser killed the tab): no card to answer — the reader's marks are kept, the tile is read again, one line says so */

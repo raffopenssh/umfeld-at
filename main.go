@@ -174,7 +174,7 @@ func main() {
 	// fair-use gate for anonymous clients (public_gate.go): requests, wire bytes
 	// and handler time per client address.
 	handler := tierMiddleware(egressMiddleware(publicGateMiddleware(gzipMiddleware(cacheMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		done := TrackRequest(r.Method, r.URL.String())
+		done := TrackRequest(r.Method, acctURL(r.URL))
 		defer done()
 		mux.ServeHTTP(w, r)
 	}))))))
@@ -209,6 +209,7 @@ func startBackground() {
 	go neFidxBlocksLoop()                                // the observed-layer peer's block manifest: a rebuilt 0.1° block moves its 16 bins' state + refresh builds (ne_glyph_fidx_blocks.go)
 	go neFidxPendLoop()                                  // blocks the peer serves in their previous generation while it rebuilds them: ask again after Retry-After (ne_glyph_fidx_blocks.go)
 	go neWarmLoop()                                      // opened share links replayed 30 min after start (ne_glyph_warm.go)
+	acctLedgerEnable()                                   // accounts.go: day ledger of issued keys on disk (read lazily, written ≤ 1/min)
 	go treeMailLoop()                                    // trees by email: one stat of the mailbox per 20 s, off unless TREE_MAIL_KEYS is set (tree_mail.go)
 	go feedbackPurgeLoop()                               // glyph-trace records live 24 h (api_feedback.go)
 	go AddressesIndexWarm()                              // addresses_index.go: street index for the find box (BEV streets + OSM-only road names)

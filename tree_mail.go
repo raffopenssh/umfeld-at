@@ -92,6 +92,7 @@ type tmKey struct {
 	daily  int
 	domain string // "@x.example": only addresses there may subscribe ("" = any)
 	addrs  int    // addresses the key binds at a time (a personal key: 1)
+	acct   string // acct=<id>: the account (export key name) this key reports for; "" = an account of its own (accounts.go)
 }
 
 type tmConfig struct {
@@ -137,12 +138,14 @@ func tmConfRead() *tmConfig {
 			log.Printf("tree-mail: key %q ignored (shorter than %d letters/digits)", k.name, tmKeyMinLen)
 			continue
 		}
-		for _, f := range p[2:] { // in any order: 500 (edits a day) · @x.example · addr=1
+		for _, f := range p[2:] { // in any order: 500 (edits a day) · @x.example · addr=1 · acct=<export key name>
 			f = strings.ToLower(strings.TrimSpace(f))
 			if n, err := strconv.Atoi(f); err == nil && n > 0 {
 				k.daily = n
 			} else if strings.HasPrefix(f, "@") && len(f) > 3 {
 				k.domain = f
+			} else if a := strings.TrimPrefix(f, "acct="); a != f && a != "" && len(a) <= 32 {
+				k.acct = a
 			} else if n, err := strconv.Atoi(strings.TrimPrefix(f, "addr=")); err == nil && n > 0 && n <= tmAddrsPerKey {
 				k.addrs = n
 			} else if f != "" {
@@ -904,7 +907,7 @@ func tmHandle(raw []byte) (retry bool) {
 	if len(items) == 0 {
 		return false
 	}
-	res := tmRelay(context.Background(), items, undo)
+	res := tmRelay(acctCtx(context.Background(), acctIDMail(*key)), items, undo)
 	var bad strings.Builder
 	written, known, failed := 0, 0, 0
 	for i, r := range res {

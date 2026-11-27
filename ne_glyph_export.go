@@ -14,6 +14,10 @@
 //	                                          "view too big — zoom in" (xArchMB estimate).
 //	…/ne/stats/unit?share=#…&format=csv&key=[your key]   key optional, localStorage only.
 //
+// The key gets there by typing it into that field or by opening an activation
+// link …/#key=<key> (xTake; accounts.go §member keys). With a key set, tree
+// reports carry it to our relay (obHdr, ne_glyph_outbox.go).
+//
 // Nothing in the menu is a fetch: links only; the export endpoint counts.
 // Docs: docs/ne-glyph.md row *EXPORT*, docs/stats-envelope.md, docs/qgis-layer.md.
 package main
@@ -37,8 +41,10 @@ const neGlyphExportJS = `
 /* ── export menu (ne_glyph_export.go): links only, same hash as the share link; QGIS tile URL + an archive of the current view */
 var tKX=tools.querySelector('.gt-kx'),tXM=tools.querySelector('.gt-xm'),XK='ne.key',XKM2=1500;/* XKM2 = the server's cap for a z 9–14 archive (ne_mvt_jobs.go nePMTMaxKm2); beyond it the menu offers the z ≤ 11 overview of the view */
 function unitHash(){var h=curHash().replace(/^#/,'');if(!h)return '';var u='',f='',t=h.split(';');for(var i=0;i<t.length;i++){if(!u&&/^(kg|h3|adm|pt)=/.test(t[i]))u=t[i];else if(/^kg=/.test(u)&&/^adm=/.test(t[i]))u+=';'+t[i];/* a combined selection: kg= and adm= lists side by side — the server answers with ONE row, their union (every cell once) */else if(/^f=/.test(t[i])&&!/^f=off:/i.test(t[i]))f=t[i]}return u?(f?u+';'+f:u):''}
+/* activation link …/#key=<key>: the fragment never reaches a server. Kept in this browser (the key field below), taken out of the address bar before anything reads or logs the hash */
+function xTake(){var h=location.hash,m=/(^#|;)key=([^;]{8,160})/.exec(h);if(!m)return;var k='';try{k=decodeURIComponent(m[2])}catch(e){}if(/^[\x21-\x7e]{8,128}$/.test(k))try{localStorage.setItem('ne.key',k)}catch(e){}var r=h.replace(/(^#|;)key=[^;]*/,'$1').replace(/^#;/,'#').replace(/;;/g,';').replace(/;$/,'');try{history.replaceState(history.state,'',location.pathname+location.search+(r==='#'?'':r))}catch(e){location.hash=r}setTimeout(function(){showHint('key saved in this browser \u2014 the export menu shows and removes it',6000)},600)}
 function xKey(){try{return localStorage.getItem(XK)||''}catch(e){return ''}}
-function xK(u){var k=xKey();return k?u+(u.indexOf('?')<0?'?':'&')+'key='+encodeURIComponent(k):u}
+function xK(u){var k=xKey();if(k.replace(/[^a-z0-9]/gi,'').length<=12)k='';/* a mail key (short) links tree reports only: it never rides in a link or a project file (accounts.go acctMailKeyMax) */return k?u+(u.indexOf('?')<0?'?':'&')+'key='+encodeURIComponent(k):u}
 /* the unit the table covers: the picked KG / Gemeinde / cell / point (share=, the hash verbatim) or, without one, the
    CURRENT VIEW as bbox= (+ the filter): cell-exact while it fits the index (≤ XBINS bins of 0.025°, api_ne_stats_unit.go
    neStatsMaxBins), farther out the server answers from the national 1-in-49 sample (approx:true) — the row says so (≈) */

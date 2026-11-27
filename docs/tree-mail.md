@@ -16,7 +16,10 @@ wrong keys per address and 1 000 in total per day, answered with silence).
 Add `<key>:<name>` to the list, `scripts/deploy.sh` (or restart). Optional fields after the
 name, in any order: `300` (edits a day), `@x.example` (only addresses of that mail domain may
 subscribe — compared at subscribe time, never stored), `addr=1` (addresses the key binds at a
-time, default and ceiling 5). A **personal key** is `key:name:@x.example:addr=1`: one person, one
+time, default and ceiling 5), `acct=<id>` (the account the key's edits are counted for — the
+name of the holder's export key; without it the key is an account of its own, `docs/accounts.md`).
+The holder of a mail key can also put it into the map (key field of the export menu, or
+`/#key=<key>`): tree reports from that browser are then counted for the same account. It opens no export. A **personal key** is `key:name:@x.example:addr=1`: one person, one
 reporter id, one address.
 
 A right key that cannot bind the sender is **answered** (the sender holds the key; silence would
