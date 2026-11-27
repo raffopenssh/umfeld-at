@@ -32,6 +32,12 @@
 //	GET    $P/api/v1/accounts                       every account: id, pseudonym, keys by NAME, ledger per month
 //	GET    $P/api/v1/accounts/{id}[?since=&until=]  + the peer's counts (unix seconds, as the peer takes them)
 //	GET    $P/api/v1/accounts/{id}?members=N        + activation links for members 1…N (member keys, below)
+//	GET    $P/api/v1/accounts[/{id}]?format=csv[&by=day]   the ledger as a sheet (default per month)
+//	GET    $P/api/v1/accounts/{id}?format=txt[&by=day]     the usage statement a holder is sent
+//
+// All of it is driven from scripts/acct.sh — there is nothing for a key holder
+// on the public side.
+//
 //	DELETE $P/api/v1/accounts/{id}                  the peer forgets the link (reports stay, anonymous)
 //
 // Without ACCT_SECRET nothing is linked and nothing is asked. The secret must
@@ -103,7 +109,10 @@ func acctIDRequest(r *http.Request) string {
 	if key == "" || len(key) > 128 {
 		return ""
 	}
-	if id, _ := exportIdentity(r); strings.HasPrefix(id, "key:") {
+	if id, t := exportIdentity(r); strings.HasPrefix(id, "key:") {
+		if t.noAcct {
+			return ""
+		}
 		return id[4:]
 	}
 	id := ""
@@ -177,11 +186,23 @@ func acctMemberTier(key string) *exportTier {
 		return nil
 	}
 	for _, t := range exportTiers {
-		if t.name == name {
+		if t.name == name && !t.noAcct {
 			return t
 		}
 	}
 	return nil
+}
+
+// acctNone — an issued key that is no account (EXPORT_KEYS flag `noacct`: a
+// shared demo key). It keeps its budget and is otherwise anonymous.
+func acctNone(id string) bool {
+	exportLoadTiers()
+	for _, t := range exportTiers {
+		if t.name == id {
+			return t.noAcct
+		}
+	}
+	return false
 }
 
 type acctCtxKey struct{}
@@ -327,7 +348,7 @@ func acctLedgerLoadLocked() {
 // acctCount — add to today's row of an account. Cheap; the file is written at
 // most once a minute, off the request path, and at shutdown (acctLedgerFlush).
 func acctCount(id, kind string, exports, bytes, reports int64) {
-	if id == "" {
+	if id == "" || acctNone(id) {
 		return
 	}
 	day := time.Now().UTC().Format("2006-01-02")
@@ -446,6 +467,160 @@ func acctLedgerMonths(id string, since, until int64) map[string]acctDay {
 		out[day[:7]] = m
 	}
 	return out
+}
+
+// acctLedgerRow — one period of one account.
+type acctLedgerRow struct {
+	Period string
+	ID     string
+	acctDay
+}
+
+// acctKinds — the CSV's product columns, in order.
+var acctKinds = []string{"table", "tiles", "archive", "project", "features", "layers", "other"}
+
+// acctLedgerRows — rows of one account ("" = all) per day or month, sorted.
+func acctLedgerRows(id string, since, until int64, byMonth bool) []acctLedgerRow {
+	l := &acctLedger
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	acctLedgerLoadLocked()
+	agg := map[[2]string]*acctLedgerRow{}
+	for day, d := range l.days {
+		if t, err := time.Parse("2006-01-02", day); err != nil || (since > 0 && t.Unix()+86400 <= since) || (until > 0 && t.Unix() > until) {
+			continue
+		}
+		p := day
+		if byMonth {
+			p = day[:7]
+		}
+		for aid, e := range d {
+			if id != "" && aid != id {
+				continue
+			}
+			k := [2]string{p, aid}
+			r := agg[k]
+			if r == nil {
+				r = &acctLedgerRow{Period: p, ID: aid, acctDay: acctDay{Kinds: map[string]int64{}}}
+				agg[k] = r
+			}
+			r.Exports += e.Exports
+			r.Bytes += e.Bytes
+			r.Reports += e.Reports
+			r.Limited += e.Limited
+			for kk, v := range e.Kinds {
+				r.Kinds[kk] += v
+			}
+		}
+	}
+	out := make([]acctLedgerRow, 0, len(agg))
+	for _, r := range agg {
+		out = append(out, *r)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Period != out[j].Period {
+			return out[i].Period < out[j].Period
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+// acctCSV — the ledger as a sheet: period,account,exports,<products…>,bytes,reports,limited.
+func acctCSV(rows []acctLedgerRow) []byte {
+	var b strings.Builder
+	b.WriteString("period,account,exports," + strings.Join(acctKinds, ",") + ",bytes,reports,limited\n")
+	for _, r := range rows {
+		b.WriteString(r.Period + "," + r.ID + "," + strconv.FormatInt(r.Exports, 10))
+		for _, k := range acctKinds {
+			b.WriteString("," + strconv.FormatInt(r.Kinds[k], 10))
+		}
+		b.WriteString("," + strconv.FormatInt(r.Bytes, 10) + "," + strconv.FormatInt(r.Reports, 10) + "," + strconv.FormatInt(r.Limited, 10) + "\n")
+	}
+	return []byte(b.String())
+}
+
+// acctStatement — the usage statement of one account as plain text: what a
+// key holder is sent (on request, or with an invoice). Key NAMES only, never a
+// key or the pseudonym.
+func acctStatement(a *acctRow, since, until int64, byMonth bool) []byte {
+	var b strings.Builder
+	day := func(u int64, open string) string {
+		if u <= 0 {
+			return open
+		}
+		return time.Unix(u, 0).UTC().Format("2006-01-02")
+	}
+	b.WriteString("Usage statement — account " + a.ID + "\n")
+	b.WriteString("Service:  " + publicURL() + "\n")
+	b.WriteString("Period:   " + day(since, "start") + " … " + day(until, "today") + " (UTC days)\n")
+	b.WriteString("Issued:   " + time.Now().UTC().Format("2006-01-02 15:04") + " UTC\n")
+	if a.Export != "" {
+		b.WriteString("Keys:     export key \"" + a.Export + "\" and its member keys\n")
+	}
+	if len(a.Mail) > 0 {
+		b.WriteString("          mail keys " + strings.Join(a.Mail, ", ") + "\n")
+	}
+	rows := acctLedgerRows(a.ID, since, until, byMonth)
+	var tot acctDay
+	tot.Kinds = map[string]int64{}
+	for _, r := range rows {
+		tot.Exports += r.Exports
+		tot.Bytes += r.Bytes
+		tot.Reports += r.Reports
+		tot.Limited += r.Limited
+		for k, v := range r.Kinds {
+			tot.Kinds[k] += v
+		}
+	}
+	b.WriteString("\nExports (this service)\n")
+	b.WriteString("  requests          " + strconv.FormatInt(tot.Exports, 10) + "\n")
+	for _, k := range acctKinds {
+		if tot.Kinds[k] > 0 {
+			b.WriteString("    " + k + strings.Repeat(" ", 16-len(k)) + strconv.FormatInt(tot.Kinds[k], 10) + "\n")
+		}
+	}
+	b.WriteString("  data sent         " + strconv.FormatFloat(float64(tot.Bytes)/1e6, 'f', 1, 64) + " MB\n")
+	b.WriteString("  over the budget   " + strconv.FormatInt(tot.Limited, 10) + " (answered 429, not counted above)\n")
+	b.WriteString("  tree reports sent " + strconv.FormatInt(tot.Reports, 10) + " (requests relayed; a file of edits is a few)\n")
+	b.WriteString("\nTree reports (as stored at " + peers().ObsName + ")\n")
+	if a.PeerErr != "" || len(a.Peer) == 0 {
+		b.WriteString("  not available right now\n")
+	} else {
+		var p map[string]interface{}
+		json.Unmarshal(a.Peer, &p)
+		num := func(k string) string {
+			f, _ := p[k].(float64)
+			return strconv.FormatInt(int64(f), 10)
+		}
+		for _, k := range []string{"reporters", "reports", "tree_versions", "species", "measures", "added", "retracted", "trees", "flags"} {
+			b.WriteString("  " + k + strings.Repeat(" ", 18-len(k)) + num(k) + "\n")
+		}
+		if f, _ := p["first_ts"].(float64); f > 0 {
+			l, _ := p["last_ts"].(float64)
+			b.WriteString("  first … last      " + day(int64(f), "") + " … " + day(int64(l), "") + "\n")
+		}
+	}
+	unit := "day"
+	if byMonth {
+		unit = "month"
+	}
+	b.WriteString("\nPer " + unit + "\n  " + unit + strings.Repeat(" ", 12-len(unit)) + "exports      MB  reports   429\n")
+	for _, r := range rows {
+		b.WriteString("  " + r.Period + strings.Repeat(" ", 12-len(r.Period)) + pad(strconv.FormatInt(r.Exports, 10), 7) + pad(strconv.FormatFloat(float64(r.Bytes)/1e6, 'f', 1, 64), 8) + pad(strconv.FormatInt(r.Reports, 10), 9) + pad(strconv.FormatInt(r.Limited, 10), 6) + "\n")
+	}
+	if len(rows) == 0 {
+		b.WriteString("  (nothing in this period)\n")
+	}
+	b.WriteString("\nCounts only: no addresses, no places asked for, no content. Kept for 800 days.\n")
+	return []byte(b.String())
+}
+
+func pad(s string, n int) string {
+	if len(s) >= n {
+		return s
+	}
+	return strings.Repeat(" ", n-len(s)) + s
 }
 
 // ── the peer's account endpoint ──
@@ -586,7 +761,9 @@ func acctList() []*acctRow {
 		return a
 	}
 	for _, t := range exportTiers {
-		get(t.name).Export = t.name
+		if !t.noAcct {
+			get(t.name).Export = t.name
+		}
 	}
 	for _, k := range tmConf().keys {
 		a := get(acctIDMail(k))
@@ -610,6 +787,19 @@ func handleV1Accounts(w http.ResponseWriter, r *http.Request) {
 	since, _ := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
 	until, _ := strconv.ParseInt(r.URL.Query().Get("until"), 10, 64)
 	rows := acctList()
+	format, byMonth := r.URL.Query().Get("format"), r.URL.Query().Get("by") != "day"
+	text := func(ct string, body []byte) {
+		w.Header().Set("Content-Type", ct+"; charset=utf-8")
+		w.Write(body)
+	}
+	if format == "csv" && r.Method == http.MethodGet { // ?format=csv[&by=day]: the ledger as a sheet, one account or all
+		if id != "" && acctNone(id) {
+			apiError(w, "no such account", http.StatusNotFound)
+			return
+		}
+		text("text/csv", acctCSV(acctLedgerRows(id, since, until, byMonth)))
+		return
+	}
 	if id == "" {
 		if r.Method != http.MethodGet {
 			apiError(w, "GET", http.StatusMethodNotAllowed)
@@ -627,7 +817,7 @@ func handleV1Accounts(w http.ResponseWriter, r *http.Request) {
 			a = x
 		}
 	}
-	if a == nil && r.Method == http.MethodDelete && len(id) <= 64 {
+	if a == nil && r.Method == http.MethodDelete && len(id) <= 64 && !acctNone(id) {
 		a = &acctRow{ID: id, Account: acctPseudonym(id)} // a key already taken out of the env file can still be forgotten at the peer
 	}
 	if a == nil {
@@ -660,6 +850,10 @@ func handleV1Accounts(w http.ResponseWriter, r *http.Request) {
 		log.Printf("accounts: %q unlinked at the peer: %s", a.ID, out)
 	default:
 		apiError(w, "GET or DELETE", http.StatusMethodNotAllowed)
+		return
+	}
+	if format == "txt" && r.Method == http.MethodGet { // the usage statement a holder is sent
+		text("text/plain", acctStatement(a, since, until, byMonth))
 		return
 	}
 	writeJSON(w, http.StatusOK, a)

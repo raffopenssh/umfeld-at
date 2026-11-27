@@ -56,7 +56,7 @@ UMFELD_PEER_OBS_WEB=
 UMFELD_PEER_OBS_REPORTER_KEY=
 # trees by email (docs/tree-mail.md): key:name[:edits per day],… — empty = off
 TREE_MAIL_KEYS=
-# issued export keys key:name:rps:burst:daily,… and the secret that keys account pseudonyms
+# issued export keys sha256:<hex>:name:rps:burst:daily,… (written by scripts/acct) and the secret that keys account pseudonyms
 # (docs/accounts.md) — ACCT_SECRET is filled in below; NEVER change it afterwards
 EXPORT_KEYS=
 ACCT_SECRET=

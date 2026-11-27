@@ -28,6 +28,7 @@ func TestAccountsPeerContract(t *testing.T) {
 		sawKeyInBodyOrHead bool
 	)
 	const exportKey = "xk_test_0123456789abcdef"
+	const demoKey = "xk_demo_0123456789abcdef"
 	peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -85,7 +86,8 @@ func TestAccountsPeerContract(t *testing.T) {
 	}
 	exportLoadTiers()
 	oldTiers := exportTiers
-	exportTiers = append([]*exportTier{}, &exportTier{key: []byte(exportKey), name: "org", rps: 10, burst: 60, daily: 1000})
+	exportTiers = append([]*exportTier{}, &exportTier{key: exportKeyHash(exportKey), name: "org", rps: 10, burst: 60, daily: 1000},
+		&exportTier{key: exportKeyHash(demoKey), name: "demo", rps: 5, burst: 30, daily: 1000, noAcct: true})
 	acctLedger.mu.Lock()
 	oldPath := acctLedger.path
 	acctLedger.path, acctLedger.loaded, acctLedger.days = filepath.Join(t.TempDir(), "a", "usage.json"), false, map[string]map[string]*acctDay{}
@@ -243,6 +245,56 @@ func TestAccountsPeerContract(t *testing.T) {
 	}
 	if s := acctURL(r.URL); strings.Contains(s, exportKey) || !strings.Contains(s, "f=a&key=-&x=1") {
 		t.Fatalf("logged URL %q", s)
+	}
+
+	// a shared demo key keeps its budget and is no account: no pseudonym, no ledger row, no member keys, not listed
+	if id, tr := exportIdentity(httptest.NewRequest("GET", "/api/v1/ne/stats/unit?key="+demoKey, nil)); id != "key:demo" || tr.daily != 1000 {
+		t.Fatalf("demo identity %q", id)
+	}
+	exportAccountFor(httptest.NewRequest("GET", "/api/v1/ne/mvt/12/1/2.pbf?key="+demoKey, nil), 500)
+	if w := post(demoKey); w.Code != 201 || postAcct != "" {
+		t.Fatalf("demo key linked: acct=%q", postAcct)
+	}
+	if w := post(acctMemberKey("demo", 1)); postAcct != "" || w.Code != 201 {
+		t.Fatalf("demo member key linked: acct=%q", postAcct)
+	}
+	if w := get("GET", "/api/v1/accounts", "private"); strings.Contains(w.Body.String(), `"demo"`) || len(acctLedgerRows("demo", 0, 0, true)) != 0 {
+		t.Fatalf("demo is an account: %s", w.Body.String())
+	}
+
+	// the ledger as a sheet and the statement a holder is sent
+	csv := get("GET", "/api/v1/accounts?format=csv&by=day", "private").Body.String()
+	if ln := strings.Split(strings.TrimSpace(csv), "\n"); len(ln) != 2 || ln[0] != "period,account,exports,table,tiles,archive,project,features,layers,other,bytes,reports,limited" || !strings.HasSuffix(ln[1], ",org,1,0,1,0,0,0,0,0,500,5,0") || len(strings.Split(ln[1], ",")[0]) != 10 {
+		t.Fatalf("csv:\n%s", csv)
+	}
+	if m := get("GET", "/api/v1/accounts/org?format=csv", "private").Body.String(); len(strings.Split(strings.Split(strings.TrimSpace(m), "\n")[1], ",")[0]) != 7 {
+		t.Fatalf("csv by month:\n%s", m)
+	}
+	st := get("GET", "/api/v1/accounts/org?format=txt", "private").Body.String()
+	for _, want := range []string{"account org", "requests          1", "tiles", "tree_versions     4", "mail keys org-1"} {
+		if !strings.Contains(st, want) {
+			t.Fatalf("statement lacks %q:\n%s", want, st)
+		}
+	}
+	if strings.Contains(st, exportKey) || strings.Contains(st, acctPseudonym("org")) || strings.Contains(st, "abcd2345") {
+		t.Fatalf("statement leaks a key or the pseudonym:\n%s", st)
+	}
+	if get("GET", "/api/v1/accounts/org?format=txt", "contrib").Code != 404 || get("GET", "/api/v1/accounts?format=csv", "contrib").Code != 404 {
+		t.Fatal("contributor tier reached the statement / sheet")
+	}
+
+	// the env file holds hashes: sha256:<hex>:name:… loads like a plain entry, flags in any place
+	t.Setenv("EXPORT_KEYS", "sha256:"+hex.EncodeToString(exportKeyHash(exportKey))+":org:10:60:1000, "+demoKey+":demo:noacct:5:30:1000,sha256:zz:bad")
+	exportTiersOnce, exportTiers = sync.Once{}, nil
+	exportLoadTiers()
+	if len(exportTiers) != 2 || exportTiers[0].name != "org" || exportTiers[0].daily != 1000 || !exportTiers[1].noAcct || exportTiers[1].burst != 30 {
+		t.Fatalf("tiers from env: %+v", exportTiers)
+	}
+	if id, _ := exportIdentity(httptest.NewRequest("GET", "/x?key="+exportKey, nil)); id != "key:org" {
+		t.Fatalf("hashed entry: %q", id)
+	}
+	if id, _ := exportIdentity(httptest.NewRequest("GET", "/x?key="+hex.EncodeToString(exportKeyHash(exportKey)), nil)); id == "key:org" {
+		t.Fatal("the hash itself opened the key")
 	}
 
 	// without the secret nothing is linked

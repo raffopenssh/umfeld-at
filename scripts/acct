@@ -1,0 +1,548 @@
+#!/usr/bin/env python3
+"""acct — accounts of issued keys: create, hand out, report, close.
+
+The one tool for docs/accounts.md. Reads and edits the env file
+(/etc/umfeld-at.env, or $ACCT_ENV / --env) and asks the RUNNING service on its
+private tier for everything else. Re-runs itself under sudo when the env file
+is not readable. Key edits take effect with `--deploy` (scripts/deploy.sh — a
+restart that refuses no connection) or the next deploy.
+
+  acct list                                  accounts, their keys by name, this month
+  acct new <id> [--mail N --domain @x.at]    new account: export key (shown ONCE) [+ N personal mail keys]
+  acct links <id> [N]                        activation links for members 1…N (default 5)
+  acct mail-key <id> [N] [--domain @x.at]    N more personal mail keys for an account
+  acct statement <id> [--month YYYY-MM]      the usage statement a holder is sent (text)
+  acct csv [<id>] [--month …] [--by day]     the ledger as CSV (all accounts without <id>)
+  acct show <id> [--month …]                 everything as JSON (ledger + peer counts)
+  acct keys [<id>]                           key entries: hash prefix, name, budget
+  acct rotate <id>                           a second export key for the account (shown ONCE)
+  acct rm-key <id> <hash prefix>             remove one export key entry
+  acct revoke <id> <n> | unrevoke <id> <n>   switch one member key off / on
+  acct noacct <name> [--undo]                an issued key that is no account (shared demo key)
+  acct close <id>                            remove every key of the account from the env file
+  acct unlink <id>                           the peer forgets the account's link (after close + deploy)
+  acct hash-env                              replace plain export keys in the env file by their hashes
+  acct doctor                                is everything set up the way the docs say?
+
+Periods: --month 2026-11 | --since 2026-11-01 --until 2026-11-30 (UTC days). Output
+is plain; add --json where it says so. Exit 0 = done, 1 = refused, 2 = usage.
+"""
+import argparse, calendar, datetime as dt, hashlib, json, os, re, secrets, stat, subprocess, sys, tempfile, urllib.error, urllib.parse, urllib.request
+
+ENV_DEFAULT = "/etc/umfeld-at.env"
+MAIL_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # docs/tree-mail.md
+KEY_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
+ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,23}$")  # an account id is permanent, lower case, URL- and CSV-safe
+
+
+def die(msg, code=1):
+    print("acct: " + msg, file=sys.stderr)
+    sys.exit(code)
+
+
+# ── env file ──
+
+class Env:
+    def __init__(self, path):
+        self.path = path
+        try:
+            self.text = open(path).read()
+        except PermissionError:
+            if os.geteuid() != 0 and not os.environ.get("ACCT_NO_SUDO"):
+                os.execvp("sudo", ["sudo", "--preserve-env=ACCT_ENV,ACCT_URL", sys.executable, os.path.abspath(__file__)] + sys.argv[1:])
+            raise
+        except FileNotFoundError:
+            die(path + " not found (scripts/install.sh writes it; or --env FILE)")
+        self.dirty = False
+
+    def get(self, name):
+        m = re.search(r"^%s=(.*)$" % re.escape(name), self.text, re.M)
+        return m.group(1).strip() if m else ""
+
+    def items(self, name):
+        return [e.strip() for e in self.get(name).split(",") if e.strip()]
+
+    def set(self, name, value):
+        line = name + "=" + value
+        if re.search(r"^%s=" % re.escape(name), self.text, re.M):
+            self.text = re.sub(r"^%s=.*$" % re.escape(name), lambda _: line, self.text, flags=re.M)
+        else:
+            self.text = self.text.rstrip("\n") + "\n" + line + "\n"
+        self.dirty = True
+
+    def set_items(self, name, items):
+        self.set(name, ",".join(items))
+
+    def save(self):
+        if not self.dirty:
+            return
+        d = os.path.dirname(self.path) or "."
+        try:
+            st = os.stat(self.path)
+            fd, tmp = tempfile.mkstemp(dir=d, prefix=".acct-")
+            with os.fdopen(fd, "w") as f:
+                f.write(self.text)
+            os.chmod(tmp, 0o600)
+            try:
+                os.chown(tmp, st.st_uid, st.st_gid)
+            except PermissionError:
+                pass
+            os.replace(tmp, self.path)  # atomic; no backup copy — a copy would keep keys we just removed
+        except PermissionError:
+            die("cannot write " + self.path + " (run with sudo)")
+        self.dirty = False
+
+
+def sha(key):
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+class ExportKey:
+    """sha256:<hex>:name[:rps[:burst[:daily]]][:noacct]  — or a plain key:name:… entry."""
+
+    def __init__(self, entry):
+        p = entry.split(":")
+        self.noacct = any(x.lower() == "noacct" for x in p[2:])
+        p = p[:2] + [x for x in p[2:] if x.lower() != "noacct"]
+        self.plain = not (p[0] == "sha256" and len(p) >= 3)
+        if self.plain:
+            self.hash, rest = sha(p[0]), p[1:]
+        else:
+            self.hash, rest = p[1], p[2:]
+        self.name = rest[0] if rest else ""
+        self.budget = rest[1:]
+
+    def entry(self):
+        return ":".join(["sha256", self.hash, self.name] + self.budget + (["noacct"] if self.noacct else []))
+
+
+class MailKey:
+    """key:name[:edits/day][:@domain][:addr=N][:acct=id]"""
+
+    def __init__(self, entry):
+        self.raw = entry
+        p = entry.split(":")
+        self.key, self.name = p[0], (p[1] if len(p) > 1 else "")
+        self.acct = next((x[5:] for x in p[2:] if x.lower().startswith("acct=")), "")
+
+    @property
+    def account(self):
+        return self.acct or "mail:" + self.name
+
+
+def export_keys(env):
+    return [ExportKey(e) for e in env.items("EXPORT_KEYS")]
+
+
+def mail_keys(env):
+    return [MailKey(e) for e in env.items("TREE_MAIL_KEYS")]
+
+
+def load_export(env):
+    ks = []
+    for e in env.items("EXPORT_KEYS"):
+        k = ExportKey(e)
+        k.raw = e
+        ks.append(k)
+    return ks
+
+
+def new_export_key():
+    return "xk_" + "".join(secrets.choice(KEY_ALPHABET) for _ in range(28))
+
+
+def new_mail_key():
+    return "".join(secrets.choice(MAIL_ALPHABET) for _ in range(8))
+
+
+# ── the running service, private tier ──
+
+class API:
+    def __init__(self, env, url):
+        self.base = (url or os.environ.get("ACCT_URL") or "http://localhost:" + (env.get("PORT") or "8000")).rstrip("/")
+        self.prefix = env.get("UMFELD_PRIVATE_PREFIX") or "/k"
+        self.token = (env.get("UMFELD_TOKEN").split(",") or [""])[0].strip()
+
+    def call(self, path, query=None, method="GET"):
+        if not self.token:
+            die("UMFELD_TOKEN is not set in the env file — the private tier is closed")
+        q = {k: v for k, v in (query or {}).items() if v not in (None, "", 0)}
+        url = self.base + self.prefix + "/api/v1/accounts" + path + ("?" + urllib.parse.urlencode(q) if q else "")
+        req = urllib.request.Request(url, method=method, headers={"Authorization": "Bearer " + self.token, "User-Agent": "umfeld-at/acct-cli"})
+        try:
+            with urllib.request.urlopen(req, timeout=40) as r:
+                return r.read().decode()
+        except urllib.error.HTTPError as e:
+            body = e.read().decode(errors="replace")[:300]
+            if e.code == 404 and path:
+                die("no such account %s (acct list) — or the service has not been deployed since it was created" % path.strip("/"))
+            die("service answered %d: %s" % (e.code, body))
+        except (urllib.error.URLError, OSError) as e:
+            die("service not reachable at %s (%s)" % (self.base, getattr(e, "reason", e)))
+
+    def json(self, path, query=None, method="GET"):
+        return json.loads(self.call(path, query, method))
+
+
+def period(a):
+    """--month / --since / --until → unix seconds (UTC), both optional."""
+    def day(s, end=False):
+        try:
+            d = dt.datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc)
+        except ValueError:
+            die("dates are YYYY-MM-DD: " + s, 2)
+        return int(d.timestamp()) + (86399 if end else 0)
+    since = until = None
+    if getattr(a, "month", None):
+        m = a.month
+        if m in ("this", "last"):
+            t = dt.datetime.now(dt.timezone.utc).replace(day=1)
+            if m == "last":
+                t = (t - dt.timedelta(days=1)).replace(day=1)
+            m = t.strftime("%Y-%m")
+        if not re.fullmatch(r"\d{4}-\d{2}", m):
+            die("--month is YYYY-MM, 'this' or 'last'", 2)
+        y, mo = int(m[:4]), int(m[5:])
+        since, until = day("%s-01" % m), day("%s-%02d" % (m, calendar.monthrange(y, mo)[1]), True)
+    if getattr(a, "since", None):
+        since = day(a.since)
+    if getattr(a, "until", None):
+        until = day(a.until, True)
+    return {"since": since, "until": until}
+
+
+def need_id(s):
+    if not ID_RE.match(s or ""):
+        die("an account id is 2–24 chars of a-z 0-9 _ - (permanent: it keys the pseudonym): %r" % s, 2)
+    return s
+
+
+def after_edit(env, a, what):
+    env.save()
+    if getattr(a, "deploy", False):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cmd = [os.path.join(root, "scripts", "deploy.sh")]
+        if os.geteuid() == 0 and os.environ.get("SUDO_USER"):
+            cmd = ["sudo", "-u", os.environ["SUDO_USER"], "-H"] + cmd
+        print("deploying …", file=sys.stderr)
+        r = subprocess.run(cmd, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        print("\n".join(r.stdout.strip().splitlines()[-2:]), file=sys.stderr)
+        if r.returncode:
+            die("deploy failed — the env file is written, the service still runs the old keys")
+    else:
+        print("\n%s — live after: scripts/deploy.sh   (or repeat with --deploy)" % what, file=sys.stderr)
+
+
+# ── commands ──
+
+def cmd_list(env, api, a):
+    d = api.json("", period(a) if (a.month or a.since or a.until) else period(argparse.Namespace(month="this")))
+    if a.json:
+        return print(json.dumps(d, indent=1))
+    if not d.get("configured"):
+        print("! ACCT_SECRET is not set: nothing is linked (acct doctor)")
+    rows = [("ACCOUNT", "EXPORT KEY", "MAIL KEYS", "EXPORTS", "MB", "REPORTS", "429")]
+    for x in d["accounts"]:
+        t = {"exports": 0, "bytes": 0, "reports": 0, "limited": 0}
+        for m in (x.get("ledger") or {}).values():
+            for k in t:
+                t[k] += m.get(k, 0)
+        rows.append((x["id"], "yes" if x.get("export_key") else "-", str(len(x.get("mail_keys") or [])) or "-", str(t["exports"]), "%.1f" % (t["bytes"] / 1e6), str(t["reports"]), str(t["limited"])))
+    w = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]
+    for r in rows:
+        print("  ".join(c.ljust(w[i]) if i < 3 else c.rjust(w[i]) for i, c in enumerate(r)).rstrip())
+    na = [k.name for k in export_keys(env) if k.noacct]
+    if na:
+        print("\nno account (budget only): " + ", ".join(sorted(set(na))))
+
+
+def cmd_new(env, api, a):
+    aid = need_id(a.id)
+    ks = load_export(env)
+    if any(k.name == aid for k in ks) or any(m.account == aid or m.name.startswith(aid + "-") for m in mail_keys(env)):
+        die("account %s exists already (acct keys %s; a second key: acct rotate %s)" % (aid, aid, aid))
+    if not env.get("ACCT_SECRET"):
+        env.set("ACCT_SECRET", secrets.token_urlsafe(36))
+        print("ACCT_SECRET was missing — generated. It must never change again; back up the env file.", file=sys.stderr)
+    key = new_export_key()
+    env.set_items("EXPORT_KEYS", env.items("EXPORT_KEYS") + ["sha256:%s:%s:%s:%s:%s" % (sha(key), aid, a.rps, a.burst, a.daily)])
+    mails = add_mail_keys(env, aid, a.mail, a.domain) if a.mail else []
+    out = {"account": aid, "export_key": key, "budget": {"rps": a.rps, "burst": a.burst, "daily": a.daily}, "mail_keys": mails}
+    if a.json:
+        print(json.dumps(out, indent=1))
+    else:
+        print("account     " + aid)
+        print("export key  " + key + "      ← shown once; only its hash is kept")
+        print("budget      %s/s, burst %s, %s a day" % (a.rps, a.burst, a.daily))
+        for m in mails:
+            print("mail key    %s   (%s%s)" % (m["key"], m["name"], ", " + a.domain if a.domain else ""))
+        print("\nfor people: acct links %s <n>   (after the deploy)" % aid)
+    after_edit(env, a, "account " + aid + " written")
+
+
+def add_mail_keys(env, aid, n, domain):
+    if domain and not re.fullmatch(r"@[a-z0-9.-]+\.[a-z]{2,}", domain):
+        die("--domain looks like @x.example", 2)
+    have = mail_keys(env)
+    nums = [int(m.name[len(aid) + 1:]) for m in have if re.fullmatch(re.escape(aid) + r"-\d+", m.name)]
+    start, out, items = max(nums, default=0) + 1, [], env.items("TREE_MAIL_KEYS")
+    for i in range(start, start + n):
+        k = new_mail_key()
+        name = "%s-%d" % (aid, i)
+        items.append(":".join([k, name] + ([domain] if domain else []) + ["addr=1", "acct=" + aid]))
+        out.append({"name": name, "key": k[:4] + "-" + k[4:]})
+    env.set_items("TREE_MAIL_KEYS", items)
+    return out
+
+
+def cmd_mail_key(env, api, a):
+    aid = need_id(a.id)
+    if not any(k.name == aid and not k.noacct for k in export_keys(env)) and not any(m.account == aid for m in mail_keys(env)):
+        die("no such account %s (acct new %s)" % (aid, aid))
+    mails = add_mail_keys(env, aid, a.n, a.domain)
+    if a.json:
+        print(json.dumps(mails, indent=1))
+    else:
+        for m in mails:
+            print("%s   %s   subject: subscribe %s" % (m["name"], m["key"], m["key"]))
+    after_edit(env, a, "%d mail key(s) written" % len(mails))
+
+
+def cmd_links(env, api, a):
+    d = api.json("/" + need_id(a.id), {"members": a.n})
+    inv = d.get("invites") or []
+    if not inv:
+        die("no member keys for %s: the account needs an export key and ACCT_SECRET (acct doctor)" % a.id)
+    if a.json:
+        return print(json.dumps(inv, indent=1))
+    for i in inv:
+        print("%3d  %s%s" % (i["member"], i["link"], "   REVOKED" if i.get("revoked") else ""))
+
+
+def cmd_statement(env, api, a):
+    q = period(a)
+    q.update(format="txt", by="day" if a.by == "day" else None)
+    sys.stdout.write(api.call("/" + need_id(a.id), q))
+
+
+def cmd_csv(env, api, a):
+    q = period(a)
+    q.update(format="csv", by="day" if a.by == "day" else None)
+    sys.stdout.write(api.call("/" + need_id(a.id) if a.id else "", q))
+
+
+def cmd_show(env, api, a):
+    print(json.dumps(api.json("/" + need_id(a.id), period(a)), indent=1))
+
+
+def cmd_keys(env, api, a):
+    rev = set(env.items("ACCT_REVOKED"))
+    rows = []
+    for k in export_keys(env):
+        if a.id and k.name != a.id:
+            continue
+        rows.append(("export", k.name, k.hash[:10], ":".join(k.budget) or "default", ("plain in the env file! " if k.plain else "") + ("no account" if k.noacct else "")))
+    for m in mail_keys(env):
+        if a.id and m.account != a.id:
+            continue
+        rows.append(("mail", m.account, m.name, "", ""))
+    for r in sorted(rev):
+        if not a.id or r.rsplit(".", 1)[0] == a.id:
+            rows.append(("revoked", r.rsplit(".", 1)[0], "member " + r.rsplit(".", 1)[1], "", ""))
+    if a.json:
+        return print(json.dumps([dict(zip(("kind", "account", "key", "budget", "note"), r)) for r in rows], indent=1))
+    for r in rows:
+        print("%-8s %-16s %-14s %-16s %s" % r)
+
+
+def cmd_rotate(env, api, a):
+    aid = need_id(a.id)
+    old = [k for k in export_keys(env) if k.name == aid]
+    if not old:
+        die("no export key for %s (acct new %s)" % (aid, aid))
+    key = new_export_key()
+    env.set_items("EXPORT_KEYS", env.items("EXPORT_KEYS") + [":".join(["sha256", sha(key), aid] + old[-1].budget + (["noacct"] if old[-1].noacct else []))])
+    print(json.dumps({"account": aid, "export_key": key}, indent=1) if a.json else "export key  " + key + "      ← shown once")
+    print("the old key keeps working until: acct rm-key %s %s" % (aid, old[-1].hash[:10]), file=sys.stderr)
+    after_edit(env, a, "second key for " + aid + " written (same account, same pseudonym)")
+
+
+def cmd_rm_key(env, api, a):
+    ks = load_export(env)
+    hit = [k for k in ks if k.name == a.id and k.hash.startswith(a.prefix.lower())]
+    if len(a.prefix) < 6 or len(hit) != 1:
+        die("%d key(s) of %s match %r — give ≥ 6 chars of one hash (acct keys %s)" % (len(hit), a.id, a.prefix, a.id))
+    if sum(1 for k in ks if k.name == a.id) == 1 and not a.force:
+        die("that is the account's last export key: its member keys die with it. `acct close %s` closes the account; --force removes just the key" % a.id)
+    env.set_items("EXPORT_KEYS", [k.raw for k in ks if k is not hit[0]])
+    after_edit(env, a, "key %s… of %s removed" % (hit[0].hash[:10], a.id))
+
+
+def cmd_revoke(env, api, a, on=True):
+    tag = "%s.%d" % (need_id(a.id), a.n)
+    cur = env.items("ACCT_REVOKED")
+    if on == (tag in cur):
+        die("member %d of %s is %s already" % (a.n, a.id, "revoked" if on else "not revoked"))
+    env.set_items("ACCT_REVOKED", sorted(set(cur + [tag])) if on else [c for c in cur if c != tag])
+    after_edit(env, a, "member %d of %s %s" % (a.n, a.id, "revoked" if on else "valid again"))
+
+
+def cmd_noacct(env, api, a):
+    ks = load_export(env)
+    hit = [k for k in ks if k.name == a.name]
+    if not hit:
+        die("no export key named " + a.name)
+    out = []
+    for k in ks:
+        e = k.raw
+        if k.name == a.name:
+            p = [x for x in e.split(":") if x.lower() != "noacct"]
+            e = ":".join(p + ([] if a.undo else ["noacct"]))
+        out.append(e)
+    env.set_items("EXPORT_KEYS", out)
+    after_edit(env, a, "%s is %s" % (a.name, "an account again" if a.undo else "no account: budget only, nothing counted or linked"))
+
+
+def cmd_close(env, api, a):
+    aid = need_id(a.id)
+    ks, ms = load_export(env), mail_keys(env)
+    ek, mk = [k for k in ks if k.name == aid], [m for m in ms if m.account == aid]
+    if not ek and not mk:
+        die("no keys of %s in the env file (already closed? then: acct unlink %s)" % (aid, aid))
+    if not a.yes:
+        die("this removes %d export key(s) and %d mail key(s) of %s — their holders are anonymous from the next deploy. Repeat with --yes" % (len(ek), len(mk), aid))
+    env.set_items("EXPORT_KEYS", [k.raw for k in ks if k.name != aid])
+    env.set_items("TREE_MAIL_KEYS", [m.raw for m in ms if m.account != aid])
+    env.set_items("ACCT_REVOKED", [r for r in env.items("ACCT_REVOKED") if r.rsplit(".", 1)[0] != aid])
+    print("removed: %d export key(s), %d mail key(s). The ledger rows stay (billing) for 800 days." % (len(ek), len(mk)))
+    print("last statement first if you need one — the peer's counts go with the unlink:  acct statement %s" % aid)
+    after_edit(env, a, "account " + aid + " closed in the env file")
+    print("then:  acct unlink %s --yes     (the peer forgets the link; reports stay, anonymous)" % aid, file=sys.stderr)
+
+
+def cmd_unlink(env, api, a):
+    aid = need_id(a.id)
+    live = [k for k in export_keys(env) if k.name == aid] + [m for m in mail_keys(env) if m.account == aid]
+    if live and not a.force:
+        die("%s still has %d key(s): the next report links it again. `acct close %s --yes --deploy` first (or --force)" % (aid, len(live), aid))
+    if not a.yes:
+        die("this erases the link between %s and its reporters at the peer for good. Repeat with --yes" % aid)
+    d = api.json("/" + aid, method="DELETE")
+    print(json.dumps(d.get("unlinked"), indent=1) if a.json else "unlinked at the peer: %s" % json.dumps(d.get("unlinked")))
+
+
+def cmd_hash_env(env, api, a):
+    ks = load_export(env)
+    plain = [k for k in ks if k.plain]
+    if not plain:
+        return print("nothing to do: every export key is a hash already")
+    env.set_items("EXPORT_KEYS", [k.entry() for k in ks])
+    print("hashed: " + ", ".join(k.name for k in plain))
+    print("the keys themselves now exist only at their holders; an old copy of the env file (acct doctor lists them) still has them")
+    after_edit(env, a, "export keys hashed (the service reads both forms, nothing changes for holders)")
+
+
+def cmd_doctor(env, api, a):
+    bad = 0
+
+    def check(ok, msg, fix=""):
+        nonlocal bad
+        bad += 0 if ok else 1
+        print(("ok   " if ok else "FAIL ") + msg + ("" if ok or not fix else "\n       → " + fix))
+
+    st = os.stat(env.path)
+    check(stat.S_IMODE(st.st_mode) & 0o077 == 0, "env file is private (%o)" % stat.S_IMODE(st.st_mode), "chmod 600 " + env.path)
+    check(len(env.get("ACCT_SECRET")) >= 32, "ACCT_SECRET is set (≥ 32 chars)", "acct new <id> generates it; never change it afterwards")
+    ks = export_keys(env)
+    plain = [k.name for k in ks if k.plain]
+    check(not plain, "export keys are stored as hashes" + (" — plain: " + ", ".join(plain) if plain else ""), "acct hash-env --deploy")
+    ids = [k.name for k in ks]
+    odd = sorted({i for i in ids + [m.acct for m in mail_keys(env) if m.acct] if not ID_RE.match(i)})
+    check(not odd, "account ids are plain lower case" + (" — " + ", ".join(odd) if odd else ""))
+    orphan = sorted({m.acct for m in mail_keys(env) if m.acct and m.acct not in ids})
+    check(not orphan, "every mail key's acct= names an export key" + (" — missing: " + ", ".join(orphan) if orphan else ""), "typo? such mail keys still count, as an account without exports")
+    d = os.path.dirname(env.path) or "."
+    copies = []
+    for f in sorted(os.listdir(d)):
+        p = os.path.join(d, f)
+        if f != os.path.basename(env.path) and f.startswith(os.path.basename(env.path)) and os.path.isfile(p):
+            try:
+                txt = open(p).read()
+            except OSError:
+                continue
+            m = re.search(r"^EXPORT_KEYS=(.*)$", txt, re.M)
+            if m and any(ExportKey(e).plain for e in m.group(1).split(",") if e.strip()):
+                copies.append(p)
+    check(not copies, "no copy of the env file with plain export keys" + (" — " + ", ".join(copies) if copies else ""), "shred -u <file> once the keys in it are rotated or known to their holders")
+    try:
+        s = api.json("")
+        check(s.get("configured"), "the running service has the secret")
+        live = {x["id"] for x in s["accounts"]}
+        want = {k.name for k in ks if not k.noacct} | {m.account for m in mail_keys(env)}
+        check(live == want, "the running service knows the env file's accounts" + ("" if live == want else " — differs: " + ", ".join(sorted(live ^ want))), "scripts/deploy.sh")
+        inf = json.loads(urllib.request.urlopen(urllib.request.Request(api.base + api.prefix + "/api/v1/debug/inflight", headers={"Authorization": "Bearer " + api.token}), timeout=20).read())
+        ac = (inf.get("caches") or inf).get("accounts") or {}
+        check(ac.get("ledger_on_disk", False), "the ledger is on disk (%s day rows)" % ac.get("ledger_days"))
+        check(not ac.get("reports_not_linked"), "the peer links our reports (%s linked, %s not)" % (ac.get("reports_linked"), ac.get("reports_not_linked")), "last warning: %s — ask the peer; reports are stored either way" % ac.get("last_warning"))
+    except SystemExit:
+        bad += 1
+    sys.exit(1 if bad else 0)
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="acct", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--env", default=os.environ.get("ACCT_ENV", ENV_DEFAULT), help="env file (default %s)" % ENV_DEFAULT)
+    ap.add_argument("--url", help="the service (default http://localhost:$PORT)")
+    sub = ap.add_subparsers(dest="cmd", metavar="command")
+
+    def cmd(name, fn, *args, edit=False, per=False, js=True, hlp=""):
+        p = sub.add_parser(name, help=hlp)
+        for arg in args:
+            p.add_argument(*arg[0], **arg[1])
+        if per:
+            p.add_argument("--month", help="YYYY-MM | this | last")
+            p.add_argument("--since", help="YYYY-MM-DD")
+            p.add_argument("--until", help="YYYY-MM-DD")
+        if js:
+            p.add_argument("--json", action="store_true")
+        if edit:
+            p.add_argument("--deploy", action="store_true", help="scripts/deploy.sh afterwards")
+        p.set_defaults(fn=fn)
+
+    ID = (["id"], {})
+    OPT_ID = (["id"], {"nargs": "?"})
+    N = lambda d: (["n"], {"type": int, "nargs": "?", "default": d})
+    DOM = (["--domain"], {"help": "@x.example: only its addresses may subscribe"})
+    BY = (["--by"], {"choices": ["day", "month"], "default": "month"})
+    YES = (["--yes"], {"action": "store_true"})
+    FORCE = (["--force"], {"action": "store_true"})
+    cmd("list", cmd_list, per=True)
+    cmd("new", cmd_new, ID, (["--mail"], {"type": int, "default": 0, "metavar": "N"}), DOM, (["--rps"], {"default": "10"}), (["--burst"], {"default": "60"}), (["--daily"], {"default": "100000"}), edit=True)
+    cmd("links", cmd_links, ID, N(5))
+    cmd("mail-key", cmd_mail_key, ID, N(1), DOM, edit=True)
+    cmd("statement", cmd_statement, ID, BY, per=True, js=False)
+    cmd("csv", cmd_csv, OPT_ID, BY, per=True, js=False)
+    cmd("show", cmd_show, ID, per=True, js=False)
+    cmd("keys", cmd_keys, OPT_ID)
+    cmd("rotate", cmd_rotate, ID, edit=True)
+    cmd("rm-key", cmd_rm_key, ID, (["prefix"], {}), FORCE, edit=True, js=False)
+    cmd("revoke", lambda e, p, a: cmd_revoke(e, p, a, True), ID, (["n"], {"type": int}), edit=True, js=False)
+    cmd("unrevoke", lambda e, p, a: cmd_revoke(e, p, a, False), ID, (["n"], {"type": int}), edit=True, js=False)
+    cmd("noacct", cmd_noacct, (["name"], {}), (["--undo"], {"action": "store_true"}), edit=True, js=False)
+    cmd("close", cmd_close, ID, YES, edit=True, js=False)
+    cmd("unlink", cmd_unlink, ID, YES, FORCE)
+    cmd("hash-env", cmd_hash_env, edit=True, js=False)
+    cmd("doctor", cmd_doctor, js=False)
+    a = ap.parse_args()
+    if not a.cmd:
+        print(__doc__.strip())
+        sys.exit(2)
+    env = Env(a.env)
+    a.fn(env, API(env, a.url), a)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except BrokenPipeError:
+        pass

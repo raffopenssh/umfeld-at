@@ -6,8 +6,9 @@
 // Identity: `key=` query (links, =IMPORTDATA), `X-Export-Key` or
 // `Authorization: Bearer` header. A key that is one of our tokens
 // (UMFELD_TOKEN / CONTRIBUTOR_TOKEN) gets its token name as identity;
-// EXPORT_KEYS (`key:name:rps:burst:daily,…`, env, 0600) defines issued keys
-// with their own budget; anything else is anonymous = the client IP with
+// EXPORT_KEYS (`sha256:<hex>:name:rps:burst:daily[:noacct],…`, env, 0600; a
+// plain `key:name:…` entry still loads) defines issued keys
+// with their own budget — only their hash is kept (exportKeyHash); anything else is anonymous = the client IP with
 // the anonymous budget. Budgets: token bucket (rps, burst) + a UTC-day
 // counter, enforced unless EXPORT_GATE_ENFORCE=0 (loopback is only counted). Answers carry the IETF RateLimit headers; 429 + Retry-After.
 //
@@ -19,7 +20,10 @@
 package main
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
+	"log"
 	"math"
 	"net/http"
 	"os"
@@ -35,7 +39,19 @@ type exportTier struct {
 	rps   float64
 	burst float64
 	daily int64
-	key   []byte // nil for anonymous / token-derived
+	key   []byte // sha256 of the issued key; nil for anonymous / token-derived
+	// noAcct: an issued key that is no account (a shared demo key): budget only,
+	// no ledger row, no pseudonym, no member keys (accounts.go)
+	noAcct bool
+}
+
+// exportKeyHash — what is kept of an issued key: its SHA-256. The env file
+// holds `sha256:<hex>` (scripts/acct.sh new-key | hash-env); a plain entry
+// still works and is hashed on load. Issued keys are long and random, so the
+// hash is not guessable back; the key itself exists only at its holder.
+func exportKeyHash(key string) []byte {
+	h := sha256.Sum256([]byte(key))
+	return h[:]
 }
 
 type exportIdent struct {
@@ -69,10 +85,28 @@ func exportLoadTiers() {
 		exportEnforce = !(v == "0" || v == "false" || v == "no") // on unless switched off
 		for _, e := range strings.Split(os.Getenv("EXPORT_KEYS"), ",") {
 			p := strings.Split(strings.TrimSpace(e), ":")
-			if len(p) < 2 || p[0] == "" {
+			noAcct := false
+			for i := len(p) - 1; i >= 2; i-- { // the flag may stand anywhere after the name
+				if strings.EqualFold(p[i], "noacct") {
+					p, noAcct = append(p[:i:i], p[i+1:]...), true
+				}
+			}
+			var kh []byte
+			if len(p) >= 3 && p[0] == "sha256" {
+				if b, err := hex.DecodeString(p[1]); err == nil && len(b) == sha256.Size {
+					kh = b
+				} else {
+					log.Printf("export gate: key %q ignored (sha256: needs 64 hex chars)", p[2])
+					continue
+				}
+				p = p[1:]
+			} else if len(p) >= 2 && p[0] != "" {
+				kh = exportKeyHash(p[0])
+			}
+			if kh == nil || len(p) < 2 || p[1] == "" {
 				continue
 			}
-			t := &exportTier{key: []byte(p[0]), name: p[1], rps: 10, burst: 60, daily: 100000}
+			t := &exportTier{key: kh, name: p[1], rps: 10, burst: 60, daily: 100000, noAcct: noAcct}
 			if len(p) > 2 {
 				t.rps, _ = strconv.ParseFloat(p[2], 64)
 			}
@@ -114,11 +148,15 @@ func exportIdentity(r *http.Request) (string, *exportTier) {
 	loadTierConfig()
 	key := exportKeyOf(r)
 	if key != "" {
-		kb := []byte(key)
-		for _, t := range exportTiers {
-			if len(t.key) == len(kb) && subtle.ConstantTimeCompare(t.key, kb) == 1 {
-				return "key:" + t.name, t
+		kb := exportKeyHash(key)
+		var hit *exportTier
+		for _, t := range exportTiers { // every key is compared
+			if hit == nil && subtle.ConstantTimeCompare(t.key, kb) == 1 {
+				hit = t
 			}
+		}
+		if hit != nil {
+			return "key:" + hit.name, hit
 		}
 		if t := acctMemberTier(key); t != nil { // accounts.go: a person's key, derived from the account
 			return "key:" + t.name, t
